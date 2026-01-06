@@ -161,15 +161,15 @@ export default function AllCountriesPage() {
                                 if (!isAvailable) return null;
 
                                 return (
-<button
+                                    <button
                                         key={letter}
                                         onClick={() => handleFilterChange(setActiveLetter, letter)}
                                         className={`h-[40px] flex items-center justify-center rounded-[8px] border p-[8px] transition-all text-sm font-medium 
                                         ${letter === "All" ? "w-[40px]" : "w-[30px]"} 
                                         ${activeLetter === letter
-                                            ? "bg-[#194473] text-white border-[#C2DCF3] shadow-md" // สไตล์ Active
-                                            : "bg-white text-gray-600 border-[#C2DCF3] hover:bg-gray-50" // สไตล์ Normal
-                                        }`}
+                                                ? "bg-[#194473] text-white border-[#C2DCF3] shadow-md" // สไตล์ Active
+                                                : "bg-white text-gray-600 border-[#C2DCF3] hover:bg-gray-50" // สไตล์ Normal
+                                            }`}
                                     >
                                         {letter}
                                     </button>

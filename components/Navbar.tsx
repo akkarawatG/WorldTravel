@@ -18,11 +18,14 @@ export interface UserProfile {
   image?: string | null;
 }
 
+// *** 1. เพิ่ม onLoginClick และ onLogout ใน Interface ***
 interface NavbarProps {
   user: UserProfile | null;
   showBack?: boolean;
   searchQuery?: string;
   setSearchQuery?: (query: string) => void;
+  onLoginClick?: () => void;
+  onLogout?: () => void;
 }
 
 interface SearchResult {
@@ -36,7 +39,9 @@ export default function Navbar({
   user,
   showBack = false,
   searchQuery = "",
-  setSearchQuery
+  setSearchQuery,
+  onLoginClick, // *** รับค่ามาใช้ ***
+  onLogout      // *** รับค่ามาใช้ ***
 }: NavbarProps) {
   const router = useRouter();
   const supabase = createClient();
@@ -57,7 +62,7 @@ export default function Navbar({
   // ✅ DEBUG LOGIC: เช็ค Session และ Database
   useEffect(() => {
     const checkUserStatus = async () => {
-      console.log("🔍 [Navbar] 1. เริ่มตรวจสอบสถานะ User...");
+      // console.log("🔍 [Navbar] 1. เริ่มตรวจสอบสถานะ User...");
 
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
@@ -79,7 +84,7 @@ export default function Navbar({
         }
 
         // ✅ แก้ไขจุดที่ 1: ดึง username มาเช็คด้วย
-        console.log("🔍 [Navbar] 3. กำลังค้นหาข้อมูลในตาราง profiles...");
+        // console.log("🔍 [Navbar] 3. กำลังค้นหาข้อมูลในตาราง profiles...");
         const { data: profile, error: dbError } = await supabase
           .from('profiles')
           .select('id, username') // ดึง username มาเช็ค
@@ -89,16 +94,15 @@ export default function Navbar({
         if (dbError) console.error("❌ [Navbar] DB Error:", dbError.message);
 
         // ✅ แก้ไขจุดที่ 2: เปลี่ยนเงื่อนไข
-        // ถ้าไม่มี Profile (กรณีไม่มี Trigger) หรือ มี Profile แต่ไม่มี Username (กรณีมี Trigger สร้างแถวเปล่า)
         const isProfileIncomplete = !profile || !profile.username;
 
-        console.log("🔍 [Navbar] 4. สถานะข้อมูล:", isProfileIncomplete ? "ยังไม่สมบูรณ์ (ต้องกรอก)" : "สมบูรณ์แล้ว ✅");
+        // console.log("🔍 [Navbar] 4. สถานะข้อมูล:", isProfileIncomplete ? "ยังไม่สมบูรณ์ (ต้องกรอก)" : "สมบูรณ์แล้ว ✅");
 
         if (isProfileIncomplete) {
-          console.log("🚨 [Navbar] 5. เปิด Modal เพื่อให้กรอกข้อมูลให้ครบ");
+          // console.log("🚨 [Navbar] 5. เปิด Modal เพื่อให้กรอกข้อมูลให้ครบ");
           setShowEditProfileModal(true);
         } else {
-          console.log("✅ [Navbar] 5. ข้อมูลครบถ้วน");
+          // console.log("✅ [Navbar] 5. ข้อมูลครบถ้วน");
         }
 
       }
@@ -120,8 +124,13 @@ export default function Navbar({
     setImageError(false);
   }, [currentUser]);
 
-  const handleLoginClick = () => {
-    setShowAuthModal(true);
+  // *** Logic Login: ถ้ามี Props ส่งมาให้ใช้ Props ถ้าไม่มีให้เปิด Modal เอง ***
+  const handleLoginTrigger = () => {
+    if (onLoginClick) {
+      onLoginClick();
+    } else {
+      setShowAuthModal(true);
+    }
   };
 
   const handleAuthSuccess = (u: AuthUserProfile) => {
@@ -129,7 +138,14 @@ export default function Navbar({
     window.location.reload();
   };
 
-  const handleLogout = async () => {
+  // *** Logic Logout: ถ้ามี Props ส่งมาให้ใช้ Props ถ้าไม่มีให้ทำเอง ***
+  const handleLogoutTrigger = async () => {
+    if (onLogout) {
+      onLogout();
+      setShowUserMenu(false);
+      return;
+    }
+
     try {
       await supabase.auth.signOut();
       if (typeof window !== 'undefined') {
@@ -297,7 +313,10 @@ export default function Navbar({
                   </div>
                 </div>
               ) : (
-                <button onClick={handleLoginClick} className="flex w-[68px] h-[24px] items-center justify-center gap-[8px] px-[8px] py-[4px] rounded-[8px] bg-[#1976D2] hover:bg-[#1565C0] text-white text-[12px] leading-none font-inter font-[400] transition border border-[#90CAF9] shadow-sm cursor-pointer">
+                <button 
+                  onClick={handleLoginTrigger} // *** ใช้ function ที่เราสร้างใหม่ ***
+                  className="flex w-[68px] h-[24px] items-center justify-center gap-[8px] px-[8px] py-[4px] rounded-[8px] bg-[#1976D2] hover:bg-[#1565C0] text-white text-[12px] leading-none font-inter font-[400] transition border border-[#90CAF9] shadow-sm cursor-pointer"
+                >
                   <Icon path={mdiLockOutline} size={0.5} />
                   <span>Login</span>
                 </button>
@@ -321,7 +340,10 @@ export default function Navbar({
                         Edit profile
                     </button>
 
-                    <button onClick={() => { handleLogout(); setShowUserMenu(false); }} className="flex items-center gap-3 w-full px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition mt-1 cursor-pointer">
+                    <button 
+                      onClick={handleLogoutTrigger} // *** ใช้ function ที่เราสร้างใหม่ ***
+                      className="flex items-center gap-3 w-full px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition mt-1 cursor-pointer"
+                    >
                       <LogOut className="w-4 h-4" /> Logout
                     </button>
                   </div>
@@ -332,6 +354,7 @@ export default function Navbar({
         </div>
       </header>
 
+      {/* ถ้าไม่มี onLoginClick ส่งมา เราก็ยังใช้ Modal ภายในตัวมันเองได้เหมือนเดิม */}
       {showAuthModal && (
         <AuthModal 
           onClose={() => setShowAuthModal(false)} 
