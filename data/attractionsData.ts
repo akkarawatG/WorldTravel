@@ -861,7 +861,18 @@ export const ATTRACTIONS_DATA: Attraction[] = [
         "profile_url": ""
       },
       "alt_text": ""
-    }]
+    },
+    {
+      "url": "https://www.elephantnaturepark.org/enp/images/elephant%20sanctuary/Half-Day-Morning-project.jpg",
+      "download_url": "https://www.elephantnaturepark.org/enp/images/elephant%20sanctuary/Half-Day-Morning-project.jpg",
+      "photographer": {
+        "name": "",
+        "username": "stellaweis_destinationart",
+        "profile_url": ""
+      },
+      "alt_text": ""
+    }
+  ]
   },
   {
     "id": "similan-islands",

@@ -160,10 +160,10 @@ export default function HomePage() {
                     </div>
                   </SwiperSlide>
                 ))}
-                <button className="custom-prev-button absolute left-4 top-1/2 -translate-y-1/2 z-30 w-[48px] h-[48px] bg-[#3A82CE33] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-[30px] p-[9px] flex items-center justify-center gap-[10px] text-[#ffffff] transition-all active:scale-95 hidden md:flex shadow-sm cursor-pointer">
+                <button className="custom-prev-button absolute left-4 top-1/2 -translate-y-1/2 z-30 w-[48px] h-[48px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-[30px] p-[9px] flex items-center justify-center gap-[10px] text-[#ffffff] transition-all active:scale-95 hidden md:flex shadow-sm cursor-pointer">
                   <ArrowLeft className="w-[30px] h-[30px]" />
                 </button>
-                <button className="custom-next-button absolute right-4 top-1/2 -translate-y-1/2 z-30 w-[48px] h-[48px] bg-[#3A82CE33] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-[30px] p-[9px] flex items-center justify-center gap-[10px] text-[#ffffff] transition-all active:scale-95 hidden md:flex shadow-sm cursor-pointer">
+                <button className="custom-next-button absolute right-4 top-1/2 -translate-y-1/2 z-30 w-[48px] h-[48px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-[30px] p-[9px] flex items-center justify-center gap-[10px] text-[#ffffff] transition-all active:scale-95 hidden md:flex shadow-sm cursor-pointer">
                   <ArrowRight className="w-[30px] h-[30px]" />
                 </button>
               </Swiper>
@@ -206,108 +206,120 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* --- 3. SECTION A: ATTRACTIONS (Cards) --- */}
-        <div className="w-full">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="w-[1128px] h-[426px] mx-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-[24px]">
             {topAttractions.map((place) => (
+              // ✅ เพิ่ม div ครอบตามสเปค: w-[264px] h-[426px] gap-[8px]
               <div
                 key={place.id}
-                onClick={() => router.push(`/detail?id=${place.id}`)}
-                className="flex w-[264px] h-[426px] flex-col gap-2 cursor-pointer group select-none min-w-0" // เพิ่ม min-w-0
+                className="w-[264px] h-[426px] flex flex-col gap-[8px]"
               >
+                <div
+                  onClick={() => router.push(`/detail?id=${place.id}`)}
+                  className="flex flex-col gap-2 cursor-pointer group select-none min-w-0"
+                >
 
-                {/* Image Container with Swiper */}
-                <div className="relative w-[264px] h-[331px] rounded-[16px] overflow-hidden shadow-sm bg-gray-100 group/slider">
-                  <Swiper
-                    modules={[Navigation, Pagination, A11y]}
-                    spaceBetween={0}
-                    slidesPerView={1}
-                    loop={true}
-                    navigation={{
-                      prevEl: `.prev-btn-${place.id}`,
-                      nextEl: `.next-btn-${place.id}`,
-                    }}
-                    pagination={{
-                      clickable: true,
-                      el: `.pagination-custom-${place.id}`
-                    }}
-                    className="w-full h-full relative"
-                  >
-                    {(place.images && place.images.length > 0 ? place.images : []).map((img, idx) => (
-                      <SwiperSlide key={idx} className="overflow-hidden rounded-[16px]">
-                        <img
-                          src={img.url}
-                          className="w-full h-full object-cover rounded-[16px]"
-                          alt={`${place.name} ${idx + 1}`}
-                        />
-                      </SwiperSlide>
-                    ))}
-
-                    {(!place.images || place.images.length === 0) && (
-                      <SwiperSlide>
-                        <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No Image</div>
-                      </SwiperSlide>
-                    )}
-
-                    <button onClick={(e) => e.stopPropagation()} className={`prev-btn-${place.id} absolute left-2 top-1/2 -translate-y-1/2 z-10 w-[24px] h-[24px] bg-white/80 hover:bg-white rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-opacity shadow-sm cursor-pointer`}>
-                      <ArrowLeft className="w-[14px] h-[14px] text-gray-700" />
-                    </button>
-                    <button onClick={(e) => e.stopPropagation()} className={`next-btn-${place.id} absolute right-2 top-1/2 -translate-y-1/2 z-10 w-[24px] h-[24px] bg-white/80 hover:bg-white rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-opacity shadow-sm cursor-pointer`}>
-                      <ArrowRight className="w-[14px] h-[14px] text-gray-700" />
-                    </button>
-                    <div className={`pagination-custom-${place.id} absolute bottom-3 left-0 w-full flex justify-center gap-1 z-20 !pointer-events-none`}></div>
-                  </Swiper>
-
-                  <style jsx global>{`
-                    .pagination-custom-${place.id} .swiper-pagination-bullet {
-                      width: 4px; height: 4px; background-color: #DEECF9; border: 1px solid #C2DCF3; opacity: 1; margin: 0 4px !important; transition: all 0.3s ease; border-radius: 50%;
-                    }
-                    .pagination-custom-${place.id} .swiper-pagination-bullet-active {
-                      width: 8px; height: 8px; background-color: #041830; border: 1px solid #C2DCF3;
-                    }
-                  `}</style>
-
-                  <div className="absolute top-2 right-2 z-20">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        console.log(`Add ${place.name} to trip`);
+                  {/* Image Container with Swiper */}
+                  <div className="relative w-[264px] h-[331px] rounded-[16px] overflow-hidden shadow-sm bg-gray-100 group/slider">
+                    <Swiper
+                      modules={[Navigation, Pagination, A11y]}
+                      spaceBetween={0}
+                      slidesPerView={1}
+                      loop={true}
+                      navigation={{
+                        prevEl: `.prev-btn-${place.id}`,
+                        nextEl: `.next-btn-${place.id}`,
                       }}
-                      // Updated styling based on specs:
-                      // Default: w-[32px], h-[24px], bg-[#00000066], border-white
-                      // Hover:   w-[60px], bg-[#1565C0]
-                      className="flex h-[24px] w-[32px] group-hover:w-[60px] items-center justify-center rounded-[8px] border border-white bg-[#00000066] group-hover:bg-[#1565C0] text-white shadow-sm transition-all duration-300 ease-in-out overflow-hidden cursor-pointer backdrop-blur-[2px]"
+                      pagination={{
+                        clickable: true,
+                        el: `.pagination-custom-${place.id}`
+                      }}
+                      className="w-full h-full relative"
                     >
-                      <Icon path={mdiPlus} size="16px" className="flex-shrink-0" />
-                      <span className="max-w-0 opacity-0 group-hover:max-w-[40px] group-hover:opacity-100 group-hover:ml-[4px] text-[12px] font-inter font-normal whitespace-nowrap transition-all duration-300">
-                        Add
+                      {(place.images && place.images.length > 0 ? place.images : []).map((img, idx) => (
+                        <SwiperSlide key={idx} className="overflow-hidden rounded-[16px]">
+                          <img
+                            src={img.url}
+                            className="w-full h-full object-cover rounded-[16px]"
+                            alt={`${place.name} ${idx + 1}`}
+                          />
+                        </SwiperSlide>
+                      ))}
+
+                      {(!place.images || place.images.length === 0) && (
+                        <SwiperSlide>
+                          <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No Image</div>
+                        </SwiperSlide>
+                      )}
+
+                      <button onClick={(e) => e.stopPropagation()} className={`prev-btn-${place.id} absolute left-2 top-1/2 -translate-y-1/2 z-10 w-[24px] h-[24px] bg-[#3A82CE33] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-all shadow-sm cursor-pointer text-white`}>
+                        <ArrowLeft className="w-[14px] h-[14px]" />
+                      </button>
+                      <button onClick={(e) => e.stopPropagation()} className={`next-btn-${place.id} absolute right-2 top-1/2 -translate-y-1/2 z-10 w-[24px] h-[24px] bg-[#3A82CE33] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-all shadow-sm cursor-pointer text-white`}>
+                        <ArrowRight className="w-[14px] h-[14px]" />
+                      </button>
+                      <div className={`pagination-custom-${place.id} absolute bottom-3 left-0 w-full flex justify-center gap-1 z-20 !pointer-events-none`}></div>
+                    </Swiper>
+
+                    <style jsx global>{`
+                      .pagination-custom-${place.id} .swiper-pagination-bullet {
+                        width: 4px; height: 4px; background-color: #DEECF9; border: 1px solid #C2DCF3; opacity: 1; margin: 0 4px !important; transition: all 0.3s ease; border-radius: 50%;
+                      }
+                      .pagination-custom-${place.id} .swiper-pagination-bullet-active {
+                        width: 8px; height: 8px; background-color: #041830; border: 1px solid #C2DCF3;
+                      }
+                    `}</style>
+
+                    <div className="absolute top-2 right-2 z-20">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          console.log(`Add ${place.name} to trip`);
+                        }}
+                        className="flex h-[24px] w-[32px] group-hover:w-[60px] items-center justify-center rounded-[8px] border border-white bg-[#00000066] group-hover:bg-[#1565C0] text-white shadow-sm transition-all duration-300 ease-in-out overflow-hidden cursor-pointer backdrop-blur-[2px]"
+                      >
+                        <Icon path={mdiPlus} size="16px" className="flex-shrink-0" />
+                        <span className="max-w-0 opacity-0 group-hover:max-w-[40px] group-hover:opacity-100 group-hover:ml-[4px] text-[12px] font-inter font-normal whitespace-nowrap transition-all duration-300">
+                          Add
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="px-1 w-full min-w-0 flex flex-col gap-1 h-[87px]">
+                    {/* ชื่อสถานที่ */}
+                    <h4 className="text-lg md:text-[20px] font-inter font-[400] text-gray-900 leading-tight group-hover:underline truncate w-full">
+                      {place.name}
+                    </h4>
+
+                    {/* Location - ลบ mt-1 ออก */}
+                    <p className="text-sm md:text-[14px] font-inter font-[400] text-gray-500 truncate pb-1 leading-normal w-full">
+                      {place.location.province_state}, {place.location.country}
+                    </p>
+
+                    {/* Rating - ลบ mt-1 ออก */}
+                    <div className="flex items-center gap-1">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Star
+                          key={star}
+                          className={`w-3 h-3 ${star <= Math.round(place.rating)
+                              ? "fill-yellow-400 text-yellow-400"
+                              : "fill-gray-200 text-gray-200"
+                            }`}
+                        />
+                      ))}
+                      <span className="text-xs font-medium text-gray-600 ml-1">
+                        ({place.rating})
                       </span>
-                    </button>
+                    </div>
+
+                    {/* Category - ลบ mt-2 ออก */}
+                    <p className="text-sm md:text-[14px] font-inter font-[700] text-gray-900 truncate pb-1 leading-normal w-full">
+                      {place.category_tags?.[0]?.replace("_", " ") ||
+                        place.category_ids?.[0]?.replace("_", " ") ||
+                        "Attraction"}
+                    </p>
                   </div>
-                </div>
-
-                <div className="px-1 w-full min-w-0"> {/* เพิ่ม min-w-0 เพื่อให้ truncate ทำงานใน flex child */}
-                  {/* ชื่อสถานที่ */}
-                  <h4 className="text-lg md:text-[20px] font-inter font-[400] text-gray-900 leading-tight group-hover:underline truncate w-full">
-                    {place.name}
-                  </h4>
-
-                  {/* Location: ✅ เพิ่ม pb-1 และ leading-normal และ min-w-0 */}
-                  <p className="text-sm md:text-[14px] font-inter font-[400] text-gray-500 mt-1 truncate pb-1 leading-normal w-full">
-                    {place.location.province_state}, {place.location.country}
-                  </p>
-
-                  <div className="flex items-center gap-1 mt-1">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <Star key={star} className={`w-3 h-3 ${star <= Math.round(place.rating) ? "fill-yellow-400 text-yellow-400" : "fill-gray-200 text-gray-200"}`} />
-                    ))}
-                    <span className="text-xs font-medium text-gray-600 ml-1">({place.rating})</span>
-                  </div>
-
-                  {/* Category: ✅ เพิ่ม pb-1 และ leading-normal */}
-                  <p className="text-sm md:text-[14px] font-inter font-[700] text-gray-900 mt-2 truncate pb-1 leading-normal w-full">
-                    {place.category_tags?.[0]?.replace('_', ' ') || place.category_ids?.[0]?.replace('_', ' ') || "Attraction"}
-                  </p>
                 </div>
               </div>
             ))}
