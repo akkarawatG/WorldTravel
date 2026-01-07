@@ -183,9 +183,9 @@ export default function HomePage() {
         {/* --- 2. HEADER & TABS --- */}
         <div className="flex flex-col gap-[24px]">
           <div id="search-section" className="w-full max-w-[1128px] h-[44px] flex items-center justify-center gap-[13px]">
-            <h3 className="text-[36px] font-[900] font-inter leading-none tracking-normal text-center text-[#194473] whitespace-nowrap">
+            {/* <h3 className="text-[36px] font-[900] font-inter leading-none tracking-normal text-center text-[#194473] whitespace-nowrap">
               Popular Destinations
-            </h3>
+            </h3> */}
           </div>
 
           <div className="w-[963px] mx-auto flex items-center justify-center gap-[10px] mb-6 border-b border-gray-200 px-[14px]">
