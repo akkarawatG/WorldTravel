@@ -425,24 +425,32 @@ function ExploreContent() {
             </div>
           </div>
           {/* --- RIGHT CONTENT --- */}
-          <div className="col-span-1 lg:col-span-3">
+          <div className="w-[840px] mx-auto">
+            {/* Grid: 3 columns, gap 24px, width 840px */}
+            <div className="grid grid-cols-3 gap-[24px] mb-10">
+              {filtered.map((place) => {
+                // Logic เดิมสำหรับการหา Category
+                const rawTag = place.category_tags?.[0] || place.category_ids?.[0] || "";
+                const matchedCategoryTitle = Object.keys(CATEGORY_MAPPING).find((key) => {
+                  const keywords = CATEGORY_MAPPING[key];
+                  return keywords.some((k) =>
+                    rawTag.toLowerCase().includes(k.toLowerCase())
+                  );
+                });
+                const displayCategory =
+                  matchedCategoryTitle || rawTag.replace(/_/g, " ");
 
-            <div className="w-full">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
-                {filtered.map((place) => {
-                  const rawTag = place.category_tags?.[0] || place.category_ids?.[0] || "";
-                  const matchedCategoryTitle = Object.keys(CATEGORY_MAPPING).find(key => {
-                    const keywords = CATEGORY_MAPPING[key];
-                    return keywords.some(k => rawTag.toLowerCase().includes(k.toLowerCase()));
-                  });
-                  const displayCategory = matchedCategoryTitle || rawTag.replace(/_/g, ' ');
-
-                  return (
+                return (
+                  <div
+                    key={place.id}
+                    // ✅ ปรับขนาด Card และ Gap ตามสเปค
+                    className="w-[264px] h-[426px] flex flex-col gap-[8px] cursor-pointer group select-none"
+                  >
                     <div
-                      key={place.id}
                       onClick={() => router.push(`/detail?id=${place.id}`)}
-                      className="flex w-[264px] h-[426px] flex-col gap-2 cursor-pointer group select-none mx-auto lg:mx-0"
+                      className="flex flex-col gap-2 min-w-0"
                     >
+                      {/* Image Container */}
                       <div className="relative w-[264px] h-[331px] rounded-[16px] overflow-hidden shadow-sm bg-gray-100 group/slider">
                         <Swiper
                           modules={[Navigation, Pagination, A11y]}
@@ -455,12 +463,18 @@ function ExploreContent() {
                           }}
                           pagination={{
                             clickable: true,
-                            el: `.pagination-custom-${place.id}`
+                            el: `.pagination-custom-${place.id}`,
                           }}
                           className="w-full h-full relative"
                         >
-                          {(place.images && place.images.length > 0 ? place.images : []).map((img, idx) => (
-                            <SwiperSlide key={idx} className="overflow-hidden rounded-[16px]">
+                          {(place.images && place.images.length > 0
+                            ? place.images
+                            : []
+                          ).map((img, idx) => (
+                            <SwiperSlide
+                              key={idx}
+                              className="overflow-hidden rounded-[16px]"
+                            >
                               <img
                                 src={img.url}
                                 className="w-full h-full object-cover rounded-[16px]"
@@ -471,38 +485,64 @@ function ExploreContent() {
 
                           {(!place.images || place.images.length === 0) && (
                             <SwiperSlide>
-                              <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No Image</div>
+                              <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">
+                                No Image
+                              </div>
                             </SwiperSlide>
                           )}
 
-                          <button onClick={(e) => e.stopPropagation()} className={`prev-btn-${place.id} absolute left-2 top-1/2 -translate-y-1/2 z-10 w-[24px] h-[24px] bg-white/80 hover:bg-white rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-opacity shadow-sm cursor-pointer`}>
+                          {/* Navigation Buttons */}
+                          <button
+                            onClick={(e) => e.stopPropagation()}
+                            className={`prev-btn-${place.id} absolute left-2 top-1/2 -translate-y-1/2 z-10 w-[24px] h-[24px] bg-white/80 hover:bg-white rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-opacity shadow-sm cursor-pointer`}
+                          >
                             <ArrowLeft className="w-[14px] h-[14px] text-gray-700" />
                           </button>
-                          <button onClick={(e) => e.stopPropagation()} className={`next-btn-${place.id} absolute right-2 top-1/2 -translate-y-1/2 z-10 w-[24px] h-[24px] bg-white/80 hover:bg-white rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-opacity shadow-sm cursor-pointer`}>
+                          <button
+                            onClick={(e) => e.stopPropagation()}
+                            className={`next-btn-${place.id} absolute right-2 top-1/2 -translate-y-1/2 z-10 w-[24px] h-[24px] bg-white/80 hover:bg-white rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-opacity shadow-sm cursor-pointer`}
+                          >
                             <ArrowRight className="w-[14px] h-[14px] text-gray-700" />
                           </button>
-                          <div className={`pagination-custom-${place.id} absolute bottom-3 left-0 w-full flex justify-center gap-1 z-20 !pointer-events-none`}></div>
+                          <div
+                            className={`pagination-custom-${place.id} absolute bottom-3 left-0 w-full flex justify-center gap-1 z-20 !pointer-events-none`}
+                          ></div>
                         </Swiper>
+
                         <style jsx global>{`
-                              .pagination-custom-${place.id} .swiper-pagination-bullet {
-                                width: 4px; height: 4px; background-color: #DEECF9; border: 1px solid #C2DCF3; opacity: 1; margin: 0 4px !important; transition: all 0.3s ease; border-radius: 50%;
-                              }
-                              .pagination-custom-${place.id} .swiper-pagination-bullet-active {
-                                width: 8px; height: 8px; background-color: #041830; border: 1px solid #C2DCF3;
-                              }
-                            `}</style>
+                .pagination-custom-${place.id} .swiper-pagination-bullet {
+                  width: 4px;
+                  height: 4px;
+                  background-color: #deecf9;
+                  border: 1px solid #c2dcf3;
+                  opacity: 1;
+                  margin: 0 4px !important;
+                  transition: all 0.3s ease;
+                  border-radius: 50%;
+                }
+                .pagination-custom-${place.id}
+                  .swiper-pagination-bullet-active {
+                  width: 8px;
+                  height: 8px;
+                  background-color: #041830;
+                  border: 1px solid #c2dcf3;
+                }
+              `}</style>
+
+                        {/* Add Button */}
                         <div className="absolute top-2 right-2 z-20">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               console.log(`Add ${place.name} to trip`);
                             }}
-                            // Updated styling based on specs:
-                            // Default: w-[32px], h-[24px], bg-[#00000066], border-white
-                            // Hover:   w-[60px], bg-[#1565C0]
                             className="flex h-[24px] w-[32px] group-hover:w-[60px] items-center justify-center rounded-[8px] border border-white bg-[#00000066] group-hover:bg-[#1565C0] text-white shadow-sm transition-all duration-300 ease-in-out overflow-hidden cursor-pointer backdrop-blur-[2px]"
                           >
-                            <Icon path={mdiPlus} size="16px" className="flex-shrink-0" />
+                            <Icon
+                              path={mdiPlus}
+                              size="16px"
+                              className="flex-shrink-0"
+                            />
                             <span className="max-w-0 opacity-0 group-hover:max-w-[40px] group-hover:opacity-100 group-hover:ml-[4px] text-[12px] font-inter font-normal whitespace-nowrap transition-all duration-300">
                               Add
                             </span>
@@ -510,47 +550,44 @@ function ExploreContent() {
                         </div>
                       </div>
 
-                      {/* ส่วน Content ด้านล่าง */}
-                      <div className="px-1">
-                        <h4 className="text-lg md:text-[20px] font-inner font-[400] text-gray-900 leading-tight group-hover:underline truncate">
+                      {/* ✅ ส่วน Content ด้านล่าง (ใช้ gap-1 ตัด margin) */}
+                      <div className="px-1 w-full min-w-0 flex flex-col gap-1 h-[87px]">
+                        {/* ชื่อสถานที่ */}
+                        <h4 className="text-lg md:text-[20px] font-inter font-[400] text-gray-900 leading-tight group-hover:underline truncate w-full">
                           {place.name}
                         </h4>
-                        <p className="text-sm md:text-[14px] font-inner font-[400] text-gray-500 mt-1 truncate leading-normal">
+
+                        {/* Location */}
+                        <p className="text-sm md:text-[14px] font-inter font-[400] text-gray-500 truncate pb-1 leading-normal w-full">
                           {place.location.province_state}, {place.location.country}
                         </p>
-                        <div className="flex items-center gap-1 mt-1">
+
+                        {/* Rating */}
+                        <div className="flex items-center gap-1">
                           {[1, 2, 3, 4, 5].map((star) => (
-                            <Star key={star} className={`w-3 h-3 ${star <= Math.round(place.rating) ? "fill-yellow-400 text-yellow-400" : "fill-gray-200 text-gray-200"}`} />
+                            <Star
+                              key={star}
+                              className={`w-3 h-3 ${star <= Math.round(place.rating)
+                                  ? "fill-yellow-400 text-yellow-400"
+                                  : "fill-gray-200 text-gray-200"
+                                }`}
+                            />
                           ))}
-                          <span className="text-xs font-medium text-gray-600 ml-1">({place.rating})</span>
+                          <span className="text-xs font-medium text-gray-600 ml-1">
+                            ({place.rating})
+                          </span>
                         </div>
 
-                        <p className="text-sm md:text-[14px] font-inner font-[700] text-gray-900 mt-2 truncate leading-normal capitalize">
+                        {/* Category */}
+                        <p className="text-sm md:text-[14px] font-inter font-[700] text-gray-900 truncate pb-1 leading-normal w-full capitalize">
                           {displayCategory}
                         </p>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
+                );
+              })}
             </div>
-
-            {filtered.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-20 text-gray-400 bg-white rounded-2xl border border-gray-100">
-                <p className="text-lg font-medium mb-2">No places found matching filters.</p>
-                <button
-                  onClick={() => {
-                    setSelectedFilter("");
-                    setSearchQuery("");
-                    setSearchResults([]);
-                    router.replace(`/explore?country=${currentCountry}`, { scroll: false });
-                  }}
-                  className="text-blue-500 hover:underline text-sm font-bold"
-                >
-                  Clear all filters
-                </button>
-              </div>
-            )}
           </div>
         </div>
       </div>

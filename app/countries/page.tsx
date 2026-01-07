@@ -78,7 +78,7 @@ export default function AllCountriesPage() {
             <div className="max-w-[1440px] mx-auto px-[156px] pt-6 mb-4">
                 <div className="flex items-center gap-2 flex-wrap mb-2 font-Inter font-[600] text-[14px] leading-[100%] text-[#9E9E9E]">
                     <span className="hover:underline cursor-pointer" onClick={() => router.push("/")}>Home</span>/
-                    <span className="hover:underline cursor-pointer" onClick={() => router.push(`/countries`)}>all Countries</span>
+                    <span className="hover:underline cursor-pointer" onClick={() => router.push(`/countries`)}>All countries</span>
                 </div>
             </div>
 

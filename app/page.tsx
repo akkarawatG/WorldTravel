@@ -56,12 +56,24 @@ export default function HomePage() {
   const [currentCountries, setCurrentCountries] = useState<Country[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  // -----------------------------------------------------------
+  // ✅ 1. เพิ่ม Logic กรองข้อมูลสำหรับ Hero Slider ตรงนี้
+  // -----------------------------------------------------------
+  const heroSlides = ATTRACTIONS_DATA
+    .filter((place) => place.location.continent === selectedContinent)
+    .slice(0, 8);
+
+  // Fallback: ถ้าทวีปนั้นไม่มีข้อมูลเลย ให้ใช้ข้อมูลทั้งหมด 8 ตัวแรกแทน (กัน Slider ว่าง)
+  const displaySlides = heroSlides.length > 0 ? heroSlides : ATTRACTIONS_DATA.slice(0, 8);
+  // -----------------------------------------------------------
+
+
   // --- 2. DATA FETCHING LOGIC ---
   useEffect(() => {
+    // ... (logic เดิมของคุณ) ...
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        // --- MOCK LOGIC ---
         const mockCountries = COUNTRIES_DATA[selectedContinent] || [];
         setCurrentCountries(mockCountries);
 
@@ -77,10 +89,8 @@ export default function HomePage() {
         setIsLoading(false);
       }
     };
-
     fetchData();
   }, [selectedContinent]);
-
   return (
     <div className="min-h-screen bg-[#FFFFFF] font-inter text-gray-800 pb-20">
 
@@ -89,7 +99,10 @@ export default function HomePage() {
         <div className="w-full max-w-[1440px] h-[414px] mx-auto bg-[#DEECF9] flex justify-center">
           <div className="w-full h-[445px] flex flex-col gap-[16px] px-[156px]">
             <div className="relative w-full h-[413px] bg-black overflow-hidden group flex-shrink-0">
+
+              {/* ✅ เพิ่ม key={selectedContinent} เพื่อให้ Swiper รีเซ็ตใหม่เมื่อเปลี่ยนทวีป */}
               <Swiper
+                key={selectedContinent}
                 modules={[Navigation, A11y]}
                 spaceBetween={0}
                 slidesPerView={1}
@@ -103,8 +116,10 @@ export default function HomePage() {
                   const realIndex = swiper.realIndex;
                   const bullets = document.querySelectorAll('.custom-pagination-bullet');
                   bullets.forEach((bullet, index) => {
+                    // Reset styling
                     bullet.classList.remove('bg-[#E0E0E0]', 'bg-[#121212]', 'w-[16px]', 'h-[16px]', 'w-[8px]', 'h-[8px]', 'border', 'border-[4px]', 'border-[#EEEEEE]', 'border-[#E0E0E0]', 'bg-gray-800', 'bg-gray-300', 'w-3', 'h-3', 'w-2.5', 'h-2.5');
                     bullet.classList.add('rounded-full', 'transition-all', 'duration-300');
+
                     if (index === realIndex) {
                       bullet.classList.add('w-[16px]', 'h-[16px]', 'bg-[#121212]', 'border-[4px]', 'border-[#E0E0E0]');
                     } else {
@@ -113,7 +128,8 @@ export default function HomePage() {
                   });
                 }}
               >
-                {ATTRACTIONS_DATA.slice(0, 8).map((slide) => (
+                {/* ✅ เปลี่ยนจาก ATTRACTIONS_DATA.slice(0, 8) เป็น displaySlides */}
+                {displaySlides.map((slide) => (
                   <SwiperSlide key={slide.id} className="relative w-full h-full">
                     <img
                       src={slide.images[0]?.url || "https://images.unsplash.com/photo-1565008576549-57569a49371d?q=80&w=1600&auto=format&fit=crop"}
@@ -121,13 +137,14 @@ export default function HomePage() {
                       alt={slide.name}
                     />
                     <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60"></div>
+
+                    {/* Content ตรงกลาง */}
                     <div className="absolute top-[167px] left-1/2 -translate-x-1/2 z-30 w-[1128px] h-[246px] flex flex-col items-center justify-center gap-[10px]">
                       <div className="w-[635px] h-[170px] flex flex-col items-center gap-[32px]">
                         <div className="flex flex-col items-center gap-[16px] w-full text-center">
                           <h1 className="font-Inter font-bold text-[48px] leading-[100%] text-white drop-shadow-[3px_3px_5px_rgba(0,0,0,1)]">Explore the world your way</h1>
                           <p className="font-Inter font-bold text-[20px] leading-[100%] text-white text-center drop-shadow-[0px_4px_4px_rgba(0,0,0,1)]">Plan tips, save places, and build your our trips</p>
                         </div>
-                        {/* ✅ ปุ่ม Start Planning ตามสเปคใหม่ */}
                         <button
                           onClick={() => document.getElementById('search-section')?.scrollIntoView({ behavior: 'smooth' })}
                           className="w-[166px] h-[40px] flex items-center justify-center gap-[10px] px-[16px] py-[8px] bg-[#3A82CE33] border border-[#95C3EA] rounded-[8px] cursor-pointer hover:bg-[#3A82CE] transition-all backdrop-blur-[2px] shadow-sm"
@@ -138,18 +155,13 @@ export default function HomePage() {
                         </button>
                       </div>
                     </div>
+
                     {/* Bottom Left Info */}
-                    {/* ✅ แก้ไข: เปลี่ยน h-[79px] เป็น min-h-[79px] หรือ h-auto เพื่อไม่ให้ตัดเนื้อหา */}
                     <div className="absolute bottom-0 left-0 z-20 w-max-[300px] min-h-[79px] flex flex-col justify-center gap-[9px] p-[16px] bg-[#3C3C4399] text-white rounded-tr-[8px] rounded-br-[8px] animate-in fade-in slide-in-from-bottom-4 duration-700">
-
-                      {/* ✅ แก้ไข: ลบ h-[47px] ออก ให้สูงตามจริง */}
                       <div className="flex flex-col justify-center gap-[8px]">
-
-                        {/* ✅ แก้ไข: เพิ่ม pb-1 เพื่อกันหางตัว p ขาด และใช้ leading-normal */}
                         <h2 className="text-[18px] font-Inter font-[700] leading-normal drop-shadow-md truncate max-w-[300px] pb-1">
                           {slide.name.split('(')[0].trim()}
                         </h2>
-
                         <div className="flex items-center gap-2 text-[14px] font-Inter font-[600] opacity-90">
                           <MapPin className="w-4 h-4 flex-shrink-0" />
                           <span className="truncate">
@@ -160,6 +172,7 @@ export default function HomePage() {
                     </div>
                   </SwiperSlide>
                 ))}
+
                 <button className="custom-prev-button absolute left-4 top-1/2 -translate-y-1/2 z-30 w-[48px] h-[48px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-[30px] p-[9px] flex items-center justify-center gap-[10px] text-[#ffffff] transition-all active:scale-95 hidden md:flex shadow-sm cursor-pointer">
                   <ArrowLeft className="w-[30px] h-[30px]" />
                 </button>
@@ -168,8 +181,11 @@ export default function HomePage() {
                 </button>
               </Swiper>
             </div>
+
+            {/* Pagination Bullets */}
             <div className="w-[184px] h-[16px] flex justify-center items-center gap-[8px] flex-shrink-0 mx-auto">
-              {ATTRACTIONS_DATA.slice(0, 8).map((_, index) => (
+              {/* ✅ เปลี่ยนจาก ATTRACTIONS_DATA.slice(0, 8) เป็น displaySlides เพื่อให้จุดเท่ากับจำนวนภาพจริง */}
+              {displaySlides.map((_, index) => (
                 <div key={index} className={`custom-pagination-bullet rounded-full transition-all duration-300 cursor-pointer box-border ${index === 0 ? 'w-[16px] h-[16px] bg-[#041830] border-[4px] border-[#DEECF9] ring-[1px] ring-[#C2DCF3]' : 'w-[16px] h-[16px] bg-[#041830] border border-[#DEECF9] ring-[1px] ring-[#C2DCF3]'}`}></div>
               ))}
             </div>
@@ -209,17 +225,16 @@ export default function HomePage() {
         <div className="w-[1128px] h-[426px] mx-auto">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-[24px]">
             {topAttractions.map((place) => (
-              // ✅ เพิ่ม div ครอบตามสเปค: w-[264px] h-[426px] gap-[8px]
+              // ✅ 1. เปลี่ยนจาก group/card เป็น "group" เฉยๆ (ชัวร์สุด)
               <div
                 key={place.id}
-                className="w-[264px] h-[426px] flex flex-col gap-[8px]"
+                className="w-[264px] h-[426px] flex flex-col gap-[8px] group cursor-pointer select-none"
+                onClick={() => router.push(`/detail?id=${place.id}`)}
               >
-                <div
-                  onClick={() => router.push(`/detail?id=${place.id}`)}
-                  className="flex flex-col gap-2 cursor-pointer group select-none min-w-0"
-                >
+                <div className="flex flex-col gap-2 min-w-0">
 
-                  {/* Image Container with Swiper */}
+                  {/* Image Container */}
+                  {/* group/slider ยังคงไว้ได้ หรือถ้ามีปัญหากับลูกศร ให้เปลี่ยนเป็น group-hover ธรรมดาที่อิงจาก div นอกสุดก็ได้ แต่ปกติส่วนนี้ไม่ค่อยมีปัญหา */}
                   <div className="relative w-[264px] h-[331px] rounded-[16px] overflow-hidden shadow-sm bg-gray-100 group/slider">
                     <Swiper
                       modules={[Navigation, Pagination, A11y]}
@@ -232,12 +247,18 @@ export default function HomePage() {
                       }}
                       pagination={{
                         clickable: true,
-                        el: `.pagination-custom-${place.id}`
+                        el: `.pagination-custom-${place.id}`,
                       }}
                       className="w-full h-full relative"
                     >
-                      {(place.images && place.images.length > 0 ? place.images : []).map((img, idx) => (
-                        <SwiperSlide key={idx} className="overflow-hidden rounded-[16px]">
+                      {(place.images && place.images.length > 0
+                        ? place.images
+                        : []
+                      ).map((img, idx) => (
+                        <SwiperSlide
+                          key={idx}
+                          className="overflow-hidden rounded-[16px]"
+                        >
                           <img
                             src={img.url}
                             className="w-full h-full object-cover rounded-[16px]"
@@ -248,27 +269,48 @@ export default function HomePage() {
 
                       {(!place.images || place.images.length === 0) && (
                         <SwiperSlide>
-                          <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No Image</div>
+                          <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">
+                            No Image
+                          </div>
                         </SwiperSlide>
                       )}
 
-                      <button onClick={(e) => e.stopPropagation()} className={`prev-btn-${place.id} absolute left-2 top-1/2 -translate-y-1/2 z-10 w-[24px] h-[24px] bg-[#3A82CE33] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-all shadow-sm cursor-pointer text-white`}>
+                      <button
+                        onClick={(e) => e.stopPropagation()}
+                        className={`prev-btn-${place.id} absolute left-2 top-1/2 -translate-y-1/2 z-10 w-[24px] h-[24px] bg-[#3A82CE33] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-all shadow-sm cursor-pointer text-white`}
+                      >
                         <ArrowLeft className="w-[14px] h-[14px]" />
                       </button>
-                      <button onClick={(e) => e.stopPropagation()} className={`next-btn-${place.id} absolute right-2 top-1/2 -translate-y-1/2 z-10 w-[24px] h-[24px] bg-[#3A82CE33] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-all shadow-sm cursor-pointer text-white`}>
+                      <button
+                        onClick={(e) => e.stopPropagation()}
+                        className={`next-btn-${place.id} absolute right-2 top-1/2 -translate-y-1/2 z-10 w-[24px] h-[24px] bg-[#3A82CE33] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-all shadow-sm cursor-pointer text-white`}
+                      >
                         <ArrowRight className="w-[14px] h-[14px]" />
                       </button>
-                      <div className={`pagination-custom-${place.id} absolute bottom-3 left-0 w-full flex justify-center gap-1 z-20 !pointer-events-none`}></div>
+                      <div
+                        className={`pagination-custom-${place.id} absolute bottom-3 left-0 w-full flex justify-center gap-1 z-20 !pointer-events-none`}
+                      ></div>
                     </Swiper>
 
                     <style jsx global>{`
-                      .pagination-custom-${place.id} .swiper-pagination-bullet {
-                        width: 4px; height: 4px; background-color: #DEECF9; border: 1px solid #C2DCF3; opacity: 1; margin: 0 4px !important; transition: all 0.3s ease; border-radius: 50%;
-                      }
-                      .pagination-custom-${place.id} .swiper-pagination-bullet-active {
-                        width: 8px; height: 8px; background-color: #041830; border: 1px solid #C2DCF3;
-                      }
-                    `}</style>
+              .pagination-custom-${place.id} .swiper-pagination-bullet {
+                width: 4px;
+                height: 4px;
+                background-color: #deecf9;
+                border: 1px solid #c2dcf3;
+                opacity: 1;
+                margin: 0 4px !important;
+                transition: all 0.3s ease;
+                border-radius: 50%;
+              }
+              .pagination-custom-${place.id}
+                .swiper-pagination-bullet-active {
+                width: 8px;
+                height: 8px;
+                background-color: #041830;
+                border: 1px solid #c2dcf3;
+              }
+            `}</style>
 
                     <div className="absolute top-2 right-2 z-20">
                       <button
@@ -278,7 +320,11 @@ export default function HomePage() {
                         }}
                         className="flex h-[24px] w-[32px] group-hover:w-[60px] items-center justify-center rounded-[8px] border border-white bg-[#00000066] group-hover:bg-[#1565C0] text-white shadow-sm transition-all duration-300 ease-in-out overflow-hidden cursor-pointer backdrop-blur-[2px]"
                       >
-                        <Icon path={mdiPlus} size="16px" className="flex-shrink-0" />
+                        <Icon
+                          path={mdiPlus}
+                          size="16px"
+                          className="flex-shrink-0"
+                        />
                         <span className="max-w-0 opacity-0 group-hover:max-w-[40px] group-hover:opacity-100 group-hover:ml-[4px] text-[12px] font-inter font-normal whitespace-nowrap transition-all duration-300">
                           Add
                         </span>
@@ -287,24 +333,24 @@ export default function HomePage() {
                   </div>
 
                   <div className="px-1 w-full min-w-0 flex flex-col gap-1 h-[87px]">
-                    {/* ชื่อสถานที่ */}
-                    <h4 className="text-lg md:text-[20px] font-inter font-[400] text-gray-900 leading-tight group-hover:underline truncate w-full">
+                    {/* ✅ 2. ใช้ group-hover:underline แบบมาตรฐาน */}
+                    <h4 className="text-lg md:text-[20px] font-inter font-normal text-[#212121] leading-tight group-hover:underline group-hover:decoration-solid group-hover:underline-offset-2 truncate w-full pb-1">
                       {place.name}
                     </h4>
 
-                    {/* Location - ลบ mt-1 ออก */}
+                    {/* Location */}
                     <p className="text-sm md:text-[14px] font-inter font-[400] text-gray-500 truncate pb-1 leading-normal w-full">
                       {place.location.province_state}, {place.location.country}
                     </p>
 
-                    {/* Rating - ลบ mt-1 ออก */}
+                    {/* Rating */}
                     <div className="flex items-center gap-1">
                       {[1, 2, 3, 4, 5].map((star) => (
                         <Star
                           key={star}
                           className={`w-3 h-3 ${star <= Math.round(place.rating)
-                              ? "fill-yellow-400 text-yellow-400"
-                              : "fill-gray-200 text-gray-200"
+                            ? "fill-yellow-400 text-yellow-400"
+                            : "fill-gray-200 text-gray-200"
                             }`}
                         />
                       ))}
@@ -313,7 +359,7 @@ export default function HomePage() {
                       </span>
                     </div>
 
-                    {/* Category - ลบ mt-2 ออก */}
+                    {/* Category */}
                     <p className="text-sm md:text-[14px] font-inter font-[700] text-gray-900 truncate pb-1 leading-normal w-full">
                       {place.category_tags?.[0]?.replace("_", " ") ||
                         place.category_ids?.[0]?.replace("_", " ") ||
