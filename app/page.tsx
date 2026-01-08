@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 // Import Icons
-import { MapPin, Star, ArrowLeft, ArrowRight, Plus } from "lucide-react";
+import { MapPin, ArrowLeft, ArrowRight, Plus, Star } from "lucide-react";
 // Import Mock Data
 import { CONTINENTS, COUNTRIES_DATA } from "../data/mockData";
 import { ATTRACTIONS_DATA } from "../data/attractionsData";
@@ -40,13 +40,6 @@ interface Country {
   attractions?: string;
 }
 
-interface HeroSlide {
-  id: number;
-  name: string;
-  location: string;
-  image: string;
-}
-
 export default function HomePage() {
   const router = useRouter();
 
@@ -70,7 +63,6 @@ export default function HomePage() {
 
   // --- 2. DATA FETCHING LOGIC ---
   useEffect(() => {
-    // ... (logic เดิมของคุณ) ...
     const fetchData = async () => {
       setIsLoading(true);
       try {
@@ -91,6 +83,7 @@ export default function HomePage() {
     };
     fetchData();
   }, [selectedContinent]);
+
   return (
     <div className="min-h-screen bg-[#FFFFFF] font-inter text-gray-800 pb-20">
 
@@ -136,7 +129,9 @@ export default function HomePage() {
                       className="w-full h-full object-cover"
                       alt={slide.name}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60"></div>
+
+                    {/* ✅ เพิ่ม pointer-events-none เพื่อให้กดทะลุ Gradient ได้ */}
+                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60 pointer-events-none"></div>
 
                     {/* Content ตรงกลาง */}
                     <div className="absolute top-[167px] left-1/2 -translate-x-1/2 z-30 w-[1128px] h-[246px] flex flex-col items-center justify-center gap-[10px]">
@@ -147,7 +142,7 @@ export default function HomePage() {
                         </div>
                         <button
                           onClick={() => document.getElementById('search-section')?.scrollIntoView({ behavior: 'smooth' })}
-                          className="w-[166px] h-[40px] flex items-center justify-center gap-[10px] px-[16px] py-[8px] bg-[#3A82CE33] border border-[#95C3EA] rounded-[8px] cursor-pointer hover:bg-[#3A82CE] transition-all backdrop-blur-[2px] shadow-sm"
+                          className="w-[166px] h-[40px] flex items-center justify-center gap-[10px] px-[16px] py-[8px] bg-[#3A82CE33] border border-[#95C3EA] rounded-[8px] cursor-pointer hover:bg-[#3A82CE] transition-all backdrop-blur-[2px] shadow-sm z-40" // เพิ่ม z-40
                         >
                           <span className="font-Inter font-normal text-[20px] leading-[100%] text-white">
                             Start Planning
@@ -156,27 +151,60 @@ export default function HomePage() {
                       </div>
                     </div>
 
-                    {/* Bottom Left Info */}
-                    <div className="absolute bottom-0 left-0 z-20 w-max-[300px] min-h-[79px] flex flex-col justify-center gap-[9px] p-[16px] bg-[#3C3C4399] text-white rounded-tr-[8px] rounded-br-[8px] animate-in fade-in slide-in-from-bottom-4 duration-700">
-                      <div className="flex flex-col justify-center gap-[8px]">
-                        <h2 className="text-[18px] font-Inter font-[700] leading-normal drop-shadow-md truncate max-w-[300px] pb-1">
+                    {/* Bottom Left Info (แก้ไขให้กดได้) */}
+                    {/* ✅ เพิ่ม z-40 และ relative เพื่อให้อยู่เหนือ layer อื่น */}
+                    <div className="absolute bottom-0 left-0 z-40 w-max-[300px] min-h-[79px] flex flex-col justify-center gap-[9px] p-[16px] bg-[#3C3C4399] text-white rounded-tr-[8px] rounded-br-[8px] animate-in fade-in slide-in-from-bottom-4 duration-700">
+                      <div className="flex flex-col justify-center gap-[4px]">
+
+                        {/* 1. ชื่อสถานที่ -> ไปหน้า Detail */}
+                        <h2
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/detail?id=${slide.id}`);
+                          }}
+                          className="text-[18px] font-Inter font-[700] leading-normal drop-shadow-md truncate max-w-[300px] pb-1 cursor-pointer hover:underline hover:text-[#DEECF9] transition-colors relative z-50"
+                        >
                           {slide.name.split('(')[0].trim()}
                         </h2>
-                        <div className="flex items-center gap-2 text-[14px] font-Inter font-[600] opacity-90">
+
+                        <div className="flex items-center gap-2 text-[14px] font-Inter font-[600] opacity-90 relative z-50">
                           <MapPin className="w-4 h-4 flex-shrink-0" />
-                          <span className="truncate">
-                            {slide.location.province_state}, {slide.location.country}
-                          </span>
+                          <div className="flex gap-1 truncate">
+
+                            {/* 2. จังหวัด -> ไปหน้า Explore (Search Province) */}
+                            <span
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/explore?search=${slide.location.province_state}`);
+                              }}
+                              className="cursor-pointer hover:underline hover:text-[#DEECF9] transition-colors"
+                            >
+                              {slide.location.province_state},
+                            </span>
+
+                            {/* 3. ประเทศ -> ไปหน้า Explore (Country Filter) */}
+                            <span
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/explore?country=${slide.location.country}`);
+                              }}
+                              className="cursor-pointer hover:underline hover:text-[#DEECF9] transition-colors"
+                            >
+                              {slide.location.country}
+                            </span>
+
+                          </div>
                         </div>
                       </div>
                     </div>
                   </SwiperSlide>
                 ))}
 
-                <button className="custom-prev-button absolute left-4 top-1/2 -translate-y-1/2 z-30 w-[48px] h-[48px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-[30px] p-[9px] flex items-center justify-center gap-[10px] text-[#ffffff] transition-all active:scale-95 hidden md:flex shadow-sm cursor-pointer">
+                {/* ปุ่มลูกศรซ้ายขวา เพิ่ม z-50 */}
+                <button className="custom-prev-button absolute left-4 top-1/2 -translate-y-1/2 z-50 w-[48px] h-[48px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-[30px] p-[9px] flex items-center justify-center gap-[10px] text-[#ffffff] transition-all active:scale-95 hidden md:flex shadow-sm cursor-pointer">
                   <ArrowLeft className="w-[30px] h-[30px]" />
                 </button>
-                <button className="custom-next-button absolute right-4 top-1/2 -translate-y-1/2 z-30 w-[48px] h-[48px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-[30px] p-[9px] flex items-center justify-center gap-[10px] text-[#ffffff] transition-all active:scale-95 hidden md:flex shadow-sm cursor-pointer">
+                <button className="custom-next-button absolute right-4 top-1/2 -translate-y-1/2 z-50 w-[48px] h-[48px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-[30px] p-[9px] flex items-center justify-center gap-[10px] text-[#ffffff] transition-all active:scale-95 hidden md:flex shadow-sm cursor-pointer">
                   <ArrowRight className="w-[30px] h-[30px]" />
                 </button>
               </Swiper>
@@ -184,7 +212,6 @@ export default function HomePage() {
 
             {/* Pagination Bullets */}
             <div className="w-[184px] h-[16px] flex justify-center items-center gap-[8px] flex-shrink-0 mx-auto">
-              {/* ✅ เปลี่ยนจาก ATTRACTIONS_DATA.slice(0, 8) เป็น displaySlides เพื่อให้จุดเท่ากับจำนวนภาพจริง */}
               {displaySlides.map((_, index) => (
                 <div key={index} className={`custom-pagination-bullet rounded-full transition-all duration-300 cursor-pointer box-border ${index === 0 ? 'w-[16px] h-[16px] bg-[#041830] border-[4px] border-[#DEECF9] ring-[1px] ring-[#C2DCF3]' : 'w-[16px] h-[16px] bg-[#041830] border border-[#DEECF9] ring-[1px] ring-[#C2DCF3]'}`}></div>
               ))}
@@ -234,8 +261,7 @@ export default function HomePage() {
                 <div className="flex flex-col gap-2 min-w-0">
 
                   {/* Image Container */}
-                  {/* group/slider ยังคงไว้ได้ หรือถ้ามีปัญหากับลูกศร ให้เปลี่ยนเป็น group-hover ธรรมดาที่อิงจาก div นอกสุดก็ได้ แต่ปกติส่วนนี้ไม่ค่อยมีปัญหา */}
-                  <div className="relative w-[264px] h-[331px] rounded-[16px] overflow-hidden shadow-sm bg-gray-100 group/slider">
+                  <div className="relative w-[264px] h-[331px] rounded-[16px] overflow-hidden shadow-sm bg-gray-100 group/slider flex-shrink-0"> {/* เพิ่ม flex-shrink-0 */}
                     <Swiper
                       modules={[Navigation, Pagination, A11y]}
                       spaceBetween={0}
@@ -277,13 +303,13 @@ export default function HomePage() {
 
                       <button
                         onClick={(e) => e.stopPropagation()}
-                        className={`prev-btn-${place.id} absolute left-2 top-1/2 -translate-y-1/2 z-10 w-[24px] h-[24px] bg-[#3A82CE33] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-all shadow-sm cursor-pointer text-white`}
+                        className={`prev-btn-${place.id} absolute left-2 top-1/2 -translate-y-1/2 z-10 w-[24px] h-[24px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-all shadow-sm cursor-pointer text-white`}
                       >
                         <ArrowLeft className="w-[14px] h-[14px]" />
                       </button>
                       <button
                         onClick={(e) => e.stopPropagation()}
-                        className={`next-btn-${place.id} absolute right-2 top-1/2 -translate-y-1/2 z-10 w-[24px] h-[24px] bg-[#3A82CE33] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-all shadow-sm cursor-pointer text-white`}
+                        className={`next-btn-${place.id} absolute right-2 top-1/2 -translate-y-1/2 z-10 w-[24px] h-[24px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-all shadow-sm cursor-pointer text-white`}
                       >
                         <ArrowRight className="w-[14px] h-[14px]" />
                       </button>
@@ -293,24 +319,44 @@ export default function HomePage() {
                     </Swiper>
 
                     <style jsx global>{`
-              .pagination-custom-${place.id} .swiper-pagination-bullet {
-                width: 4px;
-                height: 4px;
-                background-color: #deecf9;
-                border: 1px solid #c2dcf3;
-                opacity: 1;
-                margin: 0 4px !important;
-                transition: all 0.3s ease;
-                border-radius: 50%;
-              }
-              .pagination-custom-${place.id}
-                .swiper-pagination-bullet-active {
-                width: 8px;
-                height: 8px;
-                background-color: #041830;
-                border: 1px solid #c2dcf3;
-              }
-            `}</style>
+                        /* เพิ่ม flex align เพื่อจัดกึ่งกลางแนวตั้งให้จุดไม่กระโดดขึ้นลง */
+                        .pagination-custom-${place.id} {
+                          display: flex;
+                          align-items: center;
+                          justify-content: center;
+                        }
+
+                        .pagination-custom-${place.id} .swiper-pagination-bullet {
+                          /* 1. กำหนดขนาดกล่องให้ใหญ่เท่ากับตอน Active เสมอ (8px) */
+                          width: 8px;
+                          height: 8px;
+                          
+                          background-color: #deecf9;
+                          
+                          /* 2. เพิ่มขอบเป็น 2px เพราะเดี๋ยวโดนย่อ 50% จะเหลือ 1px เท่าเดิม */
+                          border: 2px solid #c2dcf3;
+                          
+                          opacity: 1;
+                          margin: 0 4px !important;
+                          transition: all 0.3s ease;
+                          border-radius: 50%;
+                          
+                          /* 3. ใช้ Scale ย่อขนาดลงให้เหลือ 4px (0.5 ของ 8px) */
+                          transform: scale(0.5);
+                        }
+
+                        .pagination-custom-${place.id} .swiper-pagination-bullet-active {
+                          background-color: #041830;
+                          
+                          /* Active: ขอบ 1px ปกติ */
+                          border: 1px solid #c2dcf3;
+                          
+                          /* 4. ขยายกลับมาเป็นขนาดจริง (8px) */
+                          transform: scale(1);
+                        }
+                      `}</style>
+
+                    {/* ❌ ลบ <style jsx global>...</style> ทิ้งได้เลยครับ ไม่ต้องใช้แล้ว */}
 
                     <div className="absolute top-2 right-2 z-20">
                       <button
@@ -320,11 +366,7 @@ export default function HomePage() {
                         }}
                         className="flex h-[24px] w-[32px] group-hover:w-[60px] items-center justify-center rounded-[8px] border border-white bg-[#00000066] group-hover:bg-[#1565C0] text-white shadow-sm transition-all duration-300 ease-in-out overflow-hidden cursor-pointer backdrop-blur-[2px]"
                       >
-                        <Icon
-                          path={mdiPlus}
-                          size="16px"
-                          className="flex-shrink-0"
-                        />
+                        <Icon path={mdiPlus} size="16px" className="flex-shrink-0" />
                         <span className="max-w-0 opacity-0 group-hover:max-w-[40px] group-hover:opacity-100 group-hover:ml-[4px] text-[12px] font-inter font-normal whitespace-nowrap transition-all duration-300">
                           Add
                         </span>
@@ -338,12 +380,10 @@ export default function HomePage() {
                       {place.name}
                     </h4>
 
-                    {/* Location */}
                     <p className="text-sm md:text-[14px] font-inter font-[400] text-gray-500 truncate pb-1 leading-normal w-full">
                       {place.location.province_state}, {place.location.country}
                     </p>
 
-                    {/* Rating */}
                     <div className="flex items-center gap-1">
                       {[1, 2, 3, 4, 5].map((star) => (
                         <Star
@@ -359,8 +399,7 @@ export default function HomePage() {
                       </span>
                     </div>
 
-                    {/* Category */}
-                    <p className="text-sm md:text-[14px] font-inter font-[700] text-gray-900 truncate pb-1 leading-normal w-full">
+                    <p className="text-sm md:text-[14px] font-inter font-[700] text-gray-900 truncate pb-1 leading-normal w-full capitalize">
                       {place.category_tags?.[0]?.replace("_", " ") ||
                         place.category_ids?.[0]?.replace("_", " ") ||
                         "Attraction"}
@@ -379,8 +418,7 @@ export default function HomePage() {
               Top list in {selectedContinent}
             </h2>
             <Link href="/countries">
-              {/* คุณอาจจะอยากแต่งปุ่มเพิ่มด้วย เช่น text-sm text-gray-500 */}
-              <button className="">
+              <button className="w-[112px] h-[22px] flex items-center justify-center gap-[10px] font-inter font-bold text-[18px] leading-none text-[#616161] hover:text-[#3A82CE] hover:underline transition-colors">
                 All Countries
               </button>
             </Link>

@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Icon from '@mdi/react';
 import { mdiLockOutline } from '@mdi/js';
+// ✅ Import Library ธงชาติ
+import ReactCountryFlag from "react-country-flag";
 
 import { ATTRACTIONS_DATA } from "../data/attractionsData";
 import AuthModal, { UserProfile as AuthUserProfile } from "./AuthModal";
@@ -18,7 +20,6 @@ export interface UserProfile {
   image?: string | null;
 }
 
-// *** 1. เพิ่ม onLoginClick และ onLogout ใน Interface ***
 interface NavbarProps {
   user: UserProfile | null;
   showBack?: boolean;
@@ -34,14 +35,109 @@ interface SearchResult {
   id?: number | string;
   subText?: string;
 }
+// ✅ ฟังก์ชันแปลงชื่อประเทศเป็น ISO Code (2 ตัวอักษร)
+// อัปเดตตามข้อมูลใน mockData.ts
+const getCountryCode = (countryName: string): string => {
+  const mapping: { [key: string]: string } = {
+    // --- Asia ---
+    "China": "CN",
+    "Thailand": "TH",
+    "Malaysia": "MY",
+    "Japan": "JP",
+    "United Arab Emirates": "AE",
+    "Saudi Arabia": "SA",
+    "Singapore": "SG",
+    "Vietnam": "VN",
+    "India": "IN",
+    "South Korea": "KR",
+    "Indonesia": "ID",
+    "Taiwan": "TW",
+    "Bahrain": "BH",
+    "Kuwait": "KW",
+    "Kazakhstan": "KZ",
+    "Philippines": "PH",
+    "Uzbekistan": "UZ",
+    "Cambodia": "KH",
+    "Jordan": "JO",
+    "Laos": "LA",
+    "Brunei": "BN",
+    "Oman": "OM",
+    "Qatar": "QA",
+    "Sri Lanka": "LK",
+
+    // --- Europe ---
+    "France": "FR",
+    "Spain": "ES",
+    "Italy": "IT",
+    "Poland": "PL",
+    "Hungary": "HU",
+    "Croatia": "HR",
+    "Turkey": "TR",
+    "United Kingdom": "GB",
+    "Germany": "DE",
+    "Greece": "GR",
+    "Denmark": "DK",
+    "Austria": "AT",
+    "Netherlands": "NL",
+    "Portugal": "PT",
+    "Romania": "RO",
+    "Switzerland": "CH",
+    "Belgium": "BE",
+    "Latvia": "LV",
+    "Georgia": "GE",
+    "Sweden": "SE",
+    "Lithuania": "LT",
+    "Estonia": "EE",
+    "Norway": "NO",
+    "Finland": "FI",
+    "Iceland": "IS",
+
+    // --- North America ---
+    "United States": "US",
+    "Mexico": "MX",
+    "Canada": "CA",
+    "Dominican Republic": "DO",
+    "Bahamas": "BS",
+    "Cuba": "CU",
+    "Jamaica": "JM",
+    "Costa Rica": "CR",
+    "Guatemala": "GT",
+    "Panama": "PA",
+
+    // --- South America ---
+    "Argentina": "AR",
+    "Brazil": "BR",
+    "Chile": "CL",
+    "Peru": "PE",
+    "Paraguay": "PY",
+    "Colombia": "CO",
+    "Uruguay": "UY",
+    "Ecuador": "EC",
+
+    // --- Africa ---
+    "South Africa": "ZA",
+    "Morocco": "MA",
+    "Egypt": "EG",
+    "Kenya": "KE",
+    "Namibia": "NA",
+    "Tanzania": "TZ",
+
+    // --- Oceania ---
+    "Australia": "AU",
+    "New Zealand": "NZ"
+  };
+  
+  // คืนค่า code หรือถ้าหาไม่เจอให้คืนค่าว่าง (เพื่อไปแสดง icon ลูกโลกแทน)
+  return mapping[countryName] || ""; 
+};
 
 export default function Navbar({
   user,
   showBack = false,
   searchQuery = "",
   setSearchQuery,
-  onLoginClick, // *** รับค่ามาใช้ ***
-  onLogout      // *** รับค่ามาใช้ ***
+  onLoginClick,
+  onLogout
 }: NavbarProps) {
   const router = useRouter();
   const supabase = createClient();
@@ -59,11 +155,8 @@ export default function Navbar({
     if (user) setCurrentUser(user);
   }, [user]);
 
-  // ✅ DEBUG LOGIC: เช็ค Session และ Database
   useEffect(() => {
     const checkUserStatus = async () => {
-      // console.log("🔍 [Navbar] 1. เริ่มตรวจสอบสถานะ User...");
-
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError) {
@@ -72,39 +165,29 @@ export default function Navbar({
       }
 
       if (session?.user) {
-        // อัปเดต currentUser ฝั่ง Client
         if (!currentUser) {
            const userData = {
-              id: session.user.id,
-              email: session.user.email,
-              name: session.user.user_metadata?.full_name || session.user.email,
-              image: session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture
+             id: session.user.id,
+             email: session.user.email,
+             name: session.user.user_metadata?.full_name || session.user.email,
+             image: session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture
            };
            setCurrentUser(userData);
         }
 
-        // ✅ แก้ไขจุดที่ 1: ดึง username มาเช็คด้วย
-        // console.log("🔍 [Navbar] 3. กำลังค้นหาข้อมูลในตาราง profiles...");
         const { data: profile, error: dbError } = await supabase
           .from('profiles')
-          .select('id, username') // ดึง username มาเช็ค
+          .select('id, username')
           .eq('id', session.user.id)
           .maybeSingle();
 
         if (dbError) console.error("❌ [Navbar] DB Error:", dbError.message);
 
-        // ✅ แก้ไขจุดที่ 2: เปลี่ยนเงื่อนไข
         const isProfileIncomplete = !profile || !profile.username;
 
-        // console.log("🔍 [Navbar] 4. สถานะข้อมูล:", isProfileIncomplete ? "ยังไม่สมบูรณ์ (ต้องกรอก)" : "สมบูรณ์แล้ว ✅");
-
         if (isProfileIncomplete) {
-          // console.log("🚨 [Navbar] 5. เปิด Modal เพื่อให้กรอกข้อมูลให้ครบ");
           setShowEditProfileModal(true);
-        } else {
-          // console.log("✅ [Navbar] 5. ข้อมูลครบถ้วน");
         }
-
       }
     };
 
@@ -124,7 +207,6 @@ export default function Navbar({
     setImageError(false);
   }, [currentUser]);
 
-  // *** Logic Login: ถ้ามี Props ส่งมาให้ใช้ Props ถ้าไม่มีให้เปิด Modal เอง ***
   const handleLoginTrigger = () => {
     if (onLoginClick) {
       onLoginClick();
@@ -138,7 +220,6 @@ export default function Navbar({
     window.location.reload();
   };
 
-  // *** Logic Logout: ถ้ามี Props ส่งมาให้ใช้ Props ถ้าไม่มีให้ทำเอง ***
   const handleLogoutTrigger = async () => {
     if (onLogout) {
       onLogout();
@@ -161,7 +242,6 @@ export default function Navbar({
     }
   };
 
-  // ... (Search Logic เดิม) ...
   useEffect(() => {
     setLocalQuery(searchQuery);
   }, [searchQuery]);
@@ -262,27 +342,51 @@ export default function Navbar({
               {/* Dropdown Results */}
               {showDropdown && localQuery && results.length > 0 && (
                 <div className="absolute top-[40px] left-0 w-[268px] bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden py-2 animate-in fade-in zoom-in-95 duration-200">
-                  {results.map((item, index) => (
-                    <div
-                      key={`${item.type}-${index}`}
-                      onClick={() => handleSelectResult(item)}
-                      className="px-4 py-2 hover:bg-blue-50 cursor-pointer flex items-center gap-3 transition-colors group"
-                    >
-                      <div className="text-gray-400 group-hover:text-blue-500">
-                        {item.type === 'country' && <Globe size={14} />}
-                        {item.type === 'province' && <Map size={14} />}
-                        {item.type === 'place' && <MapPin size={14} />}
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-[12px] font-inter font-medium text-gray-800 line-clamp-1">
-                          {item.name}
-                        </span>
-                        <span className="text-[10px] text-gray-400 capitalize">
-                          {item.type === 'place' ? item.subText : item.type}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                  {results.map((item, index) => {
+                    
+                    // ✅ หา Country Code
+                    const countryCode = item.type === 'country' ? getCountryCode(item.name) : "";
+
+                    return (
+                        <div
+                        key={`${item.type}-${index}`}
+                        onClick={() => handleSelectResult(item)}
+                        className="px-4 py-2 hover:bg-blue-50 cursor-pointer flex items-center gap-3 transition-colors group"
+                        >
+                        <div className="text-gray-400 group-hover:text-blue-500 flex-shrink-0 w-[20px] flex justify-center">
+                            {/* ✅ เงื่อนไขการแสดงผล: ถ้าเป็น Country และมี Code ให้โชว์ธง */}
+                            {item.type === 'country' ? (
+                                countryCode ? (
+                                    <ReactCountryFlag
+                                        countryCode={countryCode}
+                                        svg
+                                        style={{
+                                            width: '1.2em',
+                                            height: '1.2em',
+                                        }}
+                                        title={item.name}
+                                    />
+                                ) : (
+                                    <Globe size={14} />
+                                )
+                            ) : item.type === 'province' ? (
+                                <Map size={14} />
+                            ) : (
+                                <MapPin size={14} />
+                            )}
+                        </div>
+                        
+                        <div className="flex flex-col">
+                            <span className="text-[12px] font-inter font-medium text-gray-800 line-clamp-1">
+                            {item.name}
+                            </span>
+                            <span className="text-[10px] text-gray-400 capitalize">
+                            {item.type === 'place' ? item.subText : item.type}
+                            </span>
+                        </div>
+                        </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -314,7 +418,7 @@ export default function Navbar({
                 </div>
               ) : (
                 <button 
-                  onClick={handleLoginTrigger} // *** ใช้ function ที่เราสร้างใหม่ ***
+                  onClick={handleLoginTrigger}
                   className="flex w-[68px] h-[24px] items-center justify-center gap-[8px] px-[8px] py-[4px] rounded-[8px] bg-[#1976D2] hover:bg-[#1565C0] text-white text-[12px] leading-none font-inter font-[400] transition border border-[#90CAF9] shadow-sm cursor-pointer"
                 >
                   <Icon path={mdiLockOutline} size={0.5} />
@@ -341,7 +445,7 @@ export default function Navbar({
                     </button>
 
                     <button 
-                      onClick={handleLogoutTrigger} // *** ใช้ function ที่เราสร้างใหม่ ***
+                      onClick={handleLogoutTrigger}
                       className="flex items-center gap-3 w-full px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition mt-1 cursor-pointer"
                     >
                       <LogOut className="w-4 h-4" /> Logout
@@ -354,7 +458,6 @@ export default function Navbar({
         </div>
       </header>
 
-      {/* ถ้าไม่มี onLoginClick ส่งมา เราก็ยังใช้ Modal ภายในตัวมันเองได้เหมือนเดิม */}
       {showAuthModal && (
         <AuthModal 
           onClose={() => setShowAuthModal(false)} 
@@ -362,7 +465,6 @@ export default function Navbar({
         />
       )}
 
-      {/* ✅ 5. แสดง Modal เมื่อ State สั่ง + มี user */}
       {showEditProfileModal && currentUser && (
         <EditProfileModal
           user={currentUser}

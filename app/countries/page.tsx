@@ -39,7 +39,6 @@ export default function AllCountriesPage() {
     }, [activeContinent]);
 
 
-    // ✅ Logic 2: การกรองข้อมูลหลัก (ใช้ useMemo เพื่อประสิทธิภาพ)
     const filteredCountries = useMemo(() => {
         return ALL_COUNTRIES_FLAT.filter((country) => {
             // 1. กรองตามทวีป
@@ -50,10 +49,10 @@ export default function AllCountriesPage() {
             const matchLetter =
                 activeLetter === "All" || country.name.startsWith(activeLetter);
 
-            // 3. กรองตามคำค้นหา (Search)
+            // 3. กรองตามคำค้นหา (Search) -> แก้ตรงนี้
             const matchSearch = country.name
                 .toLowerCase()
-                .includes(searchQuery.toLowerCase());
+                .startsWith(searchQuery.toLowerCase()); // ✅ เปลี่ยนจาก includes เป็น startsWith
 
             return matchContinent && matchLetter && matchSearch;
         }).sort((a, b) => a.name.localeCompare(b.name)); // เรียงตามตัวอักษร A-Z
@@ -185,7 +184,7 @@ export default function AllCountriesPage() {
                         {currentData.map((country, index) => (
                             <div
                                 key={`${country.name}-${index}`}
-                                onClick={() => router.push(`/explore?search=${country.name}`)}
+                                onClick={() => router.push(`/explore?country=${country.name}`)}
                                 // overflow-hidden ตรงนี้จะช่วยตัดส่วนที่รูปซูมเกินออกไป ทำให้ขนาดการ์ดเท่าเดิม
                                 className="relative w-full max-w-[264px] h-[331px] rounded-[16px] overflow-hidden cursor-pointer group shadow-sm hover:shadow-md transition-all duration-300 border border-[#C2DCF3] flex flex-col bg-white mx-auto"
                             >
@@ -249,9 +248,8 @@ export default function AllCountriesPage() {
                 )}
 
                 {/* --- Pagination --- */}
-                {/* --- Pagination --- */}
                 {totalPages > 1 && (
-                    <div className="flex justify-center items-center gap-[8px] mt-12">
+                    <div className="flex justify-start items-center gap-[8px] mt-12">
                         <button
                             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                             disabled={currentPage === 1}

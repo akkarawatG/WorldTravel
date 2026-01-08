@@ -1,42 +1,51 @@
-// src/data/attractionsData.ts
+// data/attractionsData.ts
 
-export interface AttractionImage {
-  url: string;
-  download_url: string;
-  photographer: {
-    name: string;
-    username: string;
-    profile_url: string;
-  };
-  alt_text: string;
-}
-
-export interface AttractionLocation {
-  continent: string;
-  country: string;
-  province_state: string;
-  lat: number;
-  lon: number;
+// 1. เพิ่ม Interface สำหรับ Review
+export interface Review {
+  id: number | string;
+  name: string;
+  avatar: string;
+  date: string;
+  rating: number;
+  comment: string;
+  images: string[];
 }
 
 export interface Attraction {
   id: string;
   name: string;
   search_query: string;
-  location: AttractionLocation;
-  category_ids: string[];
-  category_tags: string[];
+  location: {
+    continent: string;
+    country: string;
+    province_state: string;
+    lat: number;
+    lon: number;
+  };
+  category_ids?: string[];
+  category_tags?: string[];
   rating: number;
   review_count_approx: number;
   opening_hours_text: string;
   description_short: string;
   description_long: string;
   best_season_to_visit: string;
-  images: AttractionImage[];
+  images: {
+    url: string;
+    download_url?: string;
+    photographer?: {
+      name: string;
+      username: string;
+      profile_url: string;
+    };
+    alt_text?: string;
+  }[];
+  // 2. เพิ่ม field reviews เป็น optional
+  reviews?: Review[]; 
 }
 
 export const ATTRACTIONS_DATA: Attraction[] = [
-  // ================= THAILAND (ASIA) =================
+  // ... สถานที่อื่นๆ ...
   {
     "id": "grand-palace-wat-phra-kaeo-bangkok",
     "name": "Grand Palace & Wat Phra Kaeo (Temple of the Emerald Buddha)",
@@ -93,6 +102,51 @@ export const ATTRACTIONS_DATA: Attraction[] = [
           "profile_url": "https://unsplash.com/@insolitus?utm_source=global_tourist_attractions_data&utm_medium=referral"
         },
         "alt_text": "Ornate thai temple architecture with golden accents"
+      }
+    ],
+    // 3. เพิ่มข้อมูล Reviews ตรงนี้
+    "reviews": [
+      {
+        "id": 1,
+        "name": "Elara Winter",
+        "avatar": "https://i.pravatar.cc/150?u=elara",
+        "date": "18 November 2025",
+        "rating": 5,
+        "comment": "It's really nice attraction place to visit and learn how they build up prasat. It's amazing.",
+        "images": [
+          "https://images.unsplash.com/photo-1590623329972-7313098e9862?w=200&h=200&fit=crop",
+          "https://images.unsplash.com/photo-1564507592333-c60657eea523?w=200&h=200&fit=crop",
+          "https://images.unsplash.com/photo-1598226462723-149b089c2c89?w=200&h=200&fit=crop",
+          "https://images.unsplash.com/photo-1528181304800-259b08848526?w=200&h=200&fit=crop"
+        ]
+      },
+      {
+        "id": 2,
+        "name": "Seraphina",
+        "avatar": "https://i.pravatar.cc/150?u=seraphina",
+        "date": "28 February 2025",
+        "rating": 4,
+        "comment": "Prasart Muang Singh is a well preserved historical site. The walls built around two Khmer ruins with vast ground has been well maintained. For visitor that had been through Angkor Wat, this site is relatively small in comparison. However this site remind us the influence of Khmer throughout the region. The whole visit took us about an hour.",
+        "images": [
+          "https://images.unsplash.com/photo-1629202029707-422409743949?w=200&h=200&fit=crop",
+          "https://images.unsplash.com/photo-1599557347353-7319c5c96035?w=200&h=200&fit=crop",
+          "https://images.unsplash.com/photo-1558277259-724e8677c726?w=200&h=200&fit=crop",
+          "https://images.unsplash.com/photo-1510525009512-ad7fc13eefab?w=200&h=200&fit=crop"
+        ]
+      },
+      {
+        "id": 3,
+        "name": "Jaxon Reed",
+        "avatar": "https://i.pravatar.cc/150?u=jaxon",
+        "date": "4 June 2025",
+        "rating": 4,
+        "comment": "This place was a ruined historical site. Nice to looking at and take some pictures. It was a good stop for 20 mins.",
+        "images": [
+          "https://images.unsplash.com/photo-1594900742523-939446263096?w=200&h=200&fit=crop",
+          "https://images.unsplash.com/photo-1602167727027-e436894be690?w=200&h=200&fit=crop",
+          "https://images.unsplash.com/photo-1579979350324-4903332c0c7f?w=200&h=200&fit=crop",
+          "https://images.unsplash.com/photo-1523525203375-349079933222?w=200&h=200&fit=crop"
+        ]
       }
     ]
   },
@@ -1940,7 +1994,7 @@ export const ATTRACTIONS_DATA: Attraction[] = [
     "name": "Sydney Opera House",
     "search_query": "Sydney Opera House",
     "location": {
-      "continent": "Australia / Oceania",
+      "continent": "Oceania",
       "country": "Australia",
       "province_state": "New South Wales",
       "lat": -33.8568,
@@ -1979,7 +2033,7 @@ export const ATTRACTIONS_DATA: Attraction[] = [
     "name": "Great Barrier Reef",
     "search_query": "Great Barrier Reef",
     "location": {
-      "continent": "Australia / Oceania",
+      "continent": "Oceania",
       "country": "Australia",
       "province_state": "Queensland",
       "lat": -18.2871,
@@ -2016,7 +2070,7 @@ export const ATTRACTIONS_DATA: Attraction[] = [
     "name": "Milford Sound",
     "search_query": "Milford Sound New Zealand",
     "location": {
-      "continent": "Australia / Oceania",
+      "continent": "Oceania",
       "country": "New Zealand",
       "province_state": "Southland",
       "lat": -44.6414,
@@ -2054,7 +2108,7 @@ export const ATTRACTIONS_DATA: Attraction[] = [
     "name": "Bora Bora",
     "search_query": "Bora Bora French Polynesia",
     "location": {
-      "continent": "Australia / Oceania",
+      "continent": "Oceania",
       "country": "French Polynesia",
       "province_state": "Leeward Islands",
       "lat": -16.5004,
