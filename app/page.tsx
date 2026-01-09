@@ -339,33 +339,38 @@ export default function HomePage() {
                       </button>
                     </div>
                   </div>
-
-                  <div className="px-1 w-full min-w-0 flex flex-col gap-1 h-[87px]">
-                    <h4 className="text-lg md:text-[20px] font-inter font-normal text-[#212121] leading-tight group-hover:underline group-hover:decoration-solid group-hover:underline-offset-2 truncate w-full pb-1">
-                      {place.name}
+                  <div className="w-full h-[87px] flex flex-col gap-[4px] min-w-0">
+                    
+                    {/* 1. Title: 20px, Regular(400), #212121, Line-height 100% */}
+                    <h4 className="text-[20px] font-inter font-normal text-[#212121] leading-none w-full">
+                      <span className="inline-block max-w-full truncate border-b border-transparent group-hover:border-[#212121] pb-[1px] transition-colors duration-200 align-bottom">
+                        {place.name}
+                      </span>
                     </h4>
 
-                    {/* ✅ FIX 2: ตัด .location? ออกไปเลย ใช้ province_state โดยตรง */}
-                    <p className="text-sm md:text-[14px] font-inter font-[400] text-gray-500 truncate pb-1 leading-normal w-full">
+                    {/* 2. Location: 14px, Regular(400), #9E9E9E, Line-height 100% */}
+                    <p className="text-[14px] font-inter font-normal text-[#9E9E9E] truncate leading-none w-full">
                       {place.province_state}, {place.country}
                     </p>
 
-                    <div className="flex items-center gap-1">
+                    {/* 3. Rating Stars: Gap 4px */}
+                    <div className="flex items-center gap-[4px]">
                       {[1, 2, 3, 4, 5].map((star) => (
                         <Star
                           key={star}
-                          className={`w-3 h-3 ${star <= Math.round(place.rating || 0) // ✅ FIX 3: ใส่ || 0 กัน undefined
+                          className={`w-[12px] h-[12px] ${star <= Math.round(place.rating || 0)
                             ? "fill-yellow-400 text-yellow-400"
                             : "fill-gray-200 text-gray-200"
                             }`}
                         />
                       ))}
-                      <span className="text-xs font-medium text-gray-600 ml-1">
+                      <span className="text-xs font-medium text-[#9E9E9E] ml-1">
                         ({place.rating})
                       </span>
                     </div>
 
-                    <p className="text-sm md:text-[14px] font-inter font-[700] text-gray-900 truncate pb-1 leading-normal w-full capitalize">
+                    {/* 4. Category: 14px, SemiBold(600), #212121, Line-height 100% */}
+                    <p className="text-[14px] font-inter font-semibold text-[#212121] truncate leading-none w-full capitalize">
                       {place.category_tags?.[0]?.replace("_", " ") ||
                         place.category_ids?.[0]?.replace("_", " ") ||
                         "Attraction"}
