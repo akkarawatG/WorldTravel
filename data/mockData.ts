@@ -28,6 +28,7 @@ export const COUNTRIES_DATA: Record<string, any[]> = {
     { rank: 31, name: "Indonesia", capital: "Jakarta", image: "https://images.unsplash.com/photo-1539367628448-4bc5c9d171c8?w=600&q=80" },
     { rank: 39, name: "Taiwan", capital: "Taipei", image: "https://images.unsplash.com/photo-1552993873-0dd1110e025f?w=600&q=80" },
     { rank: 43, name: "Bahrain", capital: "Manama", image: "https://dynamic-media-cdn.tripadvisor.com/media/photo-o/15/33/fb/89/bahrain.jpg?w=2400&h=-1&s=1&cx=2368&cy=517&chk=v1_427c23761d46f39623e8" },
+    { rank: 48, name: "Iran", capital: "Tehran", image: "https://t1.gstatic.com/licensed-image?q=tbn:ANd9GcRNX6K8TqJ5vYPXI0zNXvl0kQizLyre54WnKS8QJzbXXWRsXsoL4gPje3ExYfoadVQW" },
     // Excluded: Iran (48)
     { rank: 49, name: "Kuwait", capital: "Kuwait City", image: "https://dynamic-media-cdn.tripadvisor.com/media/photo-o/06/44/b1/ae/al-kout-beach.jpg?w=2400&h=-1&s=1" },
     { rank: 50, name: "Kazakhstan", capital: "Astana", image: "https://dynamic-media-cdn.tripadvisor.com/media/photo-o/15/33/fb/6b/kazakhstan.jpg?w=2400&h=-1&s=1" },

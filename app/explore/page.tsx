@@ -2,7 +2,6 @@
 
 import { useState, Suspense, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-// ✅ เพิ่ม Check icon สำหรับ Checkbox
 import { Search, MapPin, ArrowLeft, ArrowRight, Map, Star, Plus, ChevronLeft, ChevronRight, Check } from "lucide-react";
 
 import Icon from '@mdi/react';
@@ -15,7 +14,12 @@ import 'swiper/css';
 import 'swiper/css/navigation';
 import 'swiper/css/pagination';
 
-import { ATTRACTIONS_DATA, Attraction } from "../../data/attractionsData";
+// ✅ Import Service & Types
+import { searchPlaces } from '@/services/placeService'; // ต้องสร้าง function นี้ใน services/placeService.ts ก่อน (ดูด้านล่าง)
+import { Place } from '@/types/place';
+
+// Mock Data (Fallback)
+import { ATTRACTIONS_DATA as MOCK_ATTRACTIONS } from "../../data/attractionsData";
 
 // --- CONSTANTS ---
 const ITEMS_PER_PAGE = 12;
@@ -62,6 +66,7 @@ const FILTER_GROUPS = [
 ];
 
 const CATEGORY_MAPPING: Record<string, string[]> = {
+  // ... (Mapping เดิม) ...
   "Mountains": ["mountains", "peak", "volcano", "mountain"],
   "National parks": ["national_park", "nature_reserve", "park", "forest"],
   "Islands": ["island", "islet", "beach", "coast"],
@@ -111,175 +116,157 @@ function ExploreContent() {
 
   let currentCountry = paramCountry || "Thailand";
 
+  // Logic หา Country จาก Search Query (ใช้ Mock ไปก่อน เพื่อความเร็ว)
   if (!paramCountry && urlSearchQuery) {
-    const found = ATTRACTIONS_DATA.find(p =>
+    const found = MOCK_ATTRACTIONS.find(p =>
       p.name.toLowerCase().includes(urlSearchQuery.toLowerCase()) ||
       p.location.province_state.toLowerCase().includes(urlSearchQuery.toLowerCase())
     );
     if (found) currentCountry = found.location.country;
   }
 
-  const heroSlides = ATTRACTIONS_DATA
-    .filter(place => place.location.country.toLowerCase() === currentCountry.toLowerCase())
-    .slice(0, 8);
-
-  const displaySlides = heroSlides.length > 0 ? heroSlides : ATTRACTIONS_DATA.slice(0, 8);
-
-  const [attractions] = useState<Attraction[]>(ATTRACTIONS_DATA);
+  // State
+  const [attractions, setAttractions] = useState<Place[]>([]); // ใช้ Type Place จาก DB
   const [currentSlide, setCurrentSlide] = useState(0);
-
-  // ✅ เปลี่ยน State เป็น Array เพื่อรองรับ Multiple Selection
   const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState(urlSearchQuery);
-
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
-
   const [currentPage, setCurrentPage] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
 
+  // Parse Filters from URL
+  useEffect(() => {
+    if (urlTag) setSelectedFilters(urlTag.split(","));
+    else setSelectedFilters([]);
+  }, [urlTag]);
+
+  // Sync Search Query
   useEffect(() => {
     setSearchQuery(urlSearchQuery);
   }, [urlSearchQuery]);
 
-  // ✅ Parse URL tags (comma separated) to Array
-  useEffect(() => {
-    if (urlTag) {
-      setSelectedFilters(urlTag.split(","));
-    } else {
-      setSelectedFilters([]);
-    }
-  }, [urlTag]);
-
-  // ✅ เมื่อ Filter เปลี่ยน ไม่ต้อง Reset search/country แต่ Reset Page
+  // Reset Page on Change
   useEffect(() => {
     setCurrentPage(1);
   }, [currentCountry, searchQuery, selectedFilters]);
 
-  // ✅ Function จัดการ Toggle Filter
+  // --- 🔥 HYBRID DATA FETCHING ---
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        // 1. Try fetching from Supabase
+        const dbPlaces = await searchPlaces(searchQuery, currentCountry, selectedFilters);
+        let finalPlaces = dbPlaces;
+
+        // 2. If DB empty, fallback to Mock Data
+        if (dbPlaces.length === 0) {
+          console.warn("⚠️ No data in DB, using Mock Data");
+          
+          let mockFiltered = MOCK_ATTRACTIONS.filter(p => {
+             const matchCountry = p.location?.country.toLowerCase() === currentCountry.toLowerCase();
+             const searchLower = searchQuery.toLowerCase();
+             const matchSearch = searchQuery === "" ||
+               p.name.toLowerCase().startsWith(searchLower) ||
+               p.location?.province_state.toLowerCase().startsWith(searchLower);
+             return matchCountry && matchSearch;
+          });
+
+          // Filter Logic for Mock (Manual Filtering)
+          if (selectedFilters.length > 0) {
+             mockFiltered = mockFiltered.filter(p => {
+                return selectedFilters.some(filter => {
+                   const mappedKeywords = CATEGORY_MAPPING[filter] || [filter.toLowerCase().replace(/_/g, " ")];
+                   const placeTags = [...(p.category_ids || []), ...(p.category_tags || []), p.name].map(t => t.toLowerCase().replace(/_/g, " "));
+                   return mappedKeywords.some(keyword => placeTags.some(tag => tag.includes(keyword.toLowerCase())));
+                });
+             });
+          }
+
+          // Convert Mock to Place Type
+          finalPlaces = mockFiltered.map(m => ({
+             ...m,
+             id: String(m.id),
+             province_state: m.location.province_state,
+             country: m.location.country,
+             continent: m.location.continent
+          })) as unknown as Place[];
+        }
+
+        setAttractions(finalPlaces);
+
+      } catch (error) {
+        console.error("Error fetching places:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [currentCountry, searchQuery, selectedFilters]);
+
+
+  // Hero Slides (Top 8 of current result)
+  const heroSlides = attractions.slice(0, 8);
+  const displaySlides = heroSlides.length > 0 ? heroSlides : [];
+
+  const currentContinent = attractions[0]?.continent || "Asia";
+
+  const totalPages = Math.ceil(attractions.length / ITEMS_PER_PAGE);
+  const paginatedItems = attractions.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  // --- Handlers ---
+  const updateUrlParams = (newFilters: string[]) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (newFilters.length > 0) params.set("tag", newFilters.join(","));
+    else params.delete("tag");
+    if (!params.has("country")) params.set("country", currentCountry);
+    router.replace(`/explore?${params.toString()}`, { scroll: false });
+  };
+
   const toggleFilter = (item: string) => {
-    let newFilters: string[];
-    if (selectedFilters.includes(item)) {
-      // เอาออก
-      newFilters = selectedFilters.filter((f) => f !== item);
-    } else {
-      // เพิ่มเข้าต่อท้าย (เพื่อให้เรียงตามลำดับการกด)
-      newFilters = [...selectedFilters, item];
-    }
+    let newFilters = selectedFilters.includes(item)
+      ? selectedFilters.filter((f) => f !== item)
+      : [...selectedFilters, item];
     setSelectedFilters(newFilters);
     updateUrlParams(newFilters);
   };
 
-  // ✅ Function Clear All
   const clearAllFilters = () => {
     setSelectedFilters([]);
     updateUrlParams([]);
   };
 
-  // ✅ Update URL logic for Array
-  const updateUrlParams = (newFilters: string[]) => {
-    const params = new URLSearchParams(searchParams.toString());
-
-    if (newFilters.length > 0) {
-      params.set("tag", newFilters.join(","));
-    } else {
-      params.delete("tag");
-    }
-
-    if (!params.has("country")) {
-      params.set("country", currentCountry);
-    }
-
-    router.replace(`/explore?${params.toString()}`, { scroll: false });
-  };
-
-  // Search Suggestion Logic
+  // --- Search Suggestion (Using Mock for Speed or implement DB search API) ---
   useEffect(() => {
-    if (!searchQuery || searchQuery.trim() === "") {
+    if (!searchQuery?.trim()) {
       setSearchResults([]);
       return;
     }
-
     const lowerQuery = searchQuery.toLowerCase();
     const tempProvinces: SearchResult[] = [];
     const tempPlaces: SearchResult[] = [];
     const addedKeys = new Set();
 
-    const countryData = ATTRACTIONS_DATA.filter(
-      place => place.location.country.toLowerCase() === currentCountry.toLowerCase()
-    );
-
-    countryData.forEach(place => {
-      const province = place.location.province_state;
+    // Use current attractions (DB or Mock) for suggestion
+    attractions.forEach(place => {
+      const province = place.province_state || "";
       if (province.toLowerCase().startsWith(lowerQuery) && !addedKeys.has(`province-${province}`)) {
-        tempProvinces.push({ type: 'province', name: province, subText: place.location.country });
+        tempProvinces.push({ type: 'province', name: province, subText: place.country });
         addedKeys.add(`province-${province}`);
       }
-    });
-
-    countryData.forEach(place => {
       if (place.name.toLowerCase().startsWith(lowerQuery)) {
-        tempPlaces.push({ type: 'place', name: place.name, subText: `${place.location.province_state}` });
+        tempPlaces.push({ type: 'place', name: place.name, subText: province });
       }
     });
-
     setSearchResults([...tempProvinces, ...tempPlaces].slice(0, 6));
+  }, [searchQuery, attractions]);
 
-  }, [searchQuery, currentCountry]);
-
-  const currentContinent = attractions.find(
-    (p) => p.location?.country.toLowerCase() === currentCountry.toLowerCase()
-  )?.location.continent || "Asia";
-
-  let filtered = attractions.filter(p => {
-    // 1. กรอง Country & Search พื้นฐานก่อน
-    const matchCountry = p.location?.country.toLowerCase() === currentCountry.toLowerCase();
-    const searchLower = searchQuery.toLowerCase();
-    const matchSearch = searchQuery === "" ||
-      p.name.toLowerCase().startsWith(searchLower) ||
-      p.location?.province_state.toLowerCase().startsWith(searchLower);
-
-    return matchCountry && matchSearch;
-  });
-
-  // 2. ถ้ามีการเลือก Filter ให้เรียงลำดับตามการเลือก
-  if (selectedFilters.length > 0) {
-    const orderedResults: Attraction[] = [];
-    const addedIds = new Set(); // กันซ้ำ (เผื่อสถานที่หนึ่งมีหลาย Tag ที่ถูกเลือก)
-
-    // วนลูปตามลำดับ Filter ที่กด
-    selectedFilters.forEach(filter => {
-      const mappedKeywords = CATEGORY_MAPPING[filter] || [filter.toLowerCase().replace(/_/g, " ")];
-
-      // หา Data ที่ตรงกับ Filter นี้ (จากรายการที่ผ่าน Search/Country แล้ว)
-      const matches = filtered.filter(p => {
-        if (addedIds.has(p.id)) return false; // ถ้าใส่ไปแล้ว ข้ามเลย
-
-        const placeTags = [
-          ...(p.category_ids || []),
-          ...(p.category_tags || []),
-          p.name
-        ].map(t => t.toLowerCase().replace(/_/g, " "));
-
-        return mappedKeywords.some(keyword =>
-          placeTags.some(tag => tag.includes(keyword.toLowerCase()))
-        );
-      });
-
-      matches.forEach(m => {
-        orderedResults.push(m);
-        addedIds.add(m.id);
-      });
-    });
-
-    filtered = orderedResults;
-  }
-
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
-  const paginatedItems = filtered.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
 
   return (
     <div className="min-h-screen bg-[#FFFFFF] font-inter text-gray-800 pb-20" onClick={() => setShowDropdown(false)}>
@@ -295,14 +282,20 @@ function ExploreContent() {
       {/* ================= HERO SECTION ================= */}
       <div className="w-full h-[414px] bg-[#DEECF9]">
         <div className="w-full max-w-[1440px] h-[414px] mx-auto bg-[#DEECF9] flex justify-center">
-          <div className="w-full h-[445px] flex flex-col gap-[16px] px-[156px]">
+          
+          {isLoading ? (
+             <div className="w-full h-[414px] flex items-center justify-center text-gray-500">Loading...</div>
+          ) : displaySlides.length === 0 ? (
+             <div className="w-full h-[414px] flex items-center justify-center text-gray-500">No attractions found</div>
+          ) : (
+            <div className="w-full h-[445px] flex flex-col gap-[16px] px-[156px]">
             <div className="relative w-full h-[413px] bg-black overflow-hidden group flex-shrink-0 shadow-sm">
               <Swiper
                 key={currentCountry}
                 modules={[Navigation, A11y, Autoplay]}
                 spaceBetween={0}
                 slidesPerView={1}
-                loop={true}
+                loop={displaySlides.length > 1}
                 autoplay={{ delay: 5000 }}
                 navigation={{
                   prevEl: '.custom-prev-button',
@@ -312,6 +305,7 @@ function ExploreContent() {
                 onSlideChange={(swiper) => {
                   const realIndex = swiper.realIndex;
                   setCurrentSlide(realIndex);
+                  // ... (Pagination logic) ...
                   const bullets = document.querySelectorAll('.custom-pagination-bullet');
                   bullets.forEach((bullet, index) => {
                     bullet.classList.remove('bg-[#E0E0E0]', 'bg-[#121212]', 'w-[16px]', 'h-[16px]', 'w-[8px]', 'h-[8px]', 'border', 'border-[4px]', 'border-[#EEEEEE]', 'border-[#E0E0E0]');
@@ -327,61 +321,36 @@ function ExploreContent() {
                 {displaySlides.map((slide) => (
                   <SwiperSlide key={slide.id} className="relative w-full h-full">
                     <img
-                      src={slide.images?.[0]?.url || "https://images.unsplash.com/photo-1565008576549-57569a49371d?q=80&w=1600&auto=format&fit=crop"}
+                      // ✅ Handle Image URL (DB vs Mock)
+                      src={
+                        Array.isArray(slide.images) && typeof slide.images[0] === 'object' && 'url' in slide.images[0]
+                          ? (slide.images[0] as any).url 
+                          : (slide.images?.[0] || "https://images.unsplash.com/photo-1565008576549-57569a49371d?q=80&w=1600&auto=format&fit=crop")
+                      }
                       className="w-full h-full object-cover"
                       alt={slide.name}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60 pointer-events-none"></div>
-
-                    <div className="absolute top-[167px] left-1/2 -translate-x-1/2 z-30 w-[1128px] h-[246px] flex flex-col items-center justify-center gap-[10px]">
-                    </div>
+                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60"></div>
 
                     <div className="absolute bottom-0 left-0 z-40 h-[79px] flex flex-col justify-center gap-[9px] bg-[#3C3C4399] text-white p-4 rounded-tr-[8px] rounded-br-[8px] animate-in fade-in slide-in-from-bottom-4 duration-700">
-                      <div className="flex flex-col justify-center gap-[4px]">
-                        <h2
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            router.push(`/detail?id=${slide.id}`);
-                          }}
-                          className="text-[18px] font-Inter font-[700] leading-tight drop-shadow-md truncate max-w-[300px] cursor-pointer hover:underline hover:text-[#DEECF9] transition-colors relative z-50"
+                      <div className=" h-[47px] flex flex-col justify-center gap-[8px]">
+                        <h2 
+                            onClick={(e) => { e.stopPropagation(); router.push(`/detail?id=${slide.id}`); }}
+                            className="text-[18px] font-Inter font-[700] leading-tight drop-shadow-md truncate max-w-[300px] cursor-pointer hover:underline hover:text-[#DEECF9]"
                         >
-                          {slide.name}
+                            {slide.name}
                         </h2>
-
-                        <div className="flex items-center gap-2 text-[14px] font-Inter font-[600] opacity-90 relative z-50">
+                        <div className="flex items-center gap-2 text-[14px] font-Inter font-[600] opacity-90">
                           <MapPin className="w-4 h-4 flex-shrink-0" />
-                          <div className="flex gap-1 truncate">
-                            <span
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                router.push(`/explore?search=${slide.location.province_state}`);
-                              }}
-                              className="cursor-pointer hover:underline hover:text-[#DEECF9] transition-colors"
-                            >
-                              {slide.location.province_state},
-                            </span>
-                            <span
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                router.push(`/explore?country=${slide.location.country}`);
-                              }}
-                              className="cursor-pointer hover:underline hover:text-[#DEECF9] transition-colors"
-                            >
-                              {slide.location.country}
-                            </span>
-                          </div>
+                          <span className="truncate">{slide.province_state}, {slide.country}</span>
                         </div>
                       </div>
                     </div>
                   </SwiperSlide>
                 ))}
 
-                <button className="custom-prev-button absolute left-4 top-1/2 -translate-y-1/2 z-30 w-[48px] h-[48px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-[30px] p-[9px] flex items-center justify-center gap-[10px] text-[#ffffff] transition-all active:scale-95 hidden md:flex shadow-sm cursor-pointer">
-                  <ArrowLeft className="w-[30px] h-[30px]" />
-                </button>
-                <button className="custom-next-button absolute right-4 top-1/2 -translate-y-1/2 z-30 w-[48px] h-[48px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-[30px] p-[9px] flex items-center justify-center gap-[10px] text-[#ffffff] transition-all active:scale-95 hidden md:flex shadow-sm cursor-pointer">
-                  <ArrowRight className="w-[30px] h-[30px]" />
-                </button>
+                <button className="custom-prev-button absolute left-4 top-1/2 -translate-y-1/2 z-30 w-[48px] h-[48px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-[30px] p-[9px] flex items-center justify-center gap-[10px] text-[#ffffff] transition-all active:scale-95 hidden md:flex shadow-sm cursor-pointer"><ArrowLeft className="w-[30px] h-[30px]" /></button>
+                <button className="custom-next-button absolute right-4 top-1/2 -translate-y-1/2 z-30 w-[48px] h-[48px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-[30px] p-[9px] flex items-center justify-center gap-[10px] text-[#ffffff] transition-all active:scale-95 hidden md:flex shadow-sm cursor-pointer"><ArrowRight className="w-[30px] h-[30px]" /></button>
               </Swiper>
             </div>
 
@@ -391,6 +360,7 @@ function ExploreContent() {
               ))}
             </div>
           </div>
+          )}
         </div>
       </div>
       {/* ================= END HERO SECTION ================= */}
@@ -447,7 +417,7 @@ function ExploreContent() {
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
 
-          {/* --- SIDEBAR FILTERS (UPDATED) --- */}
+          {/* --- SIDEBAR FILTERS --- */}
           <div className="hidden lg:block lg:col-span-1">
             <div className="w-[266px] h-fit bg-[#F5F5F5] p-[16px] rounded-[16px] flex flex-col gap-[10px] border border-[#EEEEEE]">
 
@@ -457,33 +427,19 @@ function ExploreContent() {
                 </h3>
               </div>
 
-              {/* ✅ "Your filters" Section: แสดงเมื่อมีการเลือก */}
               {selectedFilters.length > 0 && (
                 <div className="flex flex-col gap-3 mb-4 border-b border-gray-300 pb-4">
                   <div className="flex justify-between items-center">
                     <h4 className="font-Inter font-[700] text-[16px] leading-[100%] text-[#041830]">
                       Your filters
                     </h4>
-                    <button
-                      onClick={clearAllFilters}
-                      className="text-[12px] text-gray-500 hover:text-[#3A82CE] hover:underline"
-                    >
-                      Clear
-                    </button>
+                    <button onClick={clearAllFilters} className="text-[12px] text-gray-500 hover:text-red-500 hover:underline">Clear</button>
                   </div>
                   <div className="flex flex-col gap-2">
                     {selectedFilters.map((filter) => (
-                      <button
-                        key={`selected-${filter}`}
-                        onClick={() => toggleFilter(filter)}
-                        className="w-full text-left flex items-center gap-[8px] group cursor-pointer"
-                      >
-                        <div className="w-[16px] h-[16px] rounded-full bg-[#3A82CE] flex items-center justify-center flex-shrink-0">
-                          <Check size={10} className="text-white" strokeWidth={4} />
-                        </div>
-                        <span className="font-Inter font-[700] text-[12px] leading-[100%] text-[#3A82CE] truncate">
-                          {filter}
-                        </span>
+                      <button key={`selected-${filter}`} onClick={() => toggleFilter(filter)} className="w-full text-left flex items-center gap-[8px] group cursor-pointer">
+                        <div className="w-[16px] h-[16px] rounded-full bg-[#3A82CE] flex items-center justify-center flex-shrink-0"><Check size={10} className="text-white" strokeWidth={4} /></div>
+                        <span className="font-Inter font-[700] text-[12px] leading-[100%] text-[#3A82CE] truncate">{filter}</span>
                       </button>
                     ))}
                   </div>
@@ -491,38 +447,19 @@ function ExploreContent() {
               )}
 
               <div className="w-full flex flex-col gap-[24px] overflow-y-auto overflow-x-hidden pr-1 custom-scrollbar max-h-[600px]">
-
                 <div className="flex flex-col gap-[24px]">
                   {FILTER_GROUPS.map((group, idx) => (
                     <div key={idx} className="flex flex-col gap-[8px]">
-                      <h5 className="font-Inter font-[700] text-[16px] leading-[100%] text-[#212121] text-center">
-                        {group.title}
-                      </h5>
-
+                      <h5 className="font-Inter font-[700] text-[16px] leading-[100%] text-[#212121] text-center">{group.title}</h5>
                       <div className="flex flex-col gap-[8px]">
                         {group.items.map((item) => {
                           const isSelected = selectedFilters.includes(item);
-
                           return (
-                            <button
-                              key={item}
-                              onClick={() => toggleFilter(item)}
-                              className="w-full text-left flex items-center gap-[8px] group cursor-pointer"
-                            >
-                              {/* ✅ Checkbox UI Logic */}
-                              <div className={`w-[16px] h-[16px] rounded-full transition-all duration-200 cursor-pointer flex-shrink-0 flex items-center justify-center ${isSelected
-                                ? "bg-[#3A82CE]" // Selected (Blue)
-                                : "bg-[#E0E0E0] group-hover:bg-[#d0d0d0]" // Unselected (Gray)
-                                }`}>
+                            <button key={item} onClick={() => toggleFilter(item)} className="w-full text-left flex items-center gap-[8px] group cursor-pointer">
+                              <div className={`w-[16px] h-[16px] rounded-full transition-all duration-200 cursor-pointer flex-shrink-0 flex items-center justify-center ${isSelected ? "bg-[#3A82CE]" : "bg-[#E0E0E0] group-hover:bg-[#d0d0d0]"}`}>
                                 {isSelected && <Check size={10} className="text-white" strokeWidth={4} />}
                               </div>
-
-                              <span className={`font-Inter font-[700] text-[12px] leading-[100%] transition-colors truncate ${isSelected
-                                ? "text-[#212121]" // Selected text color
-                                : "text-[#757575] group-hover:text-[#212121]"
-                                }`}>
-                                {item}
-                              </span>
+                              <span className={`font-Inter font-[700] text-[12px] leading-[100%] transition-colors truncate ${isSelected ? "text-[#212121]" : "text-[#757575] group-hover:text-[#212121]"}`}>{item}</span>
                             </button>
                           );
                         })}
@@ -536,16 +473,15 @@ function ExploreContent() {
 
           {/* --- RIGHT CONTENT (GRID) --- */}
           <div className="w-[840px] mx-auto">
+            {isLoading ? (
+               <div className="w-full h-96 flex items-center justify-center text-gray-400">Loading attractions...</div>
+            ) : paginatedItems.length === 0 ? (
+               <div className="w-full h-96 flex items-center justify-center text-gray-400">No places found.</div>
+            ) : (
             <div className="grid grid-cols-3 gap-[24px] mb-10">
               {paginatedItems.map((place) => {
                 const rawTag = place.category_tags?.[0] || place.category_ids?.[0] || "";
-                const matchedCategoryTitle = Object.keys(CATEGORY_MAPPING).find((key) => {
-                  const keywords = CATEGORY_MAPPING[key];
-                  return keywords.some((k) =>
-                    rawTag.toLowerCase().includes(k.toLowerCase())
-                  );
-                });
-                const displayCategory = matchedCategoryTitle || rawTag.replace(/_/g, " ");
+                const displayCategory = rawTag.replace(/_/g, " ");
 
                 return (
                   <div
@@ -571,136 +507,73 @@ function ExploreContent() {
                           }}
                           className="w-full h-full relative"
                         >
-                          {(place.images && place.images.length > 0
-                            ? place.images
-                            : []
-                          ).map((img, idx) => (
-                            <SwiperSlide
-                              key={idx}
-                              className="overflow-hidden rounded-[16px]"
-                            >
-                              <img
-                                src={img.url}
-                                className="w-full h-full object-cover rounded-[16px]"
-                                alt={`${place.name} ${idx + 1}`}
-                              />
-                            </SwiperSlide>
-                          ))}
+                          {(Array.isArray(place.images) && place.images.length > 0 ? place.images : []).map((img, idx) => {
+                             const imgUrl = (typeof img === 'object' && 'url' in img) ? (img as any).url : img;
+                             return (
+                                <SwiperSlide key={idx} className="overflow-hidden rounded-[16px]">
+                                  <img src={imgUrl} className="w-full h-full object-cover rounded-[16px]" alt={`${place.name} ${idx + 1}`} />
+                                </SwiperSlide>
+                             );
+                          })}
 
                           {(!place.images || place.images.length === 0) && (
                             <SwiperSlide>
-                              <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">
-                                No Image
-                              </div>
+                              <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No Image</div>
                             </SwiperSlide>
                           )}
 
-                          <button
-                            onClick={(e) => e.stopPropagation()}
-                            className={`prev-btn-${place.id} absolute left-2 top-1/2 -translate-y-1/2 z-10 w-[24px] h-[24px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-all shadow-sm cursor-pointer text-white`}
-                          >
+                          <button onClick={(e) => e.stopPropagation()} className={`prev-btn-${place.id} absolute left-2 top-1/2 -translate-y-1/2 z-10 w-[24px] h-[24px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-all shadow-sm cursor-pointer text-white`}>
                             <ArrowLeft className="w-[14px] h-[14px]" />
                           </button>
-                          <button
-                            onClick={(e) => e.stopPropagation()}
-                            className={`next-btn-${place.id} absolute right-2 top-1/2 -translate-y-1/2 z-10 w-[24px] h-[24px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-all shadow-sm cursor-pointer text-white`}
-                          >
+                          <button onClick={(e) => e.stopPropagation()} className={`next-btn-${place.id} absolute right-2 top-1/2 -translate-y-1/2 z-10 w-[24px] h-[24px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-all shadow-sm cursor-pointer text-white`}>
                             <ArrowRight className="w-[14px] h-[14px]" />
                           </button>
-                          <div
-                            className={`pagination-custom-${place.id} absolute bottom-3 left-0 w-full flex justify-center gap-1 z-20 !pointer-events-none`}
-                          ></div>
+                          <div className={`pagination-custom-${place.id} absolute bottom-3 left-0 w-full flex justify-center gap-1 z-20 !pointer-events-none`}></div>
                         </Swiper>
 
                         <style jsx global>{`
-                        /* เพิ่ม flex align เพื่อจัดกึ่งกลางแนวตั้งให้จุดไม่กระโดดขึ้นลง */
-                        .pagination-custom-${place.id} {
-                          display: flex;
-                          align-items: center;
-                          justify-content: center;
-                        }
-
-                        .pagination-custom-${place.id} .swiper-pagination-bullet {
-                          /* 1. กำหนดขนาดกล่องให้ใหญ่เท่ากับตอน Active เสมอ (8px) */
-                          width: 8px;
-                          height: 8px;
-                          
-                          background-color: #deecf9;
-                          
-                          /* 2. เพิ่มขอบเป็น 2px เพราะเดี๋ยวโดนย่อ 50% จะเหลือ 1px เท่าเดิม */
-                          border: 2px solid #c2dcf3;
-                          
-                          opacity: 1;
-                          margin: 0 4px !important;
-                          transition: all 0.3s ease;
-                          border-radius: 50%;
-                          
-                          /* 3. ใช้ Scale ย่อขนาดลงให้เหลือ 4px (0.5 ของ 8px) */
-                          transform: scale(0.5);
-                        }
-
-                        .pagination-custom-${place.id} .swiper-pagination-bullet-active {
-                          background-color: #041830;
-                          
-                          /* Active: ขอบ 1px ปกติ */
-                          border: 1px solid #c2dcf3;
-                          
-                          /* 4. ขยายกลับมาเป็นขนาดจริง (8px) */
-                          transform: scale(1);
-                        }
-                      `}</style>
+                          .pagination-custom-${place.id} .swiper-pagination-bullet {
+                            width: 4px; height: 4px; background-color: #deecf9; border: 1px solid #c2dcf3; opacity: 1; margin: 0 4px !important; transition: all 0.3s ease; border-radius: 50%;
+                          }
+                          .pagination-custom-${place.id} .swiper-pagination-bullet-active {
+                            width: 8px; height: 8px; background-color: #041830; border: 1px solid #c2dcf3;
+                          }
+                        `}</style>
 
                         <div className="absolute top-2 right-2 z-20">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              console.log(`Add ${place.name} to trip`);
-                            }}
-                            className="flex h-[24px] w-[32px] group-hover:w-[60px] items-center justify-center rounded-[8px] border border-white bg-[#00000066] group-hover:bg-[#1565C0] text-white shadow-sm transition-all duration-300 ease-in-out overflow-hidden cursor-pointer backdrop-blur-[2px]"
-                          >
+                          <button onClick={(e) => { e.stopPropagation(); console.log(`Add ${place.name} to trip`); }} className="flex h-[24px] w-[32px] group-hover:w-[60px] items-center justify-center rounded-[8px] border border-white bg-[#00000066] group-hover:bg-[#1565C0] text-white shadow-sm transition-all duration-300 ease-in-out overflow-hidden cursor-pointer backdrop-blur-[2px]">
                             <Icon path={mdiPlus} size="16px" className="flex-shrink-0" />
-                            <span className="max-w-0 opacity-0 group-hover:max-w-[40px] group-hover:opacity-100 group-hover:ml-[4px] text-[12px] font-inter font-normal whitespace-nowrap transition-all duration-300">
-                              Add
-                            </span>
+                            <span className="max-w-0 opacity-0 group-hover:max-w-[40px] group-hover:opacity-100 group-hover:ml-[4px] text-[12px] font-inter font-normal whitespace-nowrap transition-all duration-300">Add</span>
                           </button>
                         </div>
                       </div>
 
-                      <div className="w-full h-[87px] flex flex-col gap-[4px] min-w-0">
-
-                        {/* 1. Title: 20px, Regular(400), #212121, Line-height 100% */}
-                        <h4 className="text-[20px] font-inter font-normal text-[#212121] leading-none w-full">
-                          <span className="inline-block max-w-full truncate border-b border-transparent group-hover:border-[#212121] pb-[1px] transition-colors duration-200 align-bottom">
-                            {place.name}
-                          </span>
+                      <div className="px-1 w-full min-w-0 flex flex-col gap-1 h-[87px]">
+                        <h4 
+                          onClick={(e) => { e.stopPropagation(); router.push(`/detail?id=${place.id}`); }}
+                          className="text-lg md:text-[20px] font-inter font-normal text-[#212121] leading-tight hover:underline group-hover:decoration-solid group-hover:underline-offset-2 truncate w-full pb-1 cursor-pointer"
+                        >
+                          {place.name}
                         </h4>
 
-                        {/* 2. Location: 14px, Regular(400), #9E9E9E, Line-height 100% */}
-                        <p className="text-[14px] font-inter font-normal text-[#9E9E9E] truncate leading-none w-full">
-                          {place.location.province_state}, {place.location.country}
+                        <p className="text-sm md:text-[14px] font-inter font-[400] text-gray-500 truncate pb-1 leading-normal w-full">
+                          <span onClick={(e) => { e.stopPropagation(); router.push(`/explore?search=${place.province_state}`); }} className="hover:underline hover:text-[#194473] cursor-pointer transition-colors">
+                            {place.province_state}
+                          </span>,{" "}
+                          <span onClick={(e) => { e.stopPropagation(); router.push(`/explore?country=${place.country}`); }} className="hover:underline hover:text-[#194473] cursor-pointer transition-colors">
+                            {place.country}
+                          </span>
                         </p>
 
-                        {/* 3. Rating Stars: Gap 4px */}
-                        <div className="flex items-center gap-[4px]">
+                        <div className="flex items-center gap-1">
                           {[1, 2, 3, 4, 5].map((star) => (
-                            <Star
-                              key={star}
-                              className={`w-[12px] h-[12px] ${star <= Math.round(place.rating)
-                                ? "fill-yellow-400 text-yellow-400"
-                                : "fill-gray-200 text-gray-200"
-                                }`}
-                            />
+                            <Star key={star} className={`w-3 h-3 ${star <= Math.round(place.rating || 0) ? "fill-yellow-400 text-yellow-400" : "fill-gray-200 text-gray-200"}`} />
                           ))}
-                          <span className="text-xs font-medium text-[#9E9E9E] ml-1">
-                            ({place.rating})
-                          </span>
+                          <span className="text-xs font-medium text-gray-600 ml-1">({place.rating})</span>
                         </div>
 
-                        {/* 4. Category: 14px, SemiBold(600), #212121, Line-height 100% */}
-                        <p className="text-[14px] font-inter font-semibold text-[#212121] truncate leading-none w-full capitalize">
-                          {place.category_tags?.[0]?.replace("_", " ") ||
-                            place.category_ids?.[0]?.replace("_", " ") ||
-                            "Attraction"}
+                        <p className="text-sm md:text-[14px] font-inter font-[700] text-gray-900 truncate pb-1 leading-normal w-full capitalize">
+                          {displayCategory}
                         </p>
                       </div>
                     </div>
@@ -708,8 +581,9 @@ function ExploreContent() {
                 );
               })}
             </div>
+            )}
 
-            {/* Pagination Controls */}
+            {/* ✅ PAGINATION CONTROLS */}
             {totalPages > 1 && (
               <div className="flex justify-center items-center gap-[8px] mb-10">
                 <button

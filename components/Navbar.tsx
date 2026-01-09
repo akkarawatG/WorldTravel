@@ -1,17 +1,20 @@
 "use client";
+
 import { LogOut, ChevronLeft, Search, MapPin, Globe, Map } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Icon from '@mdi/react';
 import { mdiLockOutline } from '@mdi/js';
-// ✅ Import Library ธงชาติ
+// Import Library ธงชาติ
 import ReactCountryFlag from "react-country-flag";
 
-import { ATTRACTIONS_DATA } from "../data/attractionsData";
+// ✅ Import Service & Supabase
+import { searchPlaces } from "@/services/placeService"; 
+import { createClient } from "@/utils/supabase/client";
+
 import AuthModal, { UserProfile as AuthUserProfile } from "./AuthModal";
 import EditProfileModal from "./EditProfileModal"; 
-import { createClient } from "@/utils/supabase/client";
 
 export interface UserProfile {
   id?: string | number;
@@ -35,8 +38,8 @@ interface SearchResult {
   id?: number | string;
   subText?: string;
 }
-// ✅ ฟังก์ชันแปลงชื่อประเทศเป็น ISO Code (2 ตัวอักษร)
-// อัปเดตตามข้อมูลใน mockData.ts
+
+// ฟังก์ชันแปลงชื่อประเทศเป็น ISO Code (2 ตัวอักษร)
 const getCountryCode = (countryName: string): string => {
   const mapping: { [key: string]: string } = {
     // --- Asia ---
@@ -64,6 +67,7 @@ const getCountryCode = (countryName: string): string => {
     "Oman": "OM",
     "Qatar": "QA",
     "Sri Lanka": "LK",
+    "Iran": "IR",
 
     // --- Europe ---
     "France": "FR",
@@ -127,7 +131,6 @@ const getCountryCode = (countryName: string): string => {
     "New Zealand": "NZ"
   };
   
-  // คืนค่า code หรือถ้าหาไม่เจอให้คืนค่าว่าง (เพื่อไปแสดง icon ลูกโลกแทน)
   return mapping[countryName] || ""; 
 };
 
@@ -246,39 +249,66 @@ export default function Navbar({
     setLocalQuery(searchQuery);
   }, [searchQuery]);
 
+  // ✅ New Effect for Search with Supabase (Debounce logic recommended but simple here)
   useEffect(() => {
-    if (!localQuery || localQuery.trim() === "") {
-      setResults([]);
-      return;
-    }
-    const lowerQuery = localQuery.toLowerCase();
-    const tempResults: SearchResult[] = [];
-    const addedKeys = new Set();
-    ATTRACTIONS_DATA.forEach(place => {
-      const country = place.location.country;
-      if (country.toLowerCase().includes(lowerQuery) && !addedKeys.has(`country-${country}`)) {
-        tempResults.push({ type: 'country', name: country });
-        addedKeys.add(`country-${country}`);
-      }
-    });
-    ATTRACTIONS_DATA.forEach(place => {
-      const province = place.location.province_state;
-      if (province.toLowerCase().includes(lowerQuery) && !addedKeys.has(`province-${province}`)) {
-        tempResults.push({ type: 'province', name: province, subText: place.location.country });
-        addedKeys.add(`province-${province}`);
-      }
-    });
-    ATTRACTIONS_DATA.forEach(place => {
-      if (place.name.toLowerCase().includes(lowerQuery)) {
-        tempResults.push({
-          type: 'place',
-          name: place.name,
-          id: place.id,
-          subText: `${place.location.province_state}, ${place.location.country}`
+    const fetchSearchResults = async () => {
+        if (!localQuery || localQuery.trim() === "") {
+          setResults([]);
+          return;
+        }
+
+        const lowerQuery = localQuery.toLowerCase();
+        
+        // 1. เรียกใช้ searchPlaces service จาก Supabase
+        // (ฟังก์ชัน searchPlaces ที่เราเขียนไว้ มันค้นหาทั้ง name และ province_state ให้แล้ว)
+        const places = await searchPlaces(lowerQuery);
+        
+        const tempResults: SearchResult[] = [];
+        const addedKeys = new Set();
+
+        // 2. Process Results (Extract Country, Province, Place)
+        // Note: Supabase searchPlaces might return many rows, we iterate to group/filter them
+        
+        // --- Country ---
+        places.forEach(place => {
+            const country = place.country;
+            if (country && country.toLowerCase().includes(lowerQuery) && !addedKeys.has(`country-${country}`)) {
+                tempResults.push({ type: 'country', name: country });
+                addedKeys.add(`country-${country}`);
+            }
         });
-      }
-    });
-    setResults(tempResults.slice(0, 8));
+
+        // --- Province ---
+        places.forEach(place => {
+            const province = place.province_state;
+            if (province && province.toLowerCase().includes(lowerQuery) && !addedKeys.has(`province-${province}`)) {
+                tempResults.push({ type: 'province', name: province, subText: place.country });
+                addedKeys.add(`province-${province}`);
+            }
+        });
+
+        // --- Place ---
+        places.forEach(place => {
+            if (place.name.toLowerCase().includes(lowerQuery)) {
+                tempResults.push({
+                    type: 'place',
+                    name: place.name,
+                    id: place.id,
+                    subText: `${place.province_state}, ${place.country}`
+                });
+            }
+        });
+
+        setResults(tempResults.slice(0, 8));
+    };
+
+    // Debounce (Wait 300ms after typing stops)
+    const timeoutId = setTimeout(() => {
+        fetchSearchResults();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+
   }, [localQuery]);
 
   const handleSelectResult = (result: SearchResult) => {

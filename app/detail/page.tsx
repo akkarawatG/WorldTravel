@@ -3,15 +3,25 @@
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useState, useEffect, MouseEvent } from "react";
 import { MapPin, Clock, Star, ArrowLeft, ExternalLink, Sun, X, ChevronLeft, ChevronRight, Lightbulb, Search } from "lucide-react";
-import { ATTRACTIONS_DATA } from "../../data/attractionsData";
+
+// ✅ Import Service & Types
+import { getPlaceById } from "@/services/placeService";
+import { Place } from "@/types/place";
+
+// ✅ Import Mock Data (Fallback)
+import { ATTRACTIONS_DATA as MOCK_ATTRACTIONS } from "../../data/attractionsData";
 
 function DetailContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
-
     const id = searchParams.get("id");
-    const place = ATTRACTIONS_DATA.find((item) => item.id === id);
 
+    // State
+    const [place, setPlace] = useState<Place | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState(false);
+
+    // Gallery State
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [isTransitioning, setIsTransitioning] = useState(true);
     const [showModal, setShowModal] = useState(false);
@@ -21,33 +31,131 @@ function DetailContent() {
     const [activeStarFilter, setActiveStarFilter] = useState("All");
     const [reviewPage, setReviewPage] = useState(1);
 
-    const allImages = place?.images && place.images.length > 0
-        ? place.images
+    // --- DATA FETCHING LOGIC ---
+    useEffect(() => {
+        const fetchData = async () => {
+            if (!id) return;
+            setIsLoading(true);
+            try {
+                // 1. Try fetching from Supabase
+                const dbPlace = await getPlaceById(id);
+
+                if (dbPlace) {
+                    setPlace(dbPlace);
+                } else {
+                    // 2. Fallback to Mock Data
+                    const mockPlace = MOCK_ATTRACTIONS.find((item) => String(item.id) === String(id));
+                    
+                    if (mockPlace) {
+                        const transformedPlace: Place = {
+                            ...mockPlace,
+                            id: String(mockPlace.id),
+                            province_state: mockPlace.location.province_state,
+                            country: mockPlace.location.country,
+                            continent: mockPlace.location.continent,
+                            description_long: mockPlace.description_long || mockPlace.description_short,
+                            opening_hours: mockPlace.opening_hours_text,
+                            best_season: mockPlace.best_season_to_visit,
+                            formatted_address: `${mockPlace.location.province_state}, ${mockPlace.location.country}`,
+                            google_maps_url: `https://www.google.com/maps?q=${mockPlace.location.lat},${mockPlace.location.lon}`,
+                            // ✅ Default Mock Tips (Matching requested structure)
+                            travel_tips: {
+                                footwear: "We recommend comfortable walking shoes because you'll be walking on grass and dirt.",
+                                outfit: "White, cream, or brightly colored clothing like red or yellow will help you stand out from the brown rock background."
+                            }
+                        } as unknown as Place;
+                        
+                        setPlace(transformedPlace);
+                    } else {
+                        setError(true);
+                    }
+                }
+            } catch (err) {
+                console.error("Error fetching place:", err);
+                setError(true);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchData();
+    }, [id]);
+
+
+    // --- DERIVED DATA ---
+    const rawImages = place?.images || [];
+    const allImages = rawImages.length > 0
+        ? rawImages.map(img => (typeof img === 'object' && 'url' in img ? img : { url: img as string }))
         : [{ url: "https://via.placeholder.com/1200x600?text=No+Image" }];
 
     const extendedImages = allImages.length > 1
         ? [...allImages, allImages[0]]
         : allImages;
 
-    // Filter Logic: ดึงข้อมูลจาก place.reviews แทน
-    const currentReviews = place?.reviews || [];
+    const currentReviews = (place as any)?.reviews || []; 
 
-    const filteredReviews = currentReviews.filter(review => {
+    const filteredReviews = currentReviews.filter((review: any) => {
         if (activeStarFilter === "All") return true;
         const starValue = parseInt(activeStarFilter.split(" ")[0]);
         return review.rating === starValue;
     });
 
+    // ✅ HELPER: Render Tips (Specific to Footwear & Outfit)
+    const renderTips = () => {
+        const tips = place?.travel_tips as any;
+
+        if (!tips) {
+            return (
+                <p className="font-inter text-[14px] text-[#212121] leading-tight">
+                    No tips available.
+                </p>
+            );
+        }
+
+        if (typeof tips === 'string') {
+             return <p className="font-inter text-[14px] text-[#212121] leading-tight">{tips}</p>;
+        }
+
+        // Extract specific fields
+        const footwear = tips.footwear || tips.shoes;
+        const outfit = tips.outfit_recommendation || tips.outfit || tips.clothing; // Support both keys
+
+        if (!footwear && !outfit) {
+            return (
+                 <p className="font-inter text-[14px] text-[#212121] leading-tight">
+                    No specific recommendations available.
+                </p>
+            );
+        }
+
+        return (
+            <>
+                {footwear && (
+                    <p className="font-inter text-[14px] text-[#212121] leading-tight mb-3">
+                        {footwear}
+                    </p>
+                )}
+                {outfit && (
+                    <p className="font-inter text-[14px] text-[#212121] leading-tight">
+                        <span className="font-bold">Outfit: </span>
+                        {outfit}
+                    </p>
+                )}
+            </>
+        );
+    };
+
+
+    // --- EFFECT: SLIDER AUTO PLAY ---
     useEffect(() => {
         if (allImages.length <= 1 || showModal) return;
-
         const interval = setInterval(() => {
             setCurrentImageIndex((prev) => prev + 1);
         }, 10000);
-
         return () => clearInterval(interval);
     }, [allImages.length, showModal]);
 
+    // --- EFFECT: SLIDER INFINITE LOOP ---
     useEffect(() => {
         if (currentImageIndex === extendedImages.length - 1) {
             const timeout = setTimeout(() => {
@@ -63,6 +171,7 @@ function DetailContent() {
         }
     }, [currentImageIndex, extendedImages.length]);
 
+    // --- HANDLERS ---
     const openModal = () => {
         const realIndex = currentImageIndex >= allImages.length ? 0 : currentImageIndex;
         setModalIndex(realIndex);
@@ -79,7 +188,9 @@ function DetailContent() {
         setModalIndex((prev) => (prev - 1 + allImages.length) % allImages.length);
     };
 
-    if (!place) {
+    if (isLoading) return <div className="min-h-screen flex items-center justify-center text-gray-500">Loading...</div>;
+
+    if (error || !place) {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center bg-white text-gray-500">
                 <h2 className="text-xl font-bold mb-2">Attraction Not Found</h2>
@@ -113,11 +224,11 @@ function DetailContent() {
                                 <div className="flex items-center gap-2">
                                     <div className="flex items-center gap-1">
                                         {[1, 2, 3, 4, 5].map((star) => (
-                                            <Star key={star} size={24} className={`${star <= Math.round(place.rating) ? "fill-[#FFCC00] text-[#FFCC00]" : "fill-gray-300 text-gray-300"}`} />
+                                            <Star key={star} size={24} className={`${star <= Math.round(place.rating || 0) ? "fill-[#FFCC00] text-[#FFCC00]" : "fill-gray-300 text-gray-300"}`} />
                                         ))}
                                     </div>
                                     <span style={{ fontFamily: 'Inter', fontWeight: 400, fontSize: '20px', lineHeight: '100%', color: '#212121' }}>
-                                        ({place.rating})
+                                        ({place.rating || 0})
                                     </span>
                                 </div>
                             </div>
@@ -147,12 +258,12 @@ function DetailContent() {
             <div className="max-w-[1440px] mx-auto px-[156px] pt-6 mb-4">
                 <div className="flex items-center gap-2 flex-wrap mb-2 font-Inter font-[600] text-[14px] leading-[100%] text-[#9E9E9E]">
                     <span className="hover:underline cursor-pointer" onClick={() => router.push("/")}>Home</span>/
-                    <span>{place.location.continent}</span>/
-                    <span className="hover:underline cursor-pointer" onClick={() => router.push(`/explore?country=${place.location.country}`)}>
-                        {place.location.country}
+                    <span>{place.continent}</span>/
+                    <span className="hover:underline cursor-pointer" onClick={() => router.push(`/explore?country=${place.country}`)}>
+                        {place.country}
                     </span>/
-                    <span className="hover:underline cursor-pointer" onClick={() => router.push(`/explore?country=${place.location.country}&search=${place.location.province_state}`)}>
-                        {place.location.province_state}
+                    <span className="hover:underline cursor-pointer" onClick={() => router.push(`/explore?country=${place.country}&search=${place.province_state}`)}>
+                        {place.province_state}
                     </span>/
                     <span className="truncate max-w-[200px] md:max-w-none hover:underline cursor-pointer">{place.name}</span>
                 </div>
@@ -201,8 +312,9 @@ function DetailContent() {
                         <div className="flex flex-col gap-8">
                             <div className="gap-6">
                                 <h2 className="font-inter font-black text-[36px] leading-[100%] tracking-normal text-[#194473]">About</h2>
+                                {/* ✅ Use description_long from DB */}
                                 <p className="font-inter font-[400] text-[16px] leading-[100%] tracking-[0] text-justify text-[#212121] mt-6">
-                                    {place.description_long || place.description_short}
+                                    {place.description_long || place.description_short || "No description available."}
                                 </p>
                             </div>
 
@@ -214,31 +326,28 @@ function DetailContent() {
                                     <div className="w-full h-[40px] flex items-center px-4 gap-2" style={{ backgroundColor: '#E57373' }}>
                                         <Sun size={20} className="text-white" />
                                         <span className="font-inter font-semibold text-[16px] text-white">
-                                            Summer season (April - May)
+                                            Recommended Season
                                         </span>
                                     </div>
                                     <div className="w-full h-[50px] flex flex-col justify-center px-4" style={{ backgroundColor: '#FFEBEE' }}>
                                         <p className="font-inter text-[14px] text-justify text-[#212121] leading-tight">
                                             <span className="font-semibold text-[#EF6C00]">Suggest: </span>
-                                            {place.best_season_to_visit || "Laterite rock retains heat, so walking around midday might be too much. It's recommended to always bring an umbrella or hat."}
+                                            {/* ✅ Use best_season from DB */}
+                                            {place.best_season || "Check local weather forecast before visiting."}
                                         </p>
                                     </div>
                                 </div>
 
-                                <div className="w-[631px] h-[107px] mt-4 flex flex-col justify-center gap-[5px] bg-white border border-[#90CAF9] rounded-[8px] px-[16px] py-[8px]">
-                                    <div className="w-[73px] h-[24px] flex items-center gap-[10px]">
+                                <div className="w-[631px] min-h-[107px] mt-4 flex flex-col justify-center gap-[5px] bg-white border border-[#90CAF9] rounded-[8px] px-[16px] py-[16px]">
+                                    <div className="w-[73px] h-[24px] flex items-center gap-[10px] mb-2">
                                         <Lightbulb size={24} className="text-[#2196F3]" />
                                         <h3 className="font-inter font-bold text-[18px] leading-[100%] tracking-[0] text-[#212121]">
                                             Tips
                                         </h3>
                                     </div>
-                                    <p className="font-inter text-[14px] text-[#212121] leading-tight mb-2">
-                                        We recommend comfortable walking shoes because you'll be walking on grass and dirt.
-                                    </p>
-                                    <p className="font-inter text-[14px] text-[#212121] leading-tight">
-                                        <span className="font-bold">Outfit: </span>
-                                        White, cream, or brightly colored clothing like red or yellow will help you stand out from the brown rock background.
-                                    </p>
+                                    
+                                    {/* ✅ Render Tips (Footwear + Outfit) */}
+                                    {renderTips()}
                                 </div>
                             </section>
 
@@ -268,7 +377,7 @@ function DetailContent() {
 
                                 <div className="flex flex-col gap-4 mt-6">
                                     {filteredReviews.length > 0 ? (
-                                        filteredReviews.map((review) => (
+                                        filteredReviews.map((review: any) => (
                                             <div key={review.id} className="w-[631px] bg-white rounded-[8px] overflow-hidden shadow-sm border border-[#E0E0E0]">
                                                 <div className="h-[32px] bg-[#9E9E9E] flex items-center px-3 gap-2">
                                                     <img src={review.avatar} alt={review.name} className="w-6 h-6 rounded-full border border-white object-cover" />
@@ -285,11 +394,13 @@ function DetailContent() {
                                                         </div>
                                                     </div>
                                                     <p className="text-[14px] text-[#212121] font-inter leading-relaxed mb-3">{review.comment}</p>
-                                                    <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300">
-                                                        {review.images.map((img, idx) => (
-                                                            <img key={idx} src={img} alt={`Review image ${idx}`} className="w-[60px] h-[60px] object-cover rounded-[4px] border border-[#E0E0E0] hover:opacity-90 cursor-pointer" />
-                                                        ))}
-                                                    </div>
+                                                    {review.images && (
+                                                        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300">
+                                                            {review.images.map((img: string, idx: number) => (
+                                                                <img key={idx} src={img} alt={`Review image ${idx}`} className="w-[60px] h-[60px] object-cover rounded-[4px] border border-[#E0E0E0] hover:opacity-90 cursor-pointer" />
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         ))
@@ -300,43 +411,22 @@ function DetailContent() {
                                     )}
                                 </div>
 
-                                {/* ✅ PAGINATION SECTION (UPDATED) */}
                                 <div className="flex items-center justify-between gap-[8px] mb-10">
-                                    {/* 1. ส่วน Pagination (ชิดซ้าย) */}
                                     <div className="flex items-center gap-2">
-                                        <button
-                                            onClick={() => setReviewPage((p) => Math.max(1, p - 1))}
-                                            disabled={reviewPage === 1}
-                                            className="flex items-center justify-center w-[32px] h-[24px] gap-[8px] px-[8px] py-[4px] rounded-[4px] bg-[#9E9E9E] border border-[#EEEEEE] disabled:opacity-50 disabled:cursor-not-allowed transition hover:bg-[#757575]"
-                                        >
+                                        <button onClick={() => setReviewPage((p) => Math.max(1, p - 1))} disabled={reviewPage === 1} className="flex items-center justify-center w-[32px] h-[24px] gap-[8px] px-[8px] py-[4px] rounded-[4px] bg-[#9E9E9E] border border-[#EEEEEE] disabled:opacity-50 transition hover:bg-[#757575]">
                                             <ChevronLeft size={16} className="text-white" />
                                         </button>
-
                                         <div className="flex gap-2">
                                             {[1, 2, 3, 4, 5].map((page) => (
-                                                <button
-                                                    key={page}
-                                                    onClick={() => setReviewPage(page)}
-                                                    className={`flex items-center justify-center w-[25px] h-[25px] px-[8px] py-[4px] rounded-[4px] border border-[#EEEEEE] text-[12px] font-medium transition-colors ${reviewPage === page
-                                                        ? "bg-[#194473] text-white"
-                                                        : "bg-[#9E9E9E] text-white hover:bg-gray-400"
-                                                        }`}
-                                                >
+                                                <button key={page} onClick={() => setReviewPage(page)} className={`flex items-center justify-center w-[25px] h-[25px] px-[8px] py-[4px] rounded-[4px] border border-[#EEEEEE] text-[12px] font-medium transition-colors ${reviewPage === page ? "bg-[#194473] text-white" : "bg-[#9E9E9E] text-white hover:bg-gray-400"}`}>
                                                     {page}
                                                 </button>
                                             ))}
                                         </div>
-
-                                        <button
-                                            onClick={() => setReviewPage((p) => Math.min(5, p + 1))}
-                                            disabled={reviewPage === 5}
-                                            className="flex items-center justify-center w-[32px] h-[24px] gap-[8px] px-[8px] py-[4px] rounded-[4px] bg-[#9E9E9E] border border-[#EEEEEE] disabled:opacity-50 disabled:cursor-not-allowed transition hover:bg-[#757575]"
-                                        >
+                                        <button onClick={() => setReviewPage((p) => Math.min(5, p + 1))} disabled={reviewPage === 5} className="flex items-center justify-center w-[32px] h-[24px] gap-[8px] px-[8px] py-[4px] rounded-[4px] bg-[#9E9E9E] border border-[#EEEEEE] disabled:opacity-50 transition hover:bg-[#757575]">
                                             <ChevronRight size={16} className="text-white" />
                                         </button>
                                     </div>
-
-                                    {/* 2. ปุ่ม Review (ชิดขวา) */}
                                     <button className="h-[30px] px-4 bg-[#194473] text-white rounded-[8px] font-bold text-[14px] hover:bg-[#153a61]">
                                         Review
                                     </button>
@@ -353,10 +443,12 @@ function DetailContent() {
                                 <div className="bg-[#F5F5F5] p-4 flex flex-col gap-2 min-h-[99px]">
                                     <div className="flex items-start gap-3 text-sm text-[#212121]">
                                         <MapPin className="w-5 h-5 flex-shrink-0 text-[#616161]" />
-                                        <p className="font-inter font-normal text-[14px] leading-tight">{place.location.province_state}, {place.location.country} <br /></p>
+                                        {/* ✅ Use formatted_address from DB */}
+                                        <p className="font-inter font-normal text-[14px] leading-tight">{place.formatted_address || `${place.province_state}, ${place.country}`} <br /></p>
                                     </div>
                                     <div className="flex justify-end mt-auto">
-                                        <a href={`https://www.google.com/maps/search/?api=1&query=$$${place.location.lat},${place.location.lon}`} target="_blank" rel="noreferrer" className="text-xs text-[#2196F3] font-bold hover:underline flex items-center gap-1">
+                                        {/* ✅ Use google_maps_url from DB */}
+                                        <a href={place.google_maps_url || `https://www.google.com/maps?q=${place.lat},${place.lon}`} target="_blank" rel="noreferrer" className="text-xs text-[#2196F3] font-bold hover:underline flex items-center gap-1">
                                             View on Google Maps <ExternalLink size={12} />
                                         </a>
                                     </div>
@@ -372,7 +464,8 @@ function DetailContent() {
                                         <Clock className="w-5 h-5 text-[#212121]" strokeWidth={1.5} />
                                         <div className="flex items-center gap-1 text-[14px]">
                                             <span className="font-semibold text-[#194473]">Open daily:</span>
-                                            <span className="font-normal text-[#212121]">{place.opening_hours_text || "08:30 - 16:30"}</span>
+                                            {/* ✅ Use opening_hours from DB */}
+                                            <span className="font-normal text-[#212121]">{place.opening_hours || "08:30 - 16:30"}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -383,9 +476,9 @@ function DetailContent() {
                                     <div className="h-[40px] bg-[#C4C4C4] flex items-center px-4">
                                         <h3 className="font-bold text-[20px] text-[#194473] leading-none">Tag</h3>
                                     </div>
-                                    <div className="h-[57px] bg-[#F5F5F5] px-4 flex items-center gap-2">
+                                    <div className="h-[57px] bg-[#F5F5F5] px-4 flex items-center gap-2 overflow-x-auto scrollbar-hide">
                                         {place.category_tags.map((tag) => (
-                                            <span key={tag} onClick={() => router.push(`/explore?tag=${tag}`)} className="h-[25px] flex items-center justify-center bg-[#757575] hover:bg-[#616161] transition-colors cursor-pointer text-white px-3 rounded-full text-xs font-normal capitalize leading-none">
+                                            <span key={tag} onClick={() => router.push(`/explore?tag=${tag}`)} className="h-[25px] flex items-center justify-center bg-[#757575] hover:bg-[#616161] transition-colors cursor-pointer text-white px-3 rounded-full text-xs font-normal capitalize leading-none whitespace-nowrap">
                                                 {tag.replace(/_/g, " ")}
                                             </span>
                                         ))}
