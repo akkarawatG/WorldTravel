@@ -15,8 +15,8 @@ export interface Place {
   google_maps_url?: string;
   lat?: number;
   lon?: number;
-  category_ids?: string[]; // Array of strings (Text[])
-  category_tags?: string[]; // Array of strings (Text[])
+  category_ids?: string[]; 
+  category_tags?: string[]; 
   rating?: number;
   review_count?: number;
   opening_hours?: string;
@@ -25,8 +25,12 @@ export interface Place {
   description_short?: string;
   description_long?: string;
   best_season?: string;
-  travel_tips?: any; // JSONB -> อาจจะระบุโครงสร้างถ้ามี format ชัดเจน
-  images?: { url: string; caption?: string }[]; // JSONB -> แมปให้ตรงกับการใช้งาน
+  
+  // ✅ เพิ่มฟิลด์นี้เข้าไปครับ
+  price_detail?: string; 
+
+  travel_tips?: any; 
+  images?: { url: string; caption?: string }[];
   is_verified?: boolean;
   owner_response_count?: number;
   approval_status?: string;

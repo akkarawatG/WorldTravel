@@ -22,6 +22,7 @@ export interface Attraction {
     lat: number;
     lon: number;
   };
+  price_detail?: string;
   category_ids?: string[];
   category_tags?: string[];
   rating: number;

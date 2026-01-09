@@ -131,7 +131,7 @@ export const getPlaceById = async (id: string): Promise<Place | null> => {
 
   if (error) {
     // กรณีไม่เจอ หรือ ID ผิด format
-    console.error(`Error fetching place by id (${id}):`, error.message);
+    // console.error(`Error fetching place by id (${id}):`, error.message);
     return null;
   }
 

@@ -41,27 +41,60 @@ function DetailContent() {
                 const dbPlace = await getPlaceById(id);
 
                 if (dbPlace) {
+                    // ✅ Fix: ถ้าใน DB ไม่มี travel_tips หรือเป็นค่าว่าง ให้ใส่ Default เพื่อความสวยงาม
+                    if (!dbPlace.travel_tips || Object.keys(dbPlace.travel_tips).length === 0) {
+                        dbPlace.travel_tips = {
+                            footwear: "We recommend comfortable walking shoes because you'll be walking on grass and dirt.",
+                            outfit: "White, cream, or brightly colored clothing like red or yellow will help you stand out from the brown rock background."
+                        };
+                    }
                     setPlace(dbPlace);
                 } else {
                     // 2. Fallback to Mock Data
                     const mockPlace = MOCK_ATTRACTIONS.find((item) => String(item.id) === String(id));
                     
                     if (mockPlace) {
+                        // ✅ Helper: Normalize Images (แปลงรูปภาพให้เป็น { url: string }[] เสมอ)
+                        const normalizeMockImages = (imgs: any) => {
+                             if (!imgs) return [];
+                             if (Array.isArray(imgs)) {
+                                 return imgs.map(img => {
+                                     if (typeof img === 'string') return { url: img }; 
+                                     if (typeof img === 'object') return { url: img.url || img.src || img.link || "" }; 
+                                     return { url: "" };
+                                 }).filter(i => i.url);
+                             }
+                             return [];
+                        };
+
+                        // ✅ Transform Mock Data to Place Type
                         const transformedPlace: Place = {
                             ...mockPlace,
                             id: String(mockPlace.id),
                             province_state: mockPlace.location.province_state,
                             country: mockPlace.location.country,
                             continent: mockPlace.location.continent,
-                            description_long: mockPlace.description_long || mockPlace.description_short,
+                            
+                            // Map description (รองรับหลายชื่อ field)
+                            description_long: (mockPlace as any).description || mockPlace.description_long || mockPlace.description_short || "No description available.",
+                            
                             opening_hours: mockPlace.opening_hours_text,
                             best_season: mockPlace.best_season_to_visit,
                             formatted_address: `${mockPlace.location.province_state}, ${mockPlace.location.country}`,
+                            
+                            // ✅ แก้ไข URL Syntax ให้ถูกต้อง
                             google_maps_url: `https://www.google.com/maps?q=${mockPlace.location.lat},${mockPlace.location.lon}`,
-                            // ✅ Default Mock Tips (Matching requested structure)
+                            
+                            // ✅ Map Price (with Fallback)
+                            price_detail: (mockPlace as any).price_detail || "Free entry",
+
+                            // ✅ Normalize Images
+                            images: normalizeMockImages(mockPlace.images),
+                            
+                            // ✅ Map Tips (Default values for Mock)
                             travel_tips: {
                                 footwear: "We recommend comfortable walking shoes because you'll be walking on grass and dirt.",
-                                outfit: "White, cream, or brightly colored clothing like red or yellow will help you stand out from the brown rock background."
+                                outfit: "White, cream, or brightly colored clothing like red or yellow will help you stand out."
                             }
                         } as unknown as Place;
                         
@@ -116,9 +149,9 @@ function DetailContent() {
              return <p className="font-inter text-[14px] text-[#212121] leading-tight">{tips}</p>;
         }
 
-        // Extract specific fields
-        const footwear = tips.footwear || tips.shoes;
-        const outfit = tips.outfit_recommendation || tips.outfit || tips.clothing; // Support both keys
+        // Extract specific fields (รองรับหลายชื่อ key ที่อาจเก็บใน DB)
+        const footwear = tips.footwear || tips.shoes || tips.general;
+        const outfit = tips.outfit_recommendation || tips.outfit || tips.clothing;
 
         if (!footwear && !outfit) {
             return (
@@ -448,7 +481,7 @@ function DetailContent() {
                                     </div>
                                     <div className="flex justify-end mt-auto">
                                         {/* ✅ Use google_maps_url from DB */}
-                                        <a href={place.google_maps_url || `https://www.google.com/maps?q=${place.lat},${place.lon}`} target="_blank" rel="noreferrer" className="text-xs text-[#2196F3] font-bold hover:underline flex items-center gap-1">
+                                        <a href={place.google_maps_url} target="_blank" rel="noreferrer" className="text-xs text-[#2196F3] font-bold hover:underline flex items-center gap-1">
                                             View on Google Maps <ExternalLink size={12} />
                                         </a>
                                     </div>
@@ -466,6 +499,22 @@ function DetailContent() {
                                             <span className="font-semibold text-[#194473]">Open daily:</span>
                                             {/* ✅ Use opening_hours from DB */}
                                             <span className="font-normal text-[#212121]">{place.opening_hours || "08:30 - 16:30"}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="w-[456px] h-[89px] rounded-[8px] overflow-hidden shadow-sm font-inter">
+                                <div className="h-[40px] bg-[#C4C4C4] flex items-center px-4">
+                                    <h3 className="font-bold text-[20px] text-[#194473] leading-none">Price</h3>
+                                </div>
+                                <div className="h-[49px] bg-[#F5F5F5] px-4 flex items-center">
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-1 text-[14px]">
+                                            {/* ✅ FIX: เพิ่ม Fallback Text ถ้า DB เป็น null */}
+                                            <span className="font-normal text-[#212121]">
+                                                {place.price_detail || "Free entry"}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
