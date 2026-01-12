@@ -336,19 +336,6 @@ export default function HomePage() {
                                 </span>
                               </div>
                             </div>
-
-                            {/* ✅ Rating & Category Display */}
-                            <div className="flex items-center gap-[8px] text-[12px] font-Inter font-medium relative z-50 mt-1">
-                               <div className="flex items-center gap-1">
-                                  <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                                  <span>{slide.rating}</span>
-                               </div>
-                               <div className="w-[1px] h-[12px] bg-white/50"></div>
-                               <span className="truncate max-w-[200px] text-white/90">
-                                  {displayString}
-                               </span>
-                            </div>
-
                           </div>
                         </div>
                       </SwiperSlide>
