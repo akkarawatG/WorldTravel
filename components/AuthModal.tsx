@@ -25,7 +25,7 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
 
   const [view, setView] = useState<'options' | 'email' | 'verify' | 'onboarding'>('options');
   const [loading, setLoading] = useState(false);
-  const [showMore, setShowMore] = useState(false);
+
   
   // Data State
   const [email, setEmail] = useState("");
@@ -301,25 +301,6 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                   </span>
                 </div>
               </button>
-
-              <button
-                onClick={() => setShowMore(!showMore)}
-                className="h-[24px] flex items-center justify-center gap-1 text-[#2196F3] text-[12px] font-Inter font-[400] hover:underline transition-all cursor-pointer"
-              >
-                {showMore ? "Hide options" : "Show more Options"}
-                <ChevronDown className={`w-[16px] h-[16px] transition-transform duration-300 ${showMore ? "rotate-180" : ""}`} />
-              </button>
-
-              {showMore && (
-                <div className="w-[200px] h-[40px] flex items-center justify-center gap-[16px] animate-in slide-in-from-top-2 fade-in duration-300 mb-2">
-                  <button onClick={() => handleLogin('facebook')} className="w-[56px] h-[40px] flex items-center justify-center bg-[#F5F5F5] border-[2px] border-[#EEEEEE] hover:bg-[#E0E0E0] rounded-[4px] transition-all active:scale-95 cursor-pointer">
-                    <FaFacebook className="w-[24px] h-[24px] text-[#1877F2]" />
-                  </button>
-                  <button onClick={() => handleLogin('twitter')} className="w-[56px] h-[40px] flex items-center justify-center bg-[#F5F5F5] border-[2px] border-[#EEEEEE] hover:bg-[#E0E0E0] rounded-[4px] transition-all active:scale-95 cursor-pointer">
-                    <FaXTwitter className="w-[24px] h-[24px] text-black" />
-                  </button>
-                </div>
-              )}
 
               <div className="relative w-[366px] flex items-center justify-center py-2">
                 <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-[#EEEEEE]"></div></div>

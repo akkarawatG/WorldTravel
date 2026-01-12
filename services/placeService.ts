@@ -137,3 +137,48 @@ export const getPlaceById = async (id: string): Promise<Place | null> => {
 
   return data;
 };
+// ✅ ฟังก์ชันดึง Nearby Places (เพิ่ม Log)
+export const getNearbyPlaces = async (
+  lat: number,
+  lon: number,
+  excludedId: string,
+  radiusKm: number = 500, 
+  filterCountry: string | null = null 
+): Promise<Place[]> => {
+  
+  // 🔍 LOG 1: ดูค่าที่ส่งไป
+  console.log("🚀 [Service] getNearbyPlaces Calling RPC...", { 
+    ref_lat: lat, 
+    ref_lon: lon, 
+    radius_km: radiusKm, 
+    filter_country: filterCountry 
+  });
+
+  // Call RPC
+  const { data, error } = await supabase.rpc('get_best_nearby_places', {
+    ref_lat: lat,
+    ref_lon: lon,
+    excluded_id: excludedId,
+    radius_km: radiusKm,
+    filter_country: filterCountry 
+  });
+
+  // 🔍 LOG 2: ดูผลลัพธ์จาก DB [Image of database error logs]
+  if (error) {
+    console.error('❌ [Service] RPC Failed:', error.message, error.details);
+    return [];
+  }
+
+  console.log(`✅ [Service] RPC Success! Found: ${data?.length || 0} items`, data);
+
+  // Map Data
+  return (data || []).map((item: any) => ({
+    id: item.id,
+    name: item.name,
+    rating: item.rating,
+    images: Array.isArray(item.images) ? item.images : [item.images], 
+    province_state: item.province_state || item.country,
+    country: item.country,
+    description_short: `${(item.dist_meters / 1000).toFixed(1)} km away` 
+  })) as Place[];
+};

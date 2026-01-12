@@ -2,10 +2,10 @@
 
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useState, useEffect, MouseEvent, useRef } from "react";
-import { MapPin, Clock, Star, ArrowLeft, ExternalLink, Sun, X, ChevronLeft, ChevronRight, Lightbulb, Search } from "lucide-react";
+import { MapPin, Clock, Star, ArrowLeft, ExternalLink, Sun, X, ChevronLeft, ChevronRight, Lightbulb, Search, Plus } from "lucide-react";
 
 // ✅ Import Service & Types
-import { getPlaceById } from "@/services/placeService";
+import { getPlaceById, getNearbyPlaces } from "@/services/placeService";
 import { Place } from "@/types/place";
 
 // ✅ Import Mock Data (Fallback)
@@ -18,17 +18,17 @@ function DetailContent() {
 
     // State
     const [place, setPlace] = useState<Place | null>(null);
+    const [nearbyPlaces, setNearbyPlaces] = useState<Place[]>([]);
+    const [morePictures, setMorePictures] = useState<string[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(false);
 
-    // Hero Slider State (สำหรับ Slider หน้าหลัก)
+    // Hero Slider State
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [isTransitioning, setIsTransitioning] = useState(true);
 
     // Modal State
     const [showModal, setShowModal] = useState(false);
-
-    // ✅ Gallery Queue State (สำหรับ Modal Logic ใหม่)
     const [galleryQueue, setGalleryQueue] = useState<{ url: string }[]>([]);
 
     // Review States
@@ -40,59 +40,121 @@ function DetailContent() {
         const fetchData = async () => {
             if (!id) return;
             setIsLoading(true);
+            console.log("--------------------------------------------------");
+            console.log("📍 [Page] Start fetching detail for ID:", id);
+
             try {
+                // 1. Fetch Main Place Data
                 const dbPlace = await getPlaceById(id);
+                let currentPlaceData: Place | null = null;
 
                 if (dbPlace) {
+                    console.log("✅ [Page] Found in Supabase");
                     if (!dbPlace.travel_tips || Object.keys(dbPlace.travel_tips).length === 0) {
                         dbPlace.travel_tips = {
-                            footwear: "We recommend comfortable walking shoes because you'll be walking on grass and dirt.",
-                            outfit: "White, cream, or brightly colored clothing like red or yellow will help you stand out from the brown rock background."
+                            footwear: "We recommend comfortable walking shoes.",
+                            outfit: "Light clothing recommended."
                         };
                     }
-                    setPlace(dbPlace);
+                    currentPlaceData = dbPlace;
                 } else {
+                    console.warn("⚠️ [Page] Not found in Supabase, trying Mock Data...");
                     const mockPlace = MOCK_ATTRACTIONS.find((item) => String(item.id) === String(id));
 
                     if (mockPlace) {
+                        console.log("✅ [Page] Found in Mock Data");
+                        // ... (Normalize Logic เหมือนเดิม) ...
                         const normalizeMockImages = (imgs: any) => {
                             if (!imgs) return [];
-                            if (Array.isArray(imgs)) {
-                                return imgs.map(img => {
-                                    if (typeof img === 'string') return { url: img };
-                                    if (typeof img === 'object') return { url: img.url || img.src || img.link || "" };
-                                    return { url: "" };
-                                }).filter(i => i.url);
-                            }
+                            if (Array.isArray(imgs)) return imgs.map(img => typeof img === 'string' ? { url: img } : { url: img.url || "" }).filter(i => i.url);
                             return [];
                         };
 
-                        const transformedPlace: Place = {
+                        currentPlaceData = {
                             ...mockPlace,
                             id: String(mockPlace.id),
                             province_state: mockPlace.location.province_state,
                             country: mockPlace.location.country,
                             continent: mockPlace.location.continent,
-                            description_long: (mockPlace as any).description || mockPlace.description_long || mockPlace.description_short || "No description available.",
+                            location: mockPlace.location,
+                            description_long: (mockPlace as any).description || "No description.",
                             opening_hours: mockPlace.opening_hours_text,
                             best_season: mockPlace.best_season_to_visit,
                             formatted_address: `${mockPlace.location.province_state}, ${mockPlace.location.country}`,
-                            google_maps_url: `https://www.google.com/maps?q=${mockPlace.location.lat},${mockPlace.location.lon}`,
+                            google_maps_url: `http://googleusercontent.com/maps.google.com/`,
                             price_detail: (mockPlace as any).price_detail || "Free entry",
                             images: normalizeMockImages(mockPlace.images),
-                            travel_tips: {
-                                footwear: "We recommend comfortable walking shoes because you'll be walking on grass and dirt.",
-                                outfit: "White, cream, or brightly colored clothing like red or yellow will help you stand out."
-                            }
+                            reviews: (mockPlace as any).reviews || [],
+                            travel_tips: { footwear: "Comfortable shoes.", outfit: "Casual." }
                         } as unknown as Place;
-
-                        setPlace(transformedPlace);
-                    } else {
-                        setError(true);
                     }
                 }
+
+                if (currentPlaceData) {
+                    setPlace(currentPlaceData);
+
+                    // --- 2. PREPARE MORE PICTURES ---
+                    const reviewImages = (currentPlaceData as any).reviews?.reduce((acc: string[], r: any) => {
+                        return r.images ? [...acc, ...r.images] : acc;
+                    }, []) || [];
+
+                    if (reviewImages.length > 0) {
+                        setMorePictures(reviewImages);
+                    } else {
+                        const placeImages = currentPlaceData.images?.map(img => typeof img === 'string' ? img : img.url) || [];
+                        const demoImages = placeImages.length > 0 ? [...placeImages, ...placeImages, ...placeImages].slice(1, 10) : [];
+                        setMorePictures(demoImages);
+                    }
+
+                    // --- 3. FETCH NEARBY PLACES (With Debug Log) ---
+                    const lat = (currentPlaceData as any).lat || (currentPlaceData as any).location?.lat;
+                    const lon = (currentPlaceData as any).lon || (currentPlaceData as any).location?.lon;
+
+                    console.log(`📍 [Page] Checking Coordinates for Nearby: Lat=${lat}, Lon=${lon}`);
+
+                    // Helper: Get Mock Nearby
+                    const getMockNearby = () => {
+                        console.log("🛠 [Page] Using Mock Data for Nearby Places");
+                        return MOCK_ATTRACTIONS
+                            .filter(p => String(p.id) !== String(currentPlaceData?.id))
+                            .slice(0, 5)
+                            .map(p => ({
+                                ...p,
+                                id: String(p.id),
+                                images: [{ url: typeof p.images[0] === 'string' ? p.images[0] : (p.images[0] as any).url }],
+                                province_state: p.location.province_state,
+                                rating: 4.5
+                            })) as unknown as Place[];
+                    };
+
+                    if (lat && lon) {
+                        try {
+                            const searchCountry = currentPlaceData.country || null;
+                            const nearby = await getNearbyPlaces(lat, lon, currentPlaceData.id, 500, searchCountry);
+
+                            if (nearby && nearby.length > 0) {
+                                console.log(`✅ [Page] Nearby Places Found: ${nearby.length}`);
+                                setNearbyPlaces(nearby);
+                            } else {
+                                console.warn("⚠️ [Page] RPC returned empty array. Switching to Fallback.");
+                                setNearbyPlaces(getMockNearby());
+                            }
+                        } catch (e) {
+                            console.error("💥 [Page] Nearby Fetch Exception:", e);
+                            setNearbyPlaces(getMockNearby());
+                        }
+                    } else {
+                        console.warn("⚠️ [Page] No Lat/Lon available. Cannot call RPC. Switching to Fallback.");
+                        setNearbyPlaces(getMockNearby());
+                    }
+
+                } else {
+                    console.error("❌ [Page] Place Not Found (Both DB and Mock)");
+                    setError(true);
+                }
+
             } catch (err) {
-                console.error("Error fetching place:", err);
+                console.error("💥 [Page] Critical Error:", err);
                 setError(true);
             } finally {
                 setIsLoading(false);
@@ -108,7 +170,6 @@ function DetailContent() {
         ? rawImages.map(img => (typeof img === 'object' && 'url' in img ? img : { url: img as string }))
         : [{ url: "https://via.placeholder.com/1200x600?text=No+Image" }];
 
-    // Hero Slider (Infinite Loop needs duplicated images)
     const extendedImages = allImages.length > 1
         ? [...allImages, allImages[0]]
         : allImages;
@@ -176,24 +237,17 @@ function DetailContent() {
     }, [currentImageIndex, extendedImages.length]);
 
 
-    // --- HANDLERS (MODAL LOGIC UPDATED) ---
-
-    // 1. Open Modal: Prepare the Queue
+    // --- HANDLERS (MODAL LOGIC) ---
     const openModal = () => {
-        // สร้างคิวใหม่โดยให้รูปปัจจุบัน (จาก Hero Slider) เป็นตัวแรก (Index 0)
-        // และรูปอื่นๆ เรียงต่อกันเป็นวงกลม
         const currentIndex = currentImageIndex >= allImages.length ? 0 : currentImageIndex;
         const rotatedQueue = [
             ...allImages.slice(currentIndex),
             ...allImages.slice(0, currentIndex)
         ];
-
         setGalleryQueue(rotatedQueue);
         setShowModal(true);
     };
 
-    // 2. Next: Rotate Left (รูปแรกไปต่อท้าย)
-    // [A, B, C, D] -> [B, C, D, A]
     const nextModalImage = (e?: MouseEvent<HTMLButtonElement>) => {
         e?.stopPropagation();
         setGalleryQueue((prev) => {
@@ -203,8 +257,6 @@ function DetailContent() {
         });
     };
 
-    // 3. Prev: Rotate Right (รูปท้ายมาแทรกหน้า)
-    // [A, B, C, D] -> [D, A, B, C]
     const prevModalImage = (e?: MouseEvent<HTMLButtonElement>) => {
         e?.stopPropagation();
         setGalleryQueue((prev) => {
@@ -215,13 +267,9 @@ function DetailContent() {
         });
     };
 
-    // 4. Click Thumbnail: Rotate until clicked image is first
     const clickThumbnail = (indexInQueue: number) => {
-        if (indexInQueue === 0) return; // คลิกรูป Main ไม่ต้องทำอะไร
-
+        if (indexInQueue === 0) return;
         setGalleryQueue((prev) => {
-            // หมุน array ให้รูปที่คลิก (indexInQueue) มาอยู่ที่ index 0
-            const clickedImage = prev[indexInQueue];
             const newQueue = [
                 ...prev.slice(indexInQueue),
                 ...prev.slice(0, indexInQueue)
@@ -244,22 +292,19 @@ function DetailContent() {
     }
 
     // Modal Display Logic
-    const mainImage = galleryQueue[0] || { url: "" }; // รูปที่ 1 คือ Main
-    const thumbnails = galleryQueue.slice(1, 7); // รูปที่ 2-7 คือ Thumbnails (แสดงแค่ 6 รูป)
+    const mainImage = galleryQueue[0] || { url: "" };
+    const thumbnails = galleryQueue.slice(1, 7);
 
     return (
         <div className="min-h-screen bg-[#FFFFFF] font-inter text-gray-800 pb-20 relative">
 
-            {/* ✅ MODAL POPUP SECTION (QUEUE LOGIC) */}
+            {/* MODAL POPUP SECTION */}
             {showModal && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-                    {/* Backdrop */}
                     <div
                         className="absolute inset-0 bg-black/80 backdrop-blur-sm"
                         onClick={() => setShowModal(false)}
                     />
-
-                    {/* Modal Content Box */}
                     <div className="relative bg-white flex flex-col z-10 overflow-hidden shadow-2xl rounded-[16px]"
                         style={{ width: '835px', height: '624px' }}
                     >
@@ -280,68 +325,35 @@ function DetailContent() {
                                     </span>
                                 </div>
                             </div>
-                            <button
-                                onClick={() => setShowModal(false)}
-                                className="w-[24px] h-[24px] rounded-[30px] bg-[#616161] hover:bg-[#4a4a4a] flex items-center justify-center gap-[10px] text-white transition-colors"
-                            >
+                            <button onClick={() => setShowModal(false)} className="w-[24px] h-[24px] rounded-[30px] bg-[#616161] hover:bg-[#4a4a4a] flex items-center justify-center gap-[10px] text-white transition-colors">
                                 <X size={14} strokeWidth={2.5} />
                             </button>
                         </div>
 
-                        {/* Body Container (Flex Column) - ครอบส่วนที่กำหนด */}
+                        {/* Body Container */}
                         <div className="w-[835px] h-[521px] flex flex-col items-center justify-center bg-white border-l-[2px] border-r-[2px] border-b-[2px] border-[#EEEEEE] rounded-bl-[8px] rounded-br-[8px] pb-[64px]">
-
-                            {/* ✅ DIV ครอบ Main Image + Thumbnails (707x393) */}
                             <div className="w-[707px] h-[393px] flex flex-col border border-[#C2DCF3] rounded-[8px] overflow-hidden bg-white">
-
-                                {/* 2.1 Main Image Area */}
                                 <div className="relative w-full flex-1 flex-shrink-0 overflow-hidden group bg-gray-50">
-                                    <button
-                                        onClick={prevModalImage}
-                                        className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-[32px] h-[32px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center text-white transition-all shadow-sm cursor-pointer"
-                                    >
+                                    <button onClick={prevModalImage} className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-[32px] h-[32px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center text-white transition-all shadow-sm cursor-pointer">
                                         <ChevronLeft size={20} strokeWidth={2.5} />
                                     </button>
-
-                                    <img
-                                        src={mainImage.url}
-                                        alt="Gallery Main"
-                                        className="w-full h-full object-cover transition-opacity duration-300"
-                                    />
-
-                                    <button
-                                        onClick={nextModalImage}
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-[32px] h-[32px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center text-white transition-all shadow-sm cursor-pointer"
-                                    >
+                                    <img src={mainImage.url} alt="Gallery Main" className="w-full h-full object-cover transition-opacity duration-300" />
+                                    <button onClick={nextModalImage} className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-[32px] h-[32px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center text-white transition-all shadow-sm cursor-pointer">
                                         <ChevronRight size={20} strokeWidth={2.5} />
                                     </button>
                                 </div>
-
-                                {/* 2.2 Thumbnails Area (Queue: Show Next 6 Images) */}
                                 <div className="w-[707px] h-[84px] bg-white flex items-center justify-center shrink-0 border-t border-[#C2DCF3]">
-                                    <div className="flex items-center w-full">
+                                    <div className="flex items-center w-full justify-between px-2 gap-[10px]">
                                         {thumbnails.map((img, idx) => (
-                                            <div
-                                                key={`${img.url}-${idx}`}
-                                                onClick={() => clickThumbnail(idx + 1)}
-                                                // ✅ ปรับขนาดเป็น w-[117px] h-[84px]
-                                                className="relative h-[84px] w-[117px] cursor-pointer rounded-lg overflow-hidden transition-all duration-300 border border-transparent hover:opacity-100 opacity-60 hover:scale-105 flex-shrink-0"
-                                            >
-                                                <img
-                                                    src={img.url}
-                                                    alt={`Thumbnail ${idx}`}
-                                                    className="w-full h-full object-cover"
-                                                />
+                                            <div key={`${img.url}-${idx}`} onClick={() => clickThumbnail(idx + 1)} className="relative h-[64px] w-[105px] cursor-pointer rounded-lg overflow-hidden transition-all duration-300 border border-transparent hover:opacity-100 opacity-60 hover:scale-105 flex-shrink-0">
+                                                <img src={img.url} alt={`Thumbnail ${idx}`} className="w-full h-full object-cover" />
                                             </div>
                                         ))}
-                                        {/* Fill empty slots if less than 6 thumbnails */}
                                         {Array.from({ length: Math.max(0, 6 - thumbnails.length) }).map((_, i) => (
-                                            // ✅ ปรับขนาดช่องว่างให้เท่ากัน
-                                            <div key={`empty-${i}`} className="h-[84px] w-[117px] bg-gray-50 rounded-lg flex-shrink-0 border border-gray-100" />
+                                            <div key={`empty-${i}`} className="h-[64px] w-[105px] bg-gray-50 rounded-lg flex-shrink-0 border border-gray-100" />
                                         ))}
                                     </div>
                                 </div>
-
                             </div>
                         </div>
                     </div>
@@ -372,17 +384,14 @@ function DetailContent() {
                         </h1>
                     </div>
 
-                    {/* HERO IMAGE (On Page) */}
+                    {/* HERO IMAGE */}
                     <div className="w-full h-[414px] bg-[#DEECF9] mt-6">
                         <div className="w-full max-w-[1440px] h-[414px] mx-auto flex justify-center">
                             <div className="w-full h-[445px] flex flex-col gap-[16px] px-[156px]">
                                 <div className="relative w-full h-[413px] bg-black overflow-hidden group flex-shrink-0 shadow-sm cursor-pointer"
                                     onClick={openModal}
                                 >
-                                    <div
-                                        className={`flex h-full ease-in-out ${isTransitioning ? 'transition-transform duration-700' : ''}`}
-                                        style={{ transform: `translateX(-${currentImageIndex * 100}%)` }}
-                                    >
+                                    <div className={`flex h-full ease-in-out ${isTransitioning ? 'transition-transform duration-700' : ''}`} style={{ transform: `translateX(-${currentImageIndex * 100}%)` }}>
                                         {extendedImages.map((img, index) => (
                                             <div key={index} className="min-w-full h-full flex-shrink-0 relative group-hover:opacity-90 transition-opacity">
                                                 <img src={img.url} alt={`Slide ${index}`} className="w-full h-full object-cover" />
@@ -406,7 +415,6 @@ function DetailContent() {
                         <div className="flex flex-col gap-8">
                             <div className="gap-6">
                                 <h2 className="font-inter font-black text-[36px] leading-[100%] tracking-normal text-[#194473]">About</h2>
-                                {/* ✅ Use description_long from DB */}
                                 <p className="font-inter font-[400] text-[16px] leading-[100%] tracking-[0] text-justify text-[#212121] mt-6">
                                     {place.description_long || place.description_short || "No description available."}
                                 </p>
@@ -419,37 +427,26 @@ function DetailContent() {
                                 <div className="w-[631px] rounded-[8px] overflow-hidden border border-[#EF9A9A]">
                                     <div className="w-full h-[40px] flex items-center px-4 gap-2" style={{ backgroundColor: '#E57373' }}>
                                         <Sun size={20} className="text-white" />
-                                        <span className="font-inter font-semibold text-[16px] text-white">
-                                            Recommended Season
-                                        </span>
+                                        <span className="font-inter font-semibold text-[16px] text-white">Recommended Season</span>
                                     </div>
                                     <div className="w-full h-[50px] flex flex-col justify-center px-4" style={{ backgroundColor: '#FFEBEE' }}>
                                         <p className="font-inter text-[14px] text-justify text-[#212121] leading-tight">
                                             <span className="font-semibold text-[#EF6C00]">Suggest: </span>
-                                            {/* ✅ Use best_season from DB */}
                                             {place.best_season || "Check local weather forecast before visiting."}
                                         </p>
                                     </div>
                                 </div>
-
                                 <div className="w-[631px] min-h-[107px] mt-4 flex flex-col justify-center gap-[5px] bg-white border border-[#90CAF9] rounded-[8px] px-[16px] py-[16px]">
                                     <div className="w-[73px] h-[24px] flex items-center gap-[10px] mb-2">
                                         <Lightbulb size={24} className="text-[#2196F3]" />
-                                        <h3 className="font-inter font-bold text-[18px] leading-[100%] tracking-[0] text-[#212121]">
-                                            Tips
-                                        </h3>
+                                        <h3 className="font-inter font-bold text-[18px] leading-[100%] tracking-[0] text-[#212121]">Tips</h3>
                                     </div>
-
-                                    {/* ✅ Render Tips (Footwear + Outfit) */}
                                     {renderTips()}
                                 </div>
                             </section>
 
                             <section>
-                                <h2 className="font-inter font-black text-[36px] leading-[100%] tracking-normal text-[#194473] mb-6">
-                                    Reviews
-                                </h2>
-
+                                <h2 className="font-inter font-black text-[36px] leading-[100%] tracking-normal text-[#194473] mb-6">Reviews</h2>
                                 <div className="flex flex-col gap-4 mb-4">
                                     <div className="relative w-full">
                                         <div className="flex items-center w-[631px] h-[31px] gap-[8px] px-[8px] py-[4px] bg-[#194473] border border-[#E0E0E0] rounded-[8px] transition">
@@ -459,7 +456,6 @@ function DetailContent() {
                                             </div>
                                         </div>
                                     </div>
-
                                     <div className="flex w-[631px] h-[25px] gap-[32px] items-center">
                                         {["All", "1 Star", "2 Star", "3 star", "4 Star", "5 Star"].map((filter) => (
                                             <button key={filter} onClick={() => setActiveStarFilter(filter)} className={`w-[58px] h-[25px] flex items-center justify-center rounded-[4px] text-[12px] font-inter font-[400] transition-colors leading-none border ${activeStarFilter === filter ? "bg-[#0D47A1] text-white border-[#90CAF9]" : "bg-[#757575] text-white border-transparent hover:bg-gray-600"}`}>
@@ -468,7 +464,6 @@ function DetailContent() {
                                         ))}
                                     </div>
                                 </div>
-
                                 <div className="flex flex-col gap-4 mt-6">
                                     {filteredReviews.length > 0 ? (
                                         filteredReviews.map((review: any) => (
@@ -504,26 +499,17 @@ function DetailContent() {
                                         </div>
                                     )}
                                 </div>
-
                                 <div className="flex items-center justify-between gap-[8px] mb-10">
                                     <div className="flex items-center gap-2">
-                                        <button onClick={() => setReviewPage((p) => Math.max(1, p - 1))} disabled={reviewPage === 1} className="flex items-center justify-center w-[32px] h-[24px] gap-[8px] px-[8px] py-[4px] rounded-[4px] bg-[#9E9E9E] border border-[#EEEEEE] disabled:opacity-50 transition hover:bg-[#757575]">
-                                            <ChevronLeft size={16} className="text-white" />
-                                        </button>
+                                        <button onClick={() => setReviewPage((p) => Math.max(1, p - 1))} disabled={reviewPage === 1} className="flex items-center justify-center w-[32px] h-[24px] gap-[8px] px-[8px] py-[4px] rounded-[4px] bg-[#9E9E9E] border border-[#EEEEEE] disabled:opacity-50 transition hover:bg-[#757575]"><ChevronLeft size={16} className="text-white" /></button>
                                         <div className="flex gap-2">
                                             {[1, 2, 3, 4, 5].map((page) => (
-                                                <button key={page} onClick={() => setReviewPage(page)} className={`flex items-center justify-center w-[25px] h-[25px] px-[8px] py-[4px] rounded-[4px] border border-[#EEEEEE] text-[12px] font-medium transition-colors ${reviewPage === page ? "bg-[#194473] text-white" : "bg-[#9E9E9E] text-white hover:bg-gray-400"}`}>
-                                                    {page}
-                                                </button>
+                                                <button key={page} onClick={() => setReviewPage(page)} className={`flex items-center justify-center w-[25px] h-[25px] px-[8px] py-[4px] rounded-[4px] border border-[#EEEEEE] text-[12px] font-medium transition-colors ${reviewPage === page ? "bg-[#194473] text-white" : "bg-[#9E9E9E] text-white hover:bg-gray-400"}`}>{page}</button>
                                             ))}
                                         </div>
-                                        <button onClick={() => setReviewPage((p) => Math.min(5, p + 1))} disabled={reviewPage === 5} className="flex items-center justify-center w-[32px] h-[24px] gap-[8px] px-[8px] py-[4px] rounded-[4px] bg-[#9E9E9E] border border-[#EEEEEE] disabled:opacity-50 transition hover:bg-[#757575]">
-                                            <ChevronRight size={16} className="text-white" />
-                                        </button>
+                                        <button onClick={() => setReviewPage((p) => Math.min(5, p + 1))} disabled={reviewPage === 5} className="flex items-center justify-center w-[32px] h-[24px] gap-[8px] px-[8px] py-[4px] rounded-[4px] bg-[#9E9E9E] border border-[#EEEEEE] disabled:opacity-50 transition hover:bg-[#757575]"><ChevronRight size={16} className="text-white" /></button>
                                     </div>
-                                    <button className="h-[30px] px-4 bg-[#194473] text-white rounded-[8px] font-bold text-[14px] hover:bg-[#153a61]">
-                                        Review
-                                    </button>
+                                    <button className="h-[30px] px-4 bg-[#194473] text-white rounded-[8px] font-bold text-[14px] hover:bg-[#153a61]">Review</button>
                                 </div>
                             </section>
                         </div>
@@ -595,6 +581,70 @@ function DetailContent() {
                                     </div>
                                 </div>
                             )}
+
+                            {/* ✅ NEW SECTION: MORE PICTURE (Placed correctly) */}
+                            {morePictures.length > 0 && (
+                                <div className="w-[456px] flex flex-col gap-4">
+                                    <h3 className="font-inter font-bold text-[20px] text-[#194473] leading-none">More Picture</h3>
+                                    <div className="flex gap-[13px]">
+                                        {morePictures.slice(0, 3).map((img, idx) => (
+                                            <div key={idx} className="relative w-[140px] h-[140px] rounded-[8px] overflow-hidden cursor-pointer group">
+                                                <img src={img} alt={`More pic ${idx}`} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                                                {idx === 2 && morePictures.length > 3 && (
+                                                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white font-bold text-xl backdrop-blur-[1px]">
+                                                        <Plus size={24} strokeWidth={3} /> {morePictures.length - 3}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* ✅ NEW SECTION: BEST NEAR BY (Placed correctly) */}
+                            {nearbyPlaces.length > 0 && (
+                                <div className="w-[456px] flex flex-col gap-4 mt-2">
+                                    <h3 className="font-inter font-bold text-[20px] text-[#194473] leading-none">Best near by</h3>
+                                    <div className="flex flex-col gap-3">
+                                        {nearbyPlaces.map((nearby) => {
+                                            const thumbUrl = nearby.images && nearby.images.length > 0
+                                                ? (typeof nearby.images[0] === 'string' ? nearby.images[0] : (nearby.images[0] as any).url)
+                                                : "https://via.placeholder.com/80x80?text=No+Image";
+
+                                            return (
+                                                <div
+                                                    key={nearby.id}
+                                                    onClick={() => router.push(`/detail?id=${nearby.id}`)}
+                                                    className="w-full h-[96px] bg-[#F5F5F5] rounded-[8px] p-2 flex gap-3 cursor-pointer hover:bg-gray-200 transition-colors shadow-sm"
+                                                >
+                                                    <img
+                                                        src={thumbUrl}
+                                                        alt={nearby.name}
+                                                        className="w-[80px] h-[80px] rounded-[8px] object-cover flex-shrink-0"
+                                                    />
+                                                    <div className="flex flex-col justify-center gap-1 min-w-0">
+                                                        <h4 className="font-inter font-bold text-[16px] text-[#212121] leading-tight truncate">
+                                                            {nearby.name}
+                                                        </h4>
+                                                        <p className="font-inter text-[12px] text-[#757575] leading-tight truncate">
+                                                            {nearby.province_state}, {nearby.country}
+                                                        </p>
+                                                        <div className="flex items-center gap-1 mt-1">
+                                                            <div className="flex">
+                                                                {[1, 2, 3, 4, 5].map((star) => (
+                                                                    <Star key={star} size={12} className={`${star <= Math.round(nearby.rating || 0) ? "fill-[#FFCC00] text-[#FFCC00]" : "fill-gray-300 text-gray-300"}`} />
+                                                                ))}
+                                                            </div>
+                                                            <span className="text-[12px] text-[#212121] font-inter">({nearby.rating || 0})</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
                         </div>
                     </div>
                 </div>
@@ -603,6 +653,7 @@ function DetailContent() {
     );
 }
 
+// ✅ IMPORTANT: Export default component
 export default function DetailPage() {
     return (
         <Suspense fallback={<div>Loading...</div>}>
