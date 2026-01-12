@@ -282,7 +282,7 @@ export default function HomePage() {
                         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60 pointer-events-none"></div>
 
                         {/* Text Overlay (กลาง) */}
-                        <div className="absolute top-[167px] left-1/2 -translate-x-1/2 z-30 w-[1128px] h-[246px] flex flex-col items-center justify-center gap-[10px]">
+                        <div className="absolute top-[140px] left-1/2 -translate-x-1/2 z-30 w-[1128px] h-[246px] flex flex-col items-center justify-center gap-[10px]">
                           <div className="w-[635px] h-[170px] flex flex-col items-center gap-[32px]">
                             <div className="flex flex-col items-center gap-[16px] w-full text-center">
                               <h1 className="font-Inter font-bold text-[48px] leading-[100%] text-white drop-shadow-[3px_3px_5px_rgba(0,0,0,1)]">Explore the world your way</h1>
