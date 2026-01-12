@@ -557,16 +557,18 @@ function DetailContent() {
                                         <span className="font-inter font-semibold text-[16px] text-white">Recommended Season</span>
                                     </div>
                                     <div className="w-full min-h-[50px] flex flex-col justify-center px-4 py-3" style={{ backgroundColor: '#FFEBEE' }}>
-                                        {/* ✅ แก้ไขส่วนการแสดงผล String:
-                1. ใช้ .replace() เพื่อหาคำฤดูกาลแล้วเติม \n ข้างหน้า (ยกเว้นถ้าอยู่ตัวแรกสุด)
-                2. ใส่ whitespace-pre-line ใน className
-            */}
-                                        <p className="font-inter text-[14px] text-left text-[#212121] leading-relaxed whitespace-pre-line">
-                                            <span className="font-semibold text-[#EF6C00]">Suggest: </span>
-                                            {place.best_season
-                                                ? place.best_season.replace(/(?<!^)(Summer|Winter|Spring|Autumn|Fall|Rainy|Dry|Monsoon)/gi, '\n$1')
-                                                : "Check local weather forecast before visiting."}
-                                        </p>
+                                        <div className="flex gap-1 items-start"> {/* ใช้ Flex เพื่อให้คำว่า Suggest แยกกับเนื้อหาบรรทัดอื่นๆ */}
+                                            <span className="font-semibold text-[#EF6C00] whitespace-nowrap">Suggest: </span>
+                                            <p className="font-inter text-[14px] text-left text-[#212121] leading-relaxed whitespace-pre-line">
+                                                {place.best_season
+                                                    ? place.best_season
+                                                        .replace(/;|and/gi, '') // 1. ตัด ; และคำว่า and ออก (ไม่สนตัวพิมพ์เล็ก-ใหญ่)
+                                                        .replace(/\s+/g, ' ')   // 2. ปรับช่องว่างที่อาจเกินมาจากการตัดให้เหลือ 1 ช่อง
+                                                        .replace(/(?<!^)(Summer|Winter|Spring|Autumn|Fall|Rainy|Dry|Monsoon)/gi, '\n$1') // 3. ขึ้นบรรทัดใหม่หน้าฤดูกาล
+                                                        .trim() // 4. ตัดช่องว่างหน้าและหลังสุดทิ้ง
+                                                    : "Check local weather forecast before visiting."}
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="w-[631px] min-h-[107px] mt-4 flex flex-col justify-center gap-[5px] bg-white border border-[#90CAF9] rounded-[8px] px-[16px] py-[16px]">
@@ -677,21 +679,34 @@ function DetailContent() {
                                 </div>
                             </div>
 
-                            <div className="w-[456px] h-[89px] rounded-[8px] overflow-hidden shadow-sm font-inter">
+                            {/* 1. แก้ตัวแม่สุด: เปลี่ยน h-[89px] เป็น h-auto และเพิ่ม min-h-[89px] เพื่อให้ยืดหดได้ */}
+                            <div className="w-[456px] min-h-[89px] h-auto rounded-[8px] overflow-hidden shadow-sm font-inter bg-[#F5F5F5]">
+
+                                {/* Header สีเทาด้านบน */}
                                 <div className="h-[40px] bg-[#C4C4C4] flex items-center px-4">
                                     <h3 className="font-bold text-[20px] text-[#194473] leading-none">Opening hours</h3>
                                 </div>
-                                {/* ปรับจาก h-[49px] เป็น min-h-[49px] และเพิ่ม py-2 เพื่อให้สวยงามเวลาข้อความยาว */}
-                                <div className="bg-[#F5F5F5] px-4 py-2 flex items-center">
-                                    <div className="flex items-start gap-3"> {/* เปลี่ยนเป็น items-start เพื่อให้ Icon อยู่ด้านบนถ้าข้อความยาว */}
-                                        <Clock className="w-5 h-5 text-[#212121] mt-0.5 flex-shrink-0" strokeWidth={1.5} />
-                                        <div className="flex flex-row gap-1 text-[14px]">
-                                            {/* whitespace-nowrap: ห้ามหัวข้อขึ้นบรรทัดใหม่ | flex-shrink-0: ป้องกันหัวข้อโดนบีบตัว */}
+
+                                {/* 2. Body ด้านล่าง: ใช้ h-auto และ padding ตามสเปก */}
+                                <div className="w-full min-h-[49px] h-auto bg-[#F5F5F5] pt-4 pb-4 pl-2 pr-2">
+
+                                    {/* Inner Wrapper */}
+                                    <div className="flex items-start gap-[8px]">
+
+                                        {/* Icon */}
+                                        <Clock className="w-5 h-5 text-[#212121] mt-[3px] flex-shrink-0" strokeWidth={1.5} />
+
+                                        {/* 3. Text Container: ใช้ Flex เพื่อแยก "หัวข้อ" กับ "เนื้อหา" ให้อยู่คนละคอลัมน์ */}
+                                        <div className="flex-1 flex items-start gap-2 text-[14px] leading-relaxed text-[#212121]">
+
+                                            {/* หัวข้อ: ล็อกไม่ให้ตัดคำ */}
                                             <span className="font-semibold text-[#194473] whitespace-nowrap flex-shrink-0">
                                                 Open daily:
                                             </span>
-                                            <span className="font-normal text-[#212121]">
-                                                {place.opening_hours || "08:30 - 16:30"}
+
+                                            {/* เนื้อหา: ปล่อยให้ยาวและตัดบรรทัดได้ โดยจะตรงแนวกับบรรทัดแรกของตัวเองเสมอ */}
+                                            <span className="font-normal break-words">
+                                                {place.opening_hours || "24 hours (climbing season is typically July to early September)"}
                                             </span>
                                         </div>
                                     </div>
