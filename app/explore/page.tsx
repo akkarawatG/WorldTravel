@@ -318,14 +318,37 @@ function ExploreContent() {
   return (
     <div className="min-h-screen bg-[#FFFFFF] font-inter text-gray-800 pb-20" onClick={() => setShowDropdown(false)}>
       
-      <style jsx global>{`
-        .custom-pagination-container .swiper-pagination-bullet {
-          width: 4px; height: 4px; background-color: #deecf9; border: 1px solid #c2dcf3; opacity: 1; margin: 0 4px !important; transition: all 0.3s ease; border-radius: 50%;
-        }
-        .custom-pagination-container .swiper-pagination-bullet-active {
-          width: 8px; height: 8px; background-color: #041830; border: 1px solid #c2dcf3;
-        }
-      `}</style>
+<style jsx global>{`
+  /* 1. จัดการ Container ให้ลูกๆ อยู่กึ่งกลางเสมอ */
+  .custom-pagination-container {
+    display: flex !important;
+    align-items: center !important;    /* จัดกึ่งกลางแนวตั้ง */
+    justify-content: center !important; /* จัดกึ่งกลางแนวนอน */
+    height: 12px !important;            /* กำหนดความสูงคงที่เพื่อไม่ให้แถวขยับ */
+  }
+
+  /* 2. สไตล์ของจุดปกติ */
+  .custom-pagination-container .swiper-pagination-bullet {
+    width: 4px !important;
+    height: 4px !important;
+    background-color: #deecf9 !important;
+    border: 1px solid #c2dcf3 !important;
+    opacity: 1 !important;
+    margin: 0 4px !important;
+    transition: all 0.3s ease-in-out !important;
+    border-radius: 50% !important;
+    flex-shrink: 0 !important;          /* ป้องกันจุดโดนบีบเบี้ยว */
+  }
+
+  /* 3. สไตล์ของจุดเมื่อ Active (ขยายจากกลาง) */
+  .custom-pagination-container .swiper-pagination-bullet-active {
+    width: 8px !important;
+    height: 8px !important;
+    background-color: #041830 !important;
+    border: 1px solid #c2dcf3 !important;
+    /* การขยายจะดูนุ่มนวลและออกจากศูนย์กลางเพราะ align-items: center ของตัวแม่ */
+  }
+`}</style>
 
       <div className="max-w-[1440px] mx-auto px-[156px] pt-6 mb-4">
         <div className="flex items-center gap-2 flex-wrap mb-2 font-Inter font-[600] text-[14px] leading-[100%] text-[#9E9E9E]">

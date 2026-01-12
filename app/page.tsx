@@ -469,14 +469,38 @@ export default function HomePage() {
                           <div className={`pagination-custom-${place.id} absolute bottom-3 left-0 w-full flex justify-center gap-1 z-20 !pointer-events-none`}></div>
                         </Swiper>
 
-                        <style jsx global>{`
-                          .pagination-custom-${place.id} .swiper-pagination-bullet {
-                            width: 4px; height: 4px; background-color: #deecf9; border: 1px solid #c2dcf3; opacity: 1; margin: 0 4px !important; transition: all 0.3s ease; border-radius: 50%;
-                          }
-                          .pagination-custom-${place.id} .swiper-pagination-bullet-active {
-                            width: 8px; height: 8px; background-color: #041830; border: 1px solid #c2dcf3;
-                          }
-                        `}</style>
+<style jsx global>{`
+  /* คอนเทนเนอร์หลักของจุด */
+  .pagination-custom-${place.id} {
+    display: flex !important;
+    align-items: center !important; /* จัดให้อยู่กลางแนวตั้ง */
+    justify-content: center !important; /* จัดให้อยู่กลางแนวนอน */
+    height: 12px !important; /* คุมความสูงไว้ไม่ให้ดีด */
+  }
+
+  /* จุดปกติ */
+  .pagination-custom-${place.id} .swiper-pagination-bullet {
+    width: 4px !important;
+    height: 4px !important;
+    background-color: #deecf9 !important;
+    border: 1px solid #c2dcf3 !important;
+    opacity: 1 !important;
+    margin: 0 4px !important;
+    transition: all 0.3s ease-in-out !important;
+    border-radius: 50% !important;
+    flex-shrink: 0 !important; /* ป้องกันจุดโดนบีบ */
+    transform: scale(1); /* สถานะปกติ */
+  }
+
+  /* จุดที่กำลังทำงาน (Active) */
+  .pagination-custom-${place.id} .swiper-pagination-bullet-active {
+    width: 8px !important;
+    height: 8px !important;
+    background-color: #041830 !important;
+    border: 1px solid #c2dcf3 !important;
+    /* การขยายจะเกิดขึ้นจากกึ่งกลางเพราะจัด center ไว้ที่แม่แล้ว */
+  }
+`}</style>
 
                         <div className="absolute top-2 right-2 z-20">
                           <button onClick={(e) => { e.stopPropagation(); console.log(`Add ${place.name} to trip`); }} className="flex h-[24px] w-[32px] group-hover:w-[60px] items-center justify-center rounded-[8px] border border-white bg-[#00000066] group-hover:bg-[#1565C0] text-white shadow-sm transition-all duration-300 ease-in-out overflow-hidden cursor-pointer backdrop-blur-[2px]">

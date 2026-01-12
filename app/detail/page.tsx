@@ -542,7 +542,7 @@ function DetailContent() {
                   About
                 </h2>
                 {/* ลบ mt-6 ออก เพราะใช้ gap-24 ของแม่แล้ว */}
-                <p className="font-inter font-normal text-[16px] leading-none tracking-normal text-justify text-[#212121]">
+                <p className="font-inter font-normal text-[16px] leading-normal tracking-normal text-left text-[#212121]">
                   {place.description_long || place.description_short || "No description available."}
                 </p>
               </div>
