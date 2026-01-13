@@ -72,7 +72,7 @@ export default function AllCountriesPage() {
     };
 
     return (
-        <div className="min-h-screen bg-[#FFFFFF]-50 pb-20">
+        <div className="min-h-screen bg-gray-50 pb-20">
             {/* Breadcrumb */}
             <div className="max-w-[1440px] mx-auto px-[156px] pt-6 mb-4">
                 <div className="flex items-center gap-2 flex-wrap mb-2 font-Inter font-[600] text-[14px] leading-[100%] text-[#9E9E9E]">
