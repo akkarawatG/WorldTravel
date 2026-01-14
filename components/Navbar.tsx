@@ -10,11 +10,11 @@ import { mdiLockOutline } from '@mdi/js';
 import ReactCountryFlag from "react-country-flag";
 
 // ✅ Import Service & Supabase
-import { searchPlaces } from "@/services/placeService"; 
+import { searchPlaces } from "@/services/placeService";
 import { createClient } from "@/utils/supabase/client";
 
 import AuthModal, { UserProfile as AuthUserProfile } from "./AuthModal";
-import EditProfileModal from "./EditProfileModal"; 
+import EditProfileModal from "./EditProfileModal";
 
 export interface UserProfile {
   id?: string | number;
@@ -55,7 +55,7 @@ const getCountryCode = (countryName: string): string => {
     // --- Oceania ---
     "Australia": "AU", "New Zealand": "NZ"
   };
-  return mapping[countryName] || ""; 
+  return mapping[countryName] || "";
 };
 
 export default function Navbar({
@@ -85,7 +85,7 @@ export default function Navbar({
   useEffect(() => {
     const checkUserStatus = async () => {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      
+
       if (sessionError) {
         console.error("❌ [Navbar] Error getting session:", sessionError);
         return;
@@ -93,13 +93,13 @@ export default function Navbar({
 
       if (session?.user) {
         if (!currentUser) {
-           const userData = {
-             id: session.user.id,
-             email: session.user.email,
-             name: session.user.user_metadata?.full_name || session.user.email,
-             image: session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture
-           };
-           setCurrentUser(userData);
+          const userData = {
+            id: session.user.id,
+            email: session.user.email,
+            name: session.user.user_metadata?.full_name || session.user.email,
+            image: session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture
+          };
+          setCurrentUser(userData);
         }
 
         const { data: profile, error: dbError } = await supabase
@@ -121,9 +121,9 @@ export default function Navbar({
     checkUserStatus();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-        if (event === 'SIGNED_IN') {
-            checkUserStatus();
-        }
+      if (event === 'SIGNED_IN') {
+        checkUserStatus();
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -176,57 +176,57 @@ export default function Navbar({
   // ✅ New Effect for Search with Supabase (Debounce logic recommended but simple here)
   useEffect(() => {
     const fetchSearchResults = async () => {
-        if (!localQuery || localQuery.trim() === "") {
-          setResults([]);
-          return;
+      if (!localQuery || localQuery.trim() === "") {
+        setResults([]);
+        return;
+      }
+
+      const lowerQuery = localQuery.toLowerCase();
+
+      // 1. เรียกใช้ searchPlaces service จาก Supabase
+      const places = await searchPlaces(lowerQuery);
+
+      const tempResults: SearchResult[] = [];
+      const addedKeys = new Set();
+
+      // 2. Process Results (Extract Country, Province, Place)
+
+      // --- Country ---
+      places.forEach(place => {
+        const country = place.country;
+        if (country && country.toLowerCase().includes(lowerQuery) && !addedKeys.has(`country-${country}`)) {
+          tempResults.push({ type: 'country', name: country });
+          addedKeys.add(`country-${country}`);
         }
+      });
 
-        const lowerQuery = localQuery.toLowerCase();
-        
-        // 1. เรียกใช้ searchPlaces service จาก Supabase
-        const places = await searchPlaces(lowerQuery);
-        
-        const tempResults: SearchResult[] = [];
-        const addedKeys = new Set();
+      // --- Province ---
+      places.forEach(place => {
+        const province = place.province_state;
+        if (province && province.toLowerCase().includes(lowerQuery) && !addedKeys.has(`province-${province}`)) {
+          tempResults.push({ type: 'province', name: province, subText: place.country });
+          addedKeys.add(`province-${province}`);
+        }
+      });
 
-        // 2. Process Results (Extract Country, Province, Place)
-        
-        // --- Country ---
-        places.forEach(place => {
-            const country = place.country;
-            if (country && country.toLowerCase().includes(lowerQuery) && !addedKeys.has(`country-${country}`)) {
-                tempResults.push({ type: 'country', name: country });
-                addedKeys.add(`country-${country}`);
-            }
-        });
+      // --- Place ---
+      places.forEach(place => {
+        if (place.name.toLowerCase().includes(lowerQuery)) {
+          tempResults.push({
+            type: 'place',
+            name: place.name,
+            id: place.id,
+            subText: `${place.province_state}, ${place.country}`
+          });
+        }
+      });
 
-        // --- Province ---
-        places.forEach(place => {
-            const province = place.province_state;
-            if (province && province.toLowerCase().includes(lowerQuery) && !addedKeys.has(`province-${province}`)) {
-                tempResults.push({ type: 'province', name: province, subText: place.country });
-                addedKeys.add(`province-${province}`);
-            }
-        });
-
-        // --- Place ---
-        places.forEach(place => {
-            if (place.name.toLowerCase().includes(lowerQuery)) {
-                tempResults.push({
-                    type: 'place',
-                    name: place.name,
-                    id: place.id,
-                    subText: `${place.province_state}, ${place.country}`
-                });
-            }
-        });
-
-        setResults(tempResults.slice(0, 8));
+      setResults(tempResults.slice(0, 8));
     };
 
     // Debounce (Wait 300ms after typing stops)
     const timeoutId = setTimeout(() => {
-        fetchSearchResults();
+      fetchSearchResults();
     }, 300);
 
     return () => clearTimeout(timeoutId);
@@ -256,7 +256,7 @@ export default function Navbar({
   return (
     <>
       <header className="w-full min-w-[1024px] h-[65px] bg-[#F5F5F5] relative z-[50]">
-        
+
         {(showUserMenu || showDropdown) && (
           <div className="fixed inset-0 z-30 bg-transparent" onClick={() => { setShowUserMenu(false); setShowDropdown(false); }}></div>
         )}
@@ -265,7 +265,7 @@ export default function Navbar({
 
           {/* LEFT: Logo */}
           <div className="flex items-center gap-4 relative z-40">
-             {showBack && (
+            {showBack && (
               <button onClick={() => router.back()} className="text-gray-500 hover:text-gray-900 transition p-1 hover:bg-gray-200 rounded-full">
                 <ChevronLeft className="w-6 h-6" />
               </button>
@@ -277,7 +277,7 @@ export default function Navbar({
 
           {/* CENTER: Search Box */}
           <div className="flex items-center justify-center flex-1 mx-4 relative z-50">
-             <div className="relative">
+            <div className="relative">
               <div className="flex items-center w-[268px] h-[31px] gap-[8px] px-[8px] py-[4px] bg-[#194473] border border-[#E0E0E0] rounded-[8px] transition">
                 <Search className="w-[24px] h-[24px] p-[4px] text-white flex-shrink-0" />
                 <div className="flex items-center w-[220px] h-[23px] bg-[#FFFFFF] rounded-[4px] px-[8px]">
@@ -297,39 +297,39 @@ export default function Navbar({
                   {results.map((item, index) => {
                     const countryCode = item.type === 'country' ? getCountryCode(item.name) : "";
                     return (
-                        <div
+                      <div
                         key={`${item.type}-${index}`}
                         onClick={() => handleSelectResult(item)}
                         className="px-4 py-2 hover:bg-blue-50 cursor-pointer flex items-center gap-3 transition-colors group"
-                        >
+                      >
                         <div className="text-gray-400 group-hover:text-blue-500 flex-shrink-0 w-[20px] flex justify-center">
-                            {item.type === 'country' ? (
-                                countryCode ? (
-                                    <ReactCountryFlag
-                                        countryCode={countryCode}
-                                        svg
-                                        style={{ width: '1.2em', height: '1.2em' }}
-                                        title={item.name}
-                                    />
-                                ) : (
-                                    <Globe size={14} />
-                                )
-                            ) : item.type === 'province' ? (
-                                <Map size={14} />
+                          {item.type === 'country' ? (
+                            countryCode ? (
+                              <ReactCountryFlag
+                                countryCode={countryCode}
+                                svg
+                                style={{ width: '1.2em', height: '1.2em' }}
+                                title={item.name}
+                              />
                             ) : (
-                                <MapPin size={14} />
-                            )}
+                              <Globe size={14} />
+                            )
+                          ) : item.type === 'province' ? (
+                            <Map size={14} />
+                          ) : (
+                            <MapPin size={14} />
+                          )}
                         </div>
-                        
+
                         <div className="flex flex-col">
-                            <span className="text-[12px] font-inter font-medium text-gray-800 line-clamp-1">
+                          <span className="text-[12px] font-inter font-medium text-gray-800 line-clamp-1">
                             {item.name}
-                            </span>
-                            <span className="text-[10px] text-gray-400 capitalize">
+                          </span>
+                          <span className="text-[10px] text-gray-400 capitalize">
                             {item.type === 'place' ? item.subText : item.type}
-                            </span>
+                          </span>
                         </div>
-                        </div>
+                      </div>
                     );
                   })}
                 </div>
@@ -348,11 +348,11 @@ export default function Navbar({
                 <div className="flex items-center gap-2 cursor-pointer group" onClick={() => setShowUserMenu(!showUserMenu)}>
                   <div className="w-[24px] h-[24px] flex-shrink-0 rounded-full bg-[#D9D9D9] flex items-center justify-center text-white text-[12px] font-bold border border-white shadow-sm overflow-hidden">
                     {currentUser.image && !imageError ? (
-                      <img 
-                        src={currentUser.image} 
-                        alt={currentUser.name || "Profile"} 
-                        className="w-full h-full object-cover" 
-                        onError={() => setImageError(true)} 
+                      <img
+                        src={currentUser.image}
+                        alt={currentUser.name || "Profile"}
+                        className="w-full h-full object-cover"
+                        onError={() => setImageError(true)}
                       />
                     ) : (
                       <div className="w-full h-full bg-[#1976D2] flex items-center justify-center">
@@ -362,7 +362,7 @@ export default function Navbar({
                   </div>
                 </div>
               ) : (
-                <button 
+                <button
                   onClick={handleLoginTrigger}
                   className="flex w-[68px] h-[24px] items-center justify-center gap-[8px] px-[8px] py-[4px] rounded-[8px] bg-[#1976D2] hover:bg-[#1565C0] text-white text-[12px] leading-none font-inter font-[400] transition border border-[#90CAF9] shadow-sm cursor-pointer"
                 >
@@ -371,48 +371,58 @@ export default function Navbar({
                 </button>
               )}
 
-              {/* ✅ MODIFIED: Dropdown Menu to match image_0fcdad.png */}
+              {/* ✅ MODIFIED: Dropdown Menu (190x202px) */}
               {showUserMenu && currentUser && (
-                <div className="absolute right-0 top-[35px] w-[280px] bg-white rounded-[12px] shadow-[0px_4px_20px_rgba(0,0,0,0.1)] py-4 z-50 border border-gray-100 text-[#212121] animate-in fade-in zoom-in-95 duration-200 font-inter">
-                  
+                <div className="absolute right-0 top-[35px] w-[190px] h-[202px] bg-white rounded-[8px] border border-[#EEEEEE] p-4 flex flex-col gap-4 z-50 shadow-[0px_4px_20px_rgba(0,0,0,0.1)] font-inter animate-in fade-in zoom-in-95 duration-200">
+
                   {/* User Info */}
-                  <div className="px-6 mb-4">
-                    <p className="text-[18px] font-bold text-[#212121] truncate">{currentUser.name || "User"}</p>
-                    <p className="text-[14px] text-[#757575] truncate mt-1">{currentUser.email || ""}</p>
+                  {/* Wrapper: w-[158px] h-[49px] gap-2 */}
+                  <div className="w-[158px] h-[49px] flex flex-col gap-2 justify-center">
+                    {/* Name: Inter, Bold, 20px, Leading-none */}
+                    <p className="font-inter font-bold text-[20px] leading-none text-[#212121] truncate">
+                      {currentUser.name || "User"}
+                    </p>
+
+                    {/* Email: Inter, Regular, 14px, Leading-none */}
+                    <p className="font-inter font-normal text-[14px] leading-none text-[#757575] truncate">
+                      {currentUser.email || ""}
+                    </p>
                   </div>
 
-                  {/* Menu Links */}
-                  <div className="flex flex-col gap-2 px-6">
-                    
-                    <button 
+                  {/* Menu Links Group */}
+                  {/* Wrapper: w-[158px] h-[62px] gap-2 */}
+                  <div className="w-[158px] h-[62px] flex flex-col gap-2">
+                    <button
                       onClick={() => {
                         setShowUserMenu(false);
                         setShowEditProfileModal(true);
                       }}
-                      className="w-full text-left py-2 text-[16px] text-[#212121] hover:text-[#194473] transition cursor-pointer"
+                      className="w-[158px] h-[27px] rounded-[8px] flex items-center gap-4 px-[8px] py-[4px] text-left hover:text-[#194473] transition-colors
+                                 font-inter font-normal text-[16px] leading-none tracking-normal text-[#212121]"
                     >
-                        Edit profile
+                      Edit profile
                     </button>
 
-                    <button 
+                    <button
                       onClick={() => {
                         setShowUserMenu(false);
-                        // router.push('/review-history'); // Uncomment and use if you have a review history page
+                        // router.push('/review-history');
                       }}
-                      className="w-full text-left py-2 text-[16px] text-[#212121] hover:text-[#194473] transition cursor-pointer"
+                      className="w-[158px] h-[27px] rounded-[8px] flex items-center gap-4 px-[8px] py-[4px] text-left hover:text-[#194473] transition-colors
+                                 font-inter font-normal text-[16px] leading-none tracking-normal text-[#212121]"
                     >
-                        Review
-                    </button>
-
-                    <div className="h-[1px] bg-[#EEEEEE] my-1"></div>
-
-                    <button 
-                      onClick={handleLogoutTrigger}
-                      className="flex items-center justify-center gap-2 w-full h-[40px] bg-[#EA4335] hover:bg-[#d32f2f] text-white text-[16px] font-medium rounded-[8px] transition cursor-pointer mt-2"
-                    >
-                      <LogOut className="w-[18px] h-[18px]" /> Logout
+                      Review
                     </button>
                   </div>
+
+                  {/* Logout Button (ดันลงล่างด้วย mt-auto หรือปล่อยตาม flow gap-4) */}
+                  <button
+                    onClick={handleLogoutTrigger}
+                    className="w-[158px] h-[32px] rounded-[8px] flex items-center justify-center gap-2 px-[8px] py-[4px] border border-[#EF9A9A] bg-[#F44336] hover:bg-[#d32f2f] transition-colors mt-auto
+                               font-inter font-normal text-[16px] leading-none text-white"
+                  >
+                    <LogOut className="w-[16px] h-[16px]" /> Logout
+                  </button>
                 </div>
               )}
             </div>
@@ -421,9 +431,9 @@ export default function Navbar({
       </header>
 
       {showAuthModal && (
-        <AuthModal 
-          onClose={() => setShowAuthModal(false)} 
-          onSuccess={handleAuthSuccess} 
+        <AuthModal
+          onClose={() => setShowAuthModal(false)}
+          onSuccess={handleAuthSuccess}
         />
       )}
 
@@ -433,7 +443,7 @@ export default function Navbar({
           onClose={() => setShowEditProfileModal(false)}
           onSuccess={() => {
             setShowEditProfileModal(false);
-            window.location.reload(); 
+            window.location.reload();
           }}
         />
       )}
