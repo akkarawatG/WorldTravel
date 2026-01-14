@@ -494,7 +494,7 @@ function DetailContent() {
                     <span className="hover:underline cursor-pointer" onClick={() => router.push(`/explore?country=${place.country}&search=${place.province_state}`)}>
                         {place.province_state || place.country /* Fallback display */}
                     </span>/
-                    <span className="truncate max-w-[200px] md:max-w-none hover:underline cursor-pointer">{place.name}</span>
+                    <span className="truncate max-w-[200px] md:max-w-none text-[#101828] hover:underline cursor-pointer">{place.name}</span>
                 </div>
             </div>
 
@@ -650,7 +650,10 @@ function DetailContent() {
                                             <ChevronRight size={16} className="text-white" />
                                         </button>
                                     </div>
-                                    <button className="h-[30px] px-4 bg-[#194473] text-white rounded-[8px] font-bold text-[14px] hover:bg-[#153a61]">
+                                    <button
+                                        onClick={() => router.push(`/review?placeId=${id}`)} // Navigate to review page with ID
+                                        className="h-[30px] px-4 bg-[#194473] text-white rounded-[8px] font-bold text-[14px] hover:bg-[#153a61] cursor-pointer"
+                                    >
                                         Review
                                     </button>
                                 </div>

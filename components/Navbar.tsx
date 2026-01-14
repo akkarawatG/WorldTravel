@@ -43,94 +43,18 @@ interface SearchResult {
 const getCountryCode = (countryName: string): string => {
   const mapping: { [key: string]: string } = {
     // --- Asia ---
-    "China": "CN",
-    "Thailand": "TH",
-    "Malaysia": "MY",
-    "Japan": "JP",
-    "United Arab Emirates": "AE",
-    "Saudi Arabia": "SA",
-    "Singapore": "SG",
-    "Vietnam": "VN",
-    "India": "IN",
-    "South Korea": "KR",
-    "Indonesia": "ID",
-    "Taiwan": "TW",
-    "Bahrain": "BH",
-    "Kuwait": "KW",
-    "Kazakhstan": "KZ",
-    "Philippines": "PH",
-    "Uzbekistan": "UZ",
-    "Cambodia": "KH",
-    "Jordan": "JO",
-    "Laos": "LA",
-    "Brunei": "BN",
-    "Oman": "OM",
-    "Qatar": "QA",
-    "Sri Lanka": "LK",
-    "Iran": "IR",
-
+    "China": "CN", "Thailand": "TH", "Malaysia": "MY", "Japan": "JP", "United Arab Emirates": "AE", "Saudi Arabia": "SA", "Singapore": "SG", "Vietnam": "VN", "India": "IN", "South Korea": "KR", "Indonesia": "ID", "Taiwan": "TW", "Bahrain": "BH", "Kuwait": "KW", "Kazakhstan": "KZ", "Philippines": "PH", "Uzbekistan": "UZ", "Cambodia": "KH", "Jordan": "JO", "Laos": "LA", "Brunei": "BN", "Oman": "OM", "Qatar": "QA", "Sri Lanka": "LK", "Iran": "IR",
     // --- Europe ---
-    "France": "FR",
-    "Spain": "ES",
-    "Italy": "IT",
-    "Poland": "PL",
-    "Hungary": "HU",
-    "Croatia": "HR",
-    "Turkey": "TR",
-    "United Kingdom": "GB",
-    "Germany": "DE",
-    "Greece": "GR",
-    "Denmark": "DK",
-    "Austria": "AT",
-    "Netherlands": "NL",
-    "Portugal": "PT",
-    "Romania": "RO",
-    "Switzerland": "CH",
-    "Belgium": "BE",
-    "Latvia": "LV",
-    "Georgia": "GE",
-    "Sweden": "SE",
-    "Lithuania": "LT",
-    "Estonia": "EE",
-    "Norway": "NO",
-    "Finland": "FI",
-    "Iceland": "IS",
-
+    "France": "FR", "Spain": "ES", "Italy": "IT", "Poland": "PL", "Hungary": "HU", "Croatia": "HR", "Turkey": "TR", "United Kingdom": "GB", "Germany": "DE", "Greece": "GR", "Denmark": "DK", "Austria": "AT", "Netherlands": "NL", "Portugal": "PT", "Romania": "RO", "Switzerland": "CH", "Belgium": "BE", "Latvia": "LV", "Georgia": "GE", "Sweden": "SE", "Lithuania": "LT", "Estonia": "EE", "Norway": "NO", "Finland": "FI", "Iceland": "IS",
     // --- North America ---
-    "United States": "US",
-    "Mexico": "MX",
-    "Canada": "CA",
-    "Dominican Republic": "DO",
-    "Bahamas": "BS",
-    "Cuba": "CU",
-    "Jamaica": "JM",
-    "Costa Rica": "CR",
-    "Guatemala": "GT",
-    "Panama": "PA",
-
+    "United States": "US", "Mexico": "MX", "Canada": "CA", "Dominican Republic": "DO", "Bahamas": "BS", "Cuba": "CU", "Jamaica": "JM", "Costa Rica": "CR", "Guatemala": "GT", "Panama": "PA",
     // --- South America ---
-    "Argentina": "AR",
-    "Brazil": "BR",
-    "Chile": "CL",
-    "Peru": "PE",
-    "Paraguay": "PY",
-    "Colombia": "CO",
-    "Uruguay": "UY",
-    "Ecuador": "EC",
-
+    "Argentina": "AR", "Brazil": "BR", "Chile": "CL", "Peru": "PE", "Paraguay": "PY", "Colombia": "CO", "Uruguay": "UY", "Ecuador": "EC",
     // --- Africa ---
-    "South Africa": "ZA",
-    "Morocco": "MA",
-    "Egypt": "EG",
-    "Kenya": "KE",
-    "Namibia": "NA",
-    "Tanzania": "TZ",
-
+    "South Africa": "ZA", "Morocco": "MA", "Egypt": "EG", "Kenya": "KE", "Namibia": "NA", "Tanzania": "TZ",
     // --- Oceania ---
-    "Australia": "AU",
-    "New Zealand": "NZ"
+    "Australia": "AU", "New Zealand": "NZ"
   };
-  
   return mapping[countryName] || ""; 
 };
 
@@ -260,14 +184,12 @@ export default function Navbar({
         const lowerQuery = localQuery.toLowerCase();
         
         // 1. เรียกใช้ searchPlaces service จาก Supabase
-        // (ฟังก์ชัน searchPlaces ที่เราเขียนไว้ มันค้นหาทั้ง name และ province_state ให้แล้ว)
         const places = await searchPlaces(lowerQuery);
         
         const tempResults: SearchResult[] = [];
         const addedKeys = new Set();
 
         // 2. Process Results (Extract Country, Province, Place)
-        // Note: Supabase searchPlaces might return many rows, we iterate to group/filter them
         
         // --- Country ---
         places.forEach(place => {
@@ -373,10 +295,7 @@ export default function Navbar({
               {showDropdown && localQuery && results.length > 0 && (
                 <div className="absolute top-[40px] left-0 w-[268px] bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden py-2 animate-in fade-in zoom-in-95 duration-200">
                   {results.map((item, index) => {
-                    
-                    // ✅ หา Country Code
                     const countryCode = item.type === 'country' ? getCountryCode(item.name) : "";
-
                     return (
                         <div
                         key={`${item.type}-${index}`}
@@ -384,16 +303,12 @@ export default function Navbar({
                         className="px-4 py-2 hover:bg-blue-50 cursor-pointer flex items-center gap-3 transition-colors group"
                         >
                         <div className="text-gray-400 group-hover:text-blue-500 flex-shrink-0 w-[20px] flex justify-center">
-                            {/* ✅ เงื่อนไขการแสดงผล: ถ้าเป็น Country และมี Code ให้โชว์ธง */}
                             {item.type === 'country' ? (
                                 countryCode ? (
                                     <ReactCountryFlag
                                         countryCode={countryCode}
                                         svg
-                                        style={{
-                                            width: '1.2em',
-                                            height: '1.2em',
-                                        }}
+                                        style={{ width: '1.2em', height: '1.2em' }}
                                         title={item.name}
                                     />
                                 ) : (
@@ -424,7 +339,7 @@ export default function Navbar({
 
           {/* RIGHT: Menu */}
           <div className="relative w-[151px] h-[24px] flex items-center justify-between z-40">
-            <Link href="/" className="text-[20px] font-inter font-[400] text-[#000000] hover:text-[#1976D2] transition leading-none whitespace-nowrap">
+            <Link href="" className="text-[20px] font-inter font-[400] text-[#000000] hover:text-[#1976D2] transition leading-none whitespace-nowrap">
               MyTrip
             </Link>
 
@@ -456,29 +371,46 @@ export default function Navbar({
                 </button>
               )}
 
+              {/* ✅ MODIFIED: Dropdown Menu to match image_0fcdad.png */}
               {showUserMenu && currentUser && (
-                <div className="absolute right-0 top-8 w-56 bg-white rounded-xl shadow-lg py-2 z-50 border border-gray-100 text-gray-800 animate-in fade-in zoom-in-95 duration-200">
-                  <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/50">
-                    <p className="text-sm font-bold text-gray-900 truncate">{currentUser.name || "User"}</p>
-                    <p className="text-xs text-gray-500 truncate mt-0.5">{currentUser.email || ""}</p>
+                <div className="absolute right-0 top-[35px] w-[280px] bg-white rounded-[12px] shadow-[0px_4px_20px_rgba(0,0,0,0.1)] py-4 z-50 border border-gray-100 text-[#212121] animate-in fade-in zoom-in-95 duration-200 font-inter">
+                  
+                  {/* User Info */}
+                  <div className="px-6 mb-4">
+                    <p className="text-[18px] font-bold text-[#212121] truncate">{currentUser.name || "User"}</p>
+                    <p className="text-[14px] text-[#757575] truncate mt-1">{currentUser.email || ""}</p>
                   </div>
-                  <div className="p-1.5">
+
+                  {/* Menu Links */}
+                  <div className="flex flex-col gap-2 px-6">
                     
                     <button 
                       onClick={() => {
                         setShowUserMenu(false);
                         setShowEditProfileModal(true);
                       }}
-                      className="flex items-center gap-3 w-full px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition cursor-pointer text-left"
+                      className="w-full text-left py-2 text-[16px] text-[#212121] hover:text-[#194473] transition cursor-pointer"
                     >
                         Edit profile
                     </button>
 
                     <button 
-                      onClick={handleLogoutTrigger}
-                      className="flex items-center gap-3 w-full px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition mt-1 cursor-pointer"
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        // router.push('/review-history'); // Uncomment and use if you have a review history page
+                      }}
+                      className="w-full text-left py-2 text-[16px] text-[#212121] hover:text-[#194473] transition cursor-pointer"
                     >
-                      <LogOut className="w-4 h-4" /> Logout
+                        Review
+                    </button>
+
+                    <div className="h-[1px] bg-[#EEEEEE] my-1"></div>
+
+                    <button 
+                      onClick={handleLogoutTrigger}
+                      className="flex items-center justify-center gap-2 w-full h-[40px] bg-[#EA4335] hover:bg-[#d32f2f] text-white text-[16px] font-medium rounded-[8px] transition cursor-pointer mt-2"
+                    >
+                      <LogOut className="w-[18px] h-[18px]" /> Logout
                     </button>
                   </div>
                 </div>

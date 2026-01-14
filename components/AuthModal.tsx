@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { X, Mail, ChevronDown, ArrowLeft, RefreshCw, User } from "lucide-react";
-import { createClient } from "@/utils/supabase/client"; 
+import { createClient } from "@/utils/supabase/client";
 
 // Import Icons
 import { FcGoogle } from "react-icons/fc";
@@ -26,14 +26,14 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
   const [view, setView] = useState<'options' | 'email' | 'verify' | 'onboarding'>('options');
   const [loading, setLoading] = useState(false);
 
-  
+
   // Data State
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
-  
+
   // ✅ เพิ่ม: State สำหรับ Timer
   const [timer, setTimer] = useState(0);
-  
+
   // Onboarding State
   const [username, setUsername] = useState("");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
@@ -44,7 +44,7 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
   useEffect(() => {
     const initModal = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       if (session?.user) {
         setLoading(true);
         const { data: profile } = await supabase
@@ -52,15 +52,15 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
           .select('*')
           .eq('id', session.user.id)
           .single();
-        
+
         setLoading(false);
 
         if (profile) {
-            // profile exists
+          // profile exists
         } else {
-            setUserId(session.user.id);
-            if (session.user.email) setEmail(session.user.email);
-            setView('onboarding');
+          setUserId(session.user.id);
+          if (session.user.email) setEmail(session.user.email);
+          setView('onboarding');
         }
       }
     };
@@ -97,7 +97,7 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
         } : undefined,
       },
     });
-    
+
     if (error) {
       alert(error.message);
       setLoading(false);
@@ -124,7 +124,7 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
   // ✅ เพิ่ม: ฟังก์ชัน Resend OTP
   const handleResendOtp = async () => {
     if (timer > 0) return; // ถ้าเวลายังไม่หมด ห้ามกด
-    
+
     setLoading(true);
     const { error } = await supabase.auth.signInWithOtp({ email });
     setLoading(false);
@@ -141,12 +141,12 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
   const handleVerifySubmit = async () => {
     const otpValue = otp.join("");
     if (otpValue.length < 6) {
-        alert("Please enter a valid 6-digit OTP");
-        return;
+      alert("Please enter a valid 6-digit OTP");
+      return;
     }
-    
+
     setLoading(true);
-    
+
     const { data: { session }, error } = await supabase.auth.verifyOtp({
       email,
       token: otpValue,
@@ -188,53 +188,53 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
   const handleOnboardingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username || !userId || !avatarFile) {
-        alert("Please fill all fields");
-        return;
+      alert("Please fill all fields");
+      return;
     }
 
     setLoading(true);
     let avatarUrl = "";
 
     try {
-        const fileExt = avatarFile.name.split('.').pop();
-        const fileName = `${userId}-${Date.now()}.${fileExt}`;
-        const filePath = `${fileName}`;
+      const fileExt = avatarFile.name.split('.').pop();
+      const fileName = `${userId}-${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
 
-        const { error: uploadError } = await supabase.storage
-            .from('avatars')
-            .upload(filePath, avatarFile);
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, avatarFile);
 
-        if (uploadError) throw uploadError;
+      if (uploadError) throw uploadError;
 
-        const { data: { publicUrl } } = supabase.storage
-            .from('avatars')
-            .getPublicUrl(filePath);
-        
-        avatarUrl = publicUrl;
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
 
-        const { error: insertError } = await supabase
-            .from('profiles')
-            .insert({
-                id: userId,
-                username: username,
-                avatar_url: avatarUrl,
-                role: 'user',
-            });
+      avatarUrl = publicUrl;
 
-        if (insertError) throw insertError;
-
-        onSuccess({
-            id: userId,
-            name: username,
-            email: email,
-            image: avatarUrl
+      const { error: insertError } = await supabase
+        .from('profiles')
+        .insert({
+          id: userId,
+          username: username,
+          avatar_url: avatarUrl,
+          role: 'user',
         });
-        onClose();
+
+      if (insertError) throw insertError;
+
+      onSuccess({
+        id: userId,
+        name: username,
+        email: email,
+        image: avatarUrl
+      });
+      onClose();
 
     } catch (error: any) {
-        alert("Error creating profile: " + error.message);
+      alert("Error creating profile: " + error.message);
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
@@ -257,9 +257,9 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-        const file = e.target.files[0];
-        setAvatarFile(file);
-        setAvatarPreview(URL.createObjectURL(file));
+      const file = e.target.files[0];
+      setAvatarFile(file);
+      setAvatarPreview(URL.createObjectURL(file));
     }
   }
 
@@ -268,9 +268,9 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
       <div className="relative bg-[#FAFAFA] w-full max-w-[558px] min-h-[513px] rounded-[16px] shadow-[4px_9px_8px_0px_rgba(0,0,0,0.45)] flex flex-col items-center px-[96px] py-[70px] transition-all duration-300">
 
         {view !== 'onboarding' && (
-             <button onClick={onClose} className="absolute top-6 right-6 p-2 text-gray-400 hover:bg-gray-200 rounded-full transition">
-                <X className="w-6 h-6" />
-             </button>
+          <button onClick={onClose} className="absolute top-6 right-6 p-2 text-gray-400 hover:bg-gray-200 rounded-full transition">
+            <X className="w-6 h-6" />
+          </button>
         )}
 
         {(view === 'email' || view === 'verify') && (
@@ -286,7 +286,7 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
               Sign in
             </h2>
             <div className="w-full flex flex-col items-center gap-[16px]">
-              
+
               <button
                 onClick={() => handleLogin('google')}
                 disabled={loading}
@@ -363,9 +363,13 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
             <h2 className="text-[36px] font-Inter font-[900] text-[#194473] leading-none mb-[32px] text-center tracking-tight">
               Verify your email
             </h2>
-            <div className="mb-8 text-[#212121]" style={{ fontFamily: 'Inter', fontWeight: 400, fontSize: '12px', lineHeight: '150%', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <p>The Verification link has been sent. If you don’t have it in your inbox, check spam folder</p>
-              <p>The OTP will be sent to your email. <span className="font-bold">{email}</span></p>
+            <div className="flex flex-col gap-1 mb-8">
+              <h1 className="font-inter font-normal text-[12px] leading-none tracking-normal text-[#212121]">
+                The Verification link has been sent. If you don’t have it in your inbox, check spam folder
+              </h1>
+              <h1 className="font-inter font-normal text-[12px] leading-none tracking-normal text-[#212121]">
+                The OTP will be sent to your email. <span className="font-bold">{email}</span>
+              </h1>
             </div>
 
             <div className="flex justify-between w-full mb-8">
@@ -391,8 +395,15 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                 className={`flex items-center justify-center gap-2 transition-colors ${timer > 0 ? 'cursor-not-allowed opacity-50' : 'hover:bg-gray-200 cursor-pointer'}`}
                 style={{ width: 'auto', minWidth: '150px', height: '24px', backgroundColor: '#F5F5F5', border: '2px solid #EEEEEE', borderRadius: '8px', padding: '4px 16px' }}
               >
-                <RefreshCw size={12} color="#9E9E9E" className={loading ? "animate-spin" : ""} />
-                <span style={{ fontFamily: 'Inter', fontWeight: 400, fontSize: '12px', color: '#9E9E9E', whiteSpace: 'nowrap' }}>
+                {/* ✅ ปรับสีไอคอน: ถ้า timer > 0 เป็นสีเทา, ถ้าหมดเวลาเป็นสีฟ้า (#2196F3) */}
+                <RefreshCw
+                  size={12}
+                  color={timer > 0 ? "#9E9E9E" : "#2196F3"}
+                  className={loading ? "animate-spin" : ""}
+                />
+
+                {/* ✅ ปรับสีตัวอักษร: ใช้ logic เดียวกับไอคอน */}
+                <span style={{ fontFamily: 'Inter', fontWeight: 400, fontSize: '12px', color: timer > 0 ? '#9E9E9E' : '#2196F3', whiteSpace: 'nowrap' }}>
                   {timer > 0 ? `Resend in ${timer}s` : "Resend OTP"}
                 </span>
               </button>
@@ -403,9 +414,9 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
               disabled={loading}
               className={`w-full h-[35px] text-[16px] font-Inter font-[400] rounded-[8px] transition-all active:scale-[0.99] flex items-center justify-center cursor-pointer
               ${otp.join("").length === 6
-                ? "bg-[#2196F3] hover:bg-[#1976D2] text-white shadow-md"
-                : "bg-[#C0C0C0] text-[#616161] cursor-not-allowed border border-[#EEEEEE]"
-              }`}
+                  ? "bg-[#2196F3] hover:bg-[#1976D2] text-white shadow-md"
+                  : "bg-[#C0C0C0] text-[#616161] cursor-not-allowed border border-[#EEEEEE]"
+                }`}
             >
               {loading ? "Verifying..." : "Verify"}
             </button>
@@ -414,60 +425,60 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
 
         {/* ================= VIEW 4: ONBOARDING (Create Profile) ================= */}
         {view === 'onboarding' && (
-            <div className="flex flex-col items-center animate-in slide-in-from-right-4 duration-300 w-full">
-                <h2 className="text-[30px] font-Inter font-[900] text-[#194473] leading-none mb-6 text-center tracking-tight">
-                    Create Profile
-                </h2>
-                <form onSubmit={handleOnboardingSubmit} className="w-[360px] flex flex-col gap-[20px]">
-                    
-                    {/* Avatar Upload */}
-                    <div className="flex flex-col items-center gap-4">
-                        <div className="relative w-24 h-24 rounded-full bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden group hover:border-[#2196F3] transition-colors cursor-pointer">
-                            {avatarPreview ? (
-                                <img src={avatarPreview} alt="Preview" className="w-full h-full object-cover" />
-                            ) : (
-                                <User className="w-10 h-10 text-gray-400 group-hover:text-[#2196F3]" />
-                            )}
-                            <input 
-                                type="file" 
-                                accept="image/*" 
-                                onChange={handleAvatarChange} 
-                                className="absolute inset-0 opacity-0 cursor-pointer"
-                                required
-                            />
-                            {!avatarPreview && <div className="absolute bottom-2 text-[10px] text-gray-500">Upload</div>}
-                        </div>
-                        <p className="text-xs text-gray-500">Tap to upload avatar *</p>
-                    </div>
+          <div className="flex flex-col items-center animate-in slide-in-from-right-4 duration-300 w-full">
+            <h2 className="text-[30px] font-Inter font-[900] text-[#194473] leading-none mb-6 text-center tracking-tight">
+              Create Profile
+            </h2>
+            <form onSubmit={handleOnboardingSubmit} className="w-[360px] flex flex-col gap-[20px]">
 
-                    {/* Username Input */}
-                    <div className="flex flex-col gap-[12px]">
-                        <label className="text-[16px] font-Inter font-[400] text-[#212121]">
-                            Username <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                            type="text"
-                            placeholder="Enter unique username"
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
-                            required
-                            minLength={3}
-                            className="w-full h-[40px] bg-[#F5F5F5] border-[2px] border-[#EEEEEE] rounded-[8px] px-[16px] py-[8px] text-[14px] font-Inter font-[400] text-[#212121] outline-none focus:border-[#2196F3] transition-all placeholder:text-[#9E9E9E]"
-                        />
-                    </div>
+              {/* Avatar Upload */}
+              <div className="flex flex-col items-center gap-4">
+                <div className="relative w-24 h-24 rounded-full bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden group hover:border-[#2196F3] transition-colors cursor-pointer">
+                  {avatarPreview ? (
+                    <img src={avatarPreview} alt="Preview" className="w-full h-full object-cover" />
+                  ) : (
+                    <User className="w-10 h-10 text-gray-400 group-hover:text-[#2196F3]" />
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarChange}
+                    className="absolute inset-0 opacity-0 cursor-pointer"
+                    required
+                  />
+                  {!avatarPreview && <div className="absolute bottom-2 text-[10px] text-gray-500">Upload</div>}
+                </div>
+                <p className="text-xs text-gray-500">Tap to upload avatar *</p>
+              </div>
 
-                    {/* Submit Button */}
-                    <button
-                        type="submit"
-                        disabled={loading || !username || !avatarFile}
-                        className={`w-full h-[40px] mt-2 text-[16px] font-Inter font-[400] rounded-[8px] transition-all active:scale-[0.99] flex items-center justify-center cursor-pointer
+              {/* Username Input */}
+              <div className="flex flex-col gap-[12px]">
+                <label className="text-[16px] font-Inter font-[400] text-[#212121]">
+                  Username <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Enter unique username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  required
+                  minLength={3}
+                  className="w-full h-[40px] bg-[#F5F5F5] border-[2px] border-[#EEEEEE] rounded-[8px] px-[16px] py-[8px] text-[14px] font-Inter font-[400] text-[#212121] outline-none focus:border-[#2196F3] transition-all placeholder:text-[#9E9E9E]"
+                />
+              </div>
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={loading || !username || !avatarFile}
+                className={`w-full h-[40px] mt-2 text-[16px] font-Inter font-[400] rounded-[8px] transition-all active:scale-[0.99] flex items-center justify-center cursor-pointer
                         ${(username && avatarFile) ? "bg-[#2196F3] hover:bg-[#1976D2] text-white shadow-md" : "bg-[#C0C0C0] text-[#616161] cursor-not-allowed border border-[#EEEEEE]"}
                         `}
-                    >
-                        {loading ? "Creating Profile..." : "Complete Signup"}
-                    </button>
-                </form>
-            </div>
+              >
+                {loading ? "Creating Profile..." : "Complete Signup"}
+              </button>
+            </form>
+          </div>
         )}
 
       </div>
