@@ -4,10 +4,12 @@
 import { useState, useEffect, MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { MapPin, Clock, Star, ArrowLeft, ExternalLink, Sun, X, ChevronLeft, ChevronRight, Lightbulb, Search, Plus } from "lucide-react";
+import { MapPin, Clock, Star, ExternalLink, Sun, X, ChevronLeft, ChevronRight, Lightbulb, Search, Plus, ArrowLeft, ArrowRight } from "lucide-react";
 import { Place } from "@/types/place";
+import { createClient } from "@/utils/supabase/client";
+import AuthModal from "@/components/AuthModal";
 
-// --- MAPPINGS ---
+// ... (KEEP CONSTANTS & MAPPINGS AS IS - ไม่ต้องแก้ส่วน Mappings ข้างบน) ...
 const CATEGORY_MATCHING_KEYWORDS: Record<string, string[]> = {
     "Mountains": ["mountain", "mountains", "peak", "volcano", "hill", "doi"],
     "National parks": ["national_park", "national_parks", "nature_reserve", "forest"],
@@ -111,20 +113,33 @@ interface DetailClientProps {
     morePictures: string[];
 }
 
+const REVIEWS_PER_PAGE = 3; // ✅ กำหนดจำนวนรีวิวต่อหน้าตรงนี้
+
 export default function DetailClient({ place, nearbyPlaces, morePictures }: DetailClientProps) {
     const router = useRouter();
+    const supabase = createClient();
 
     // Hero Slider State
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [isTransitioning, setIsTransitioning] = useState(true);
 
-    // Modal State
+    // Main Gallery Modal State
     const [showModal, setShowModal] = useState(false);
     const [galleryQueue, setGalleryQueue] = useState<{ url: string }[]>([]);
+
+    // Review Image Popup State (NEW)
+    const [showReviewModal, setShowReviewModal] = useState(false);
+    const [selectedReviewImage, setSelectedReviewImage] = useState<string | null>(null);
+    const [selectedReviewData, setSelectedReviewData] = useState<any | null>(null);
+    const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
 
     // Review States
     const [activeStarFilter, setActiveStarFilter] = useState("All");
     const [reviewPage, setReviewPage] = useState(1);
+    const [searchQuery, setSearchQuery] = useState(""); // ✅ เพิ่ม State สำหรับ Search
+
+    // Auth Modal State
+    const [showAuthModal, setShowAuthModal] = useState(false);
 
     // --- DERIVED DATA ---
     const rawImages = place?.images || [];
@@ -138,12 +153,41 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
 
     const currentReviews = (place as any)?.reviews || [];
 
-    // Filter Logic
+    // ✅ ปรับ Logic การ Filter: รวม Star Filter + Search Query
     const filteredReviews = currentReviews.filter((review: any) => {
-        if (activeStarFilter === "All") return true;
-        const starValue = parseInt(activeStarFilter.split(" ")[0]);
-        return review.rating === starValue;
+        // 1. Filter by Star
+        let starMatch = true;
+        if (activeStarFilter !== "All") {
+            const starValue = parseInt(activeStarFilter.split(" ")[0]);
+            starMatch = review.rating === starValue;
+        }
+
+        // 2. Filter by Search Query
+        let searchMatch = true;
+        if (searchQuery.trim() !== "") {
+            const query = searchQuery.toLowerCase();
+            const content = (review.content || review.comment || "").toLowerCase();
+            searchMatch = content.includes(query);
+        }
+
+        return starMatch && searchMatch;
     });
+
+    // ✅ Pagination Logic: คำนวณจำนวนหน้า และตัด Array ตามหน้าปัจจุบัน
+    const totalReviews = filteredReviews.length;
+    const totalPages = Math.ceil(totalReviews / REVIEWS_PER_PAGE);
+    
+    // ถ้าหน้าปัจจุบันเกินจำนวนหน้าที่มีจริง (เช่น จากการเปลี่ยน filter) ให้กลับไปหน้า 1
+    useEffect(() => {
+        if (reviewPage > totalPages && totalPages > 0) {
+            setReviewPage(1);
+        }
+    }, [totalPages, reviewPage]);
+
+    const displayedReviews = filteredReviews.slice(
+        (reviewPage - 1) * REVIEWS_PER_PAGE,
+        reviewPage * REVIEWS_PER_PAGE
+    );
 
     const displayTags = getDisplayCategories(place.category_tags || []);
 
@@ -176,7 +220,7 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
         );
     };
 
-    // --- EFFECT: HERO SLIDER AUTO PLAY ---
+    // --- EFFECT: SLIDER ---
     useEffect(() => {
         if (allImages.length <= 1 || showModal) return;
         const interval = setInterval(() => {
@@ -185,7 +229,6 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
         return () => clearInterval(interval);
     }, [allImages.length, showModal]);
 
-    // --- EFFECT: HERO SLIDER INFINITE LOOP ---
     useEffect(() => {
         if (currentImageIndex === extendedImages.length - 1) {
             const timeout = setTimeout(() => {
@@ -201,7 +244,7 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
         }
     }, [currentImageIndex, extendedImages.length]);
 
-    // --- HANDLERS (MODAL LOGIC) ---
+    // --- HANDLERS (MAIN GALLERY MODAL) ---
     const openModal = () => {
         const currentIndex = currentImageIndex >= allImages.length ? 0 : currentImageIndex;
         const rotatedQueue = [
@@ -242,64 +285,272 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
         });
     };
 
-    // Modal Display Logic
+    // --- HANDLERS (REVIEW IMAGE MODAL WITH NAVIGATION) ---
+
+    // Helper function: Find the review object that contains this specific image URL
+    const findReviewByImage = (imageUrl: string) => {
+        return currentReviews.find((review: any) => {
+            if (Array.isArray(review.images)) {
+                return review.images.some((img: any) => {
+                    const url = typeof img === 'string' ? img : img.url;
+                    return url === imageUrl;
+                });
+            }
+            return false;
+        });
+    };
+
+    // Open Modal Function
+    const openReviewImageModal = (imageUrl: string) => {
+        const foundReview = findReviewByImage(imageUrl);
+        const indexInMore = morePictures.findIndex(url => url === imageUrl);
+
+        // Use found review OR fallback if not found (to prevent crash)
+        const reviewDataToUse = foundReview || {
+            name: place.name,
+            rating: 0,
+            content: "No review description available for this image.",
+            visit_date: null,
+            profiles: {
+                username: "Gallery Image",
+                avatar_url: null
+            }
+        };
+
+        setSelectedReviewData(reviewDataToUse);
+        setSelectedReviewImage(imageUrl);
+        setSelectedImageIndex(indexInMore !== -1 ? indexInMore : 0);
+        setShowReviewModal(true);
+    };
+
+    // ✅ Navigation Function (TripAdvisor Style)
+    const navigateReviewImage = (direction: 'next' | 'prev', e: MouseEvent) => {
+        e.stopPropagation();
+
+        if (morePictures.length <= 1) return;
+
+        let newIndex = direction === 'next' ? selectedImageIndex + 1 : selectedImageIndex - 1;
+
+        // Loop Logic
+        if (newIndex >= morePictures.length) newIndex = 0;
+        if (newIndex < 0) newIndex = morePictures.length - 1;
+
+        // 1. Get New Image URL
+        const newImageUrl = morePictures[newIndex];
+
+        // 2. Find Review associated with New Image
+        const newReviewData = findReviewByImage(newImageUrl);
+
+        // 3. Fallback Data if no review found
+        const reviewDataToUse = newReviewData || {
+            name: place.name,
+            rating: 0,
+            content: "No review description available for this image.",
+            visit_date: null,
+            profiles: {
+                username: "Gallery Image",
+                avatar_url: null
+            }
+        };
+
+        // 4. Update ALL States (Image + Review Data)
+        setSelectedImageIndex(newIndex);
+        setSelectedReviewImage(newImageUrl);
+        setSelectedReviewData(reviewDataToUse);
+    };
+
+    const closeReviewModal = () => {
+        setShowReviewModal(false);
+        setSelectedReviewImage(null);
+        setSelectedReviewData(null);
+    };
+
     const mainImage = galleryQueue[0] || { url: "" };
     const thumbnails = galleryQueue.slice(1, 7);
 
-    // Helper Function: Check Risky Image Source
     const isRiskyImage = (url: string) => {
         return url.includes('wikimedia.org') ||
             url.includes('cloudfront.net') ||
-            url.includes('placehold.co') || // ✅ ไม่ต้อง Optimize Placeholder
+            url.includes('placehold.co') ||
             url.includes('via.placeholder.com');
+    };
+
+    const handleReviewClick = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (session) {
+            router.push(`/review?placeId=${place.id}`);
+        } else {
+            setShowAuthModal(true);
+        }
+    };
+
+    const handleAuthSuccess = () => {
+        setShowAuthModal(false);
+        router.push(`/review?placeId=${place.id}`);
     };
 
     return (
         <div className="min-h-screen bg-[#FFFFFF] font-inter text-gray-800 pb-20 relative">
 
-            {/* MODAL POPUP SECTION */}
-            {showModal && (
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+            {showAuthModal && (
+                <AuthModal
+                    onClose={() => setShowAuthModal(false)}
+                    onSuccess={handleAuthSuccess}
+                />
+            )}
+
+            {/* --- REVIEW IMAGE MODAL --- */}
+            {showReviewModal && selectedReviewData && selectedReviewImage && (
+                <div className="fixed inset-0 z-[10000] flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={closeReviewModal} />
                     <div
-                        className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-                        onClick={() => setShowModal(false)}
-                    />
-                    <div className="relative bg-white flex flex-col z-10 overflow-hidden shadow-2xl rounded-[16px]"
-                        style={{ width: '835px', height: '624px' }}
+                        className="relative bg-white rounded-[16px] overflow-hidden shadow-2xl flex flex-col animate-in fade-in zoom-in-95 duration-200"
+                        style={{ width: '1128px', height: '522px' }}
                     >
-                        {/* Header */}
-                        <div className="w-[835px] h-[103px] flex justify-between items-center bg-white border-[2px] border-[#EEEEEE] rounded-tl-[8px] rounded-tr-[8px] pt-[32px] pr-[64px] pb-[32px] pl-[65px] shrink-0">
+                         {/* Header (Title Bar) */}
+                         <div className="flex-shrink-0 w-full h-[103px] flex justify-between items-center bg-white z-20 
+                                      pt-[32px] pb-[32px] pl-[65px] pr-[64px]
+                                      border-b-[2px] border-[#EEEEEE] 
+                                      rounded-tl-[16px] rounded-tr-[16px]">
+
                             <div className="w-[623px] h-[39px] flex items-center gap-[16px]">
-                                <h3 className="font-Inter font-semibold text-[32px] text-[#194473] leading-[100%] truncate">
+                                <h3 className="font-Inter font-semibold text-[32px] text-[#194473] leading-none truncate">
                                     {place.name}
                                 </h3>
+
+                                {(place.rating ?? 0) > 0 && (
+                                    <div className="w-[172px] h-[24px] flex items-center gap-[8px] flex-shrink-0">
+                                        <div className="flex items-center gap-[4px] w-[136px] h-[24px]">
+                                            {[1, 2, 3, 4, 5].map((star) => (
+                                                <Star
+                                                    key={star}
+                                                    size={24}
+                                                    className={`${star <= Math.round(place.rating || 0) ? "fill-[#FFCC00] text-[#FFCC00]" : "fill-gray-300 text-gray-300"}`}
+                                                />
+                                            ))}
+                                        </div>
+                                        <span className="font-Inter font-normal text-[20px] leading-none text-[#212121]">
+                                            ({place.rating})
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+
+                            <button onClick={closeReviewModal} className="p-2 hover:bg-gray-100 rounded-full transition-colors cursor-pointer">
+                                <X size={24} className="text-[#616161]" />
+                            </button>
+                        </div>
+
+                        {/* Content Area */}
+                        <div className="flex w-full flex-1 overflow-hidden">
+                             {/* Left Side: Review Details */}
+                            <div className="w-[400px] flex-shrink-0 border-r border-[#EEEEEE] p-6 flex flex-col gap-4 overflow-y-auto bg-white">
+                                <div className="flex flex-col gap-1">
+                                    {/* Avatar + Name */}
+                                    <div className="flex items-center gap-3">
+                                        <div className="relative w-[32px] h-[32px] rounded-full overflow-hidden border border-[#E0E0E0] flex-shrink-0">
+                                            <Image
+                                                src={selectedReviewData.profiles?.avatar_url || "https://placehold.co/100x100?text=U"}
+                                                alt={selectedReviewData.profiles?.username || "User"}
+                                                fill
+                                                className="object-cover"
+                                                unoptimized
+                                            />
+                                        </div>
+                                        <h4 className="font-inter font-bold text-[28px] text-black leading-none tracking-normal">
+                                            {selectedReviewData.profiles?.username || selectedReviewData.name || "Anonymous"}
+                                        </h4>
+                                    </div>
+                                    {/* Rating */}
+                                    <div className="w-[96px] h-[16px] flex items-center gap-[4px]">
+                                        {selectedReviewData.rating > 0 ? (
+                                            <>
+                                                {[1, 2, 3, 4, 5].map((star) => (
+                                                    <Star
+                                                        key={star}
+                                                        size={16}
+                                                        className={`${star <= selectedReviewData.rating ? "fill-[#FFCC00] text-[#FFCC00]" : "fill-gray-300 text-gray-300"}`}
+                                                    />
+                                                ))}
+                                                <span className="text-[12px] text-[#757575] leading-none">
+                                                    ({selectedReviewData.rating})
+                                                </span>
+                                            </>
+                                        ) : (
+                                            <span className="text-[12px] text-[#757575] leading-none">Image Gallery</span>
+                                        )}
+                                    </div>
+                                </div>
+                                {/* Review Content Box */}
+                                <div className="w-[318px] h-[127px] bg-white border border-[#EEEEEE] rounded-[8px] p-[16px] overflow-y-auto">
+                                    <p className="font-inter font-normal text-[16px] text-black leading-none tracking-normal whitespace-pre-line">
+                                        {selectedReviewData.content}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Right Side: Image */}
+                            <div className="w-[704px] h-[402px] bg-gray-100 flex items-center justify-center relative group overflow-hidden rounded-[8px]">
+                                {morePictures.length > 1 && (
+                                    <>
+                                        <button
+                                            onClick={(e) => navigateReviewImage('prev', e)}
+                                            className="absolute left-4 top-1/2 -translate-y-1/2 z-30 w-[48px] h-[48px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-[30px] p-[9px] flex items-center justify-center gap-[10px] text-[#ffffff] transition-all active:scale-95 hidden md:flex shadow-sm cursor-pointer"
+                                        >
+                                            <ArrowLeft className="w-[30px] h-[30px]" />
+                                        </button>
+                                        <button
+                                            onClick={(e) => navigateReviewImage('next', e)}
+                                            className="absolute right-4 top-1/2 -translate-y-1/2 z-50 w-[48px] h-[48px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-[30px] p-[9px] flex items-center justify-center gap-[10px] text-[#ffffff] transition-all active:scale-95 hidden md:flex shadow-sm cursor-pointer"
+                                        >
+                                            <ArrowRight className="w-[30px] h-[30px]" />
+                                        </button>
+                                    </>
+                                )}
+                                <div className="relative w-full h-full">
+                                    <Image
+                                        src={selectedReviewImage}
+                                        alt="Review Detail"
+                                        fill
+                                        className="object-cover"
+                                        unoptimized={isRiskyImage(selectedReviewImage)}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+             {/* ... (Existing Main Gallery Modal - Unchanged) ... */}
+            {showModal && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowModal(false)} />
+                    <div className="relative bg-white flex flex-col z-10 overflow-hidden shadow-2xl rounded-[16px]" style={{ width: '835px', height: '624px' }}>
+                        {/* ... (Keep existing gallery modal content) ... */}
+                         <div className="w-[835px] h-[103px] flex justify-between items-center bg-white border-[2px] border-[#EEEEEE] rounded-tl-[8px] rounded-tr-[8px] pt-[32px] pr-[64px] pb-[32px] pl-[65px] shrink-0">
+                            <div className="w-[623px] h-[39px] flex items-center gap-[16px]">
+                                <h3 className="font-Inter font-semibold text-[32px] text-[#194473] leading-[100%] truncate">{place.name}</h3>
                                 <div className="w-[172px] h-[24px] flex items-center gap-[8px] flex-shrink-0">
                                     <div className="flex items-center gap-1">
                                         {[1, 2, 3, 4, 5].map((star) => (
                                             <Star key={star} size={24} className={`${star <= Math.round(place.rating || 0) ? "fill-[#FFCC00] text-[#FFCC00]" : "fill-gray-300 text-gray-300"}`} />
                                         ))}
                                     </div>
-                                    <span className="font-Inter font-normal text-[20px] leading-[100%] text-[#212121]">
-                                        ({place.rating || 0})
-                                    </span>
+                                    <span className="font-Inter font-normal text-[20px] leading-[100%] text-[#212121]">({place.rating || 0})</span>
                                 </div>
                             </div>
                             <button onClick={() => setShowModal(false)} className="w-[24px] h-[24px] rounded-[30px] bg-[#616161] hover:bg-[#4a4a4a] flex items-center justify-center gap-[10px] text-white transition-colors">
                                 <X size={14} strokeWidth={2.5} />
                             </button>
                         </div>
-
-                        {/* Body Container */}
                         <div className="w-[835px] h-[521px] flex flex-col items-center justify-center bg-white border-l-[2px] border-r-[2px] border-b-[2px] border-[#EEEEEE] rounded-bl-[8px] rounded-br-[8px] pb-[64px]">
                             <div className="w-[707px] h-[393px] flex flex-col border border-[#C2DCF3] rounded-[8px] overflow-hidden bg-white">
                                 <div className="relative w-full flex-1 flex-shrink-0 overflow-hidden group bg-gray-50">
-                                    <button onClick={prevModalImage} className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-[32px] h-[32px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center text-white transition-all shadow-sm cursor-pointer">
-                                        <ChevronLeft size={20} strokeWidth={2.5} />
-                                    </button>
+                                    <button onClick={prevModalImage} className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-[32px] h-[32px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center text-white transition-all shadow-sm cursor-pointer"><ChevronLeft size={20} strokeWidth={2.5} /></button>
                                     <img src={mainImage.url} alt="Gallery Main" className="w-full h-full object-cover transition-opacity duration-300" />
-                                    <button onClick={nextModalImage} className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-[32px] h-[32px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center text-white transition-all shadow-sm cursor-pointer">
-                                        <ChevronRight size={20} strokeWidth={2.5} />
-                                    </button>
+                                    <button onClick={nextModalImage} className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-[32px] h-[32px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center text-white transition-all shadow-sm cursor-pointer"><ChevronRight size={20} strokeWidth={2.5} /></button>
                                 </div>
                                 <div className="w-[707px] h-[84px] bg-white flex items-center justify-center shrink-0 border-t border-[#C2DCF3]">
                                     <div className="flex items-center w-full justify-between px-2 gap-[10px]">
@@ -324,12 +575,8 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
                 <div className="flex items-center gap-2 flex-wrap mb-2 font-Inter font-[600] text-[14px] leading-[100%] text-[#9E9E9E]">
                     <span className="hover:underline cursor-pointer" onClick={() => router.push("/")}>Home</span>/
                     <span>{place.continent}</span>/
-                    <span className="hover:underline cursor-pointer" onClick={() => router.push(`/explore?country=${place.country}`)}>
-                        {place.country}
-                    </span>/
-                    <span className="hover:underline cursor-pointer" onClick={() => router.push(`/explore?country=${place.country}&search=${place.province_state}`)}>
-                        {place.province_state || place.country}
-                    </span>/
+                    <span className="hover:underline cursor-pointer" onClick={() => router.push(`/explore?country=${place.country}`)}>{place.country}</span>/
+                    <span className="hover:underline cursor-pointer" onClick={() => router.push(`/explore?country=${place.country}&search=${place.province_state}`)}>{place.province_state || place.country}</span>/
                     <span className="truncate max-w-[200px] md:max-w-none text-[#101828] hover:underline cursor-pointer">{place.name}</span>
                 </div>
             </div>
@@ -338,37 +585,21 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
             <div className="gap-[32px] mt-8">
                 <div className="gap-6">
                     <div className="max-w-[1440px] mx-auto px-[156px] ">
-                        <h1 className="font-inter font-bold text-[48px] leading-[100%] tracking-normal text-[#194473] mt-4">
-                            {place.name}
-                        </h1>
+                        <h1 className="font-inter font-bold text-[48px] leading-[100%] tracking-normal text-[#194473] mt-4">{place.name}</h1>
                     </div>
 
-                    {/* HERO IMAGE */}
                     <div className="w-full h-[414px] bg-[#DEECF9] mt-6">
                         <div className="w-full max-w-[1440px] h-[414px] mx-auto flex justify-center">
                             <div className="w-full h-[445px] flex flex-col gap-[16px] px-[156px]">
-                                <div className="relative w-full h-[413px] bg-black overflow-hidden group flex-shrink-0 shadow-sm cursor-pointer"
-                                    onClick={openModal}
-                                >
+                                <div className="relative w-full h-[413px] bg-black overflow-hidden group flex-shrink-0 shadow-sm cursor-pointer" onClick={openModal}>
                                     <div className={`flex h-full ease-in-out ${isTransitioning ? 'transition-transform duration-700' : ''}`} style={{ transform: `translateX(-${currentImageIndex * 100}%)` }}>
                                         {extendedImages.map((img, index) => {
                                             const imgUrl = img.url;
                                             return (
                                                 <div key={index} className="min-w-full h-full flex-shrink-0 relative group-hover:opacity-90 transition-opacity">
-                                                    {/* ✅ ใช้ Image และ unoptimized */}
-                                                    <Image
-                                                        src={imgUrl}
-                                                        alt={`Slide ${index}`}
-                                                        fill
-                                                        priority={index === 0}
-                                                        className="object-cover"
-                                                        sizes="100vw"
-                                                        unoptimized={isRiskyImage(imgUrl)}
-                                                    />
+                                                    <Image src={imgUrl} alt={`Slide ${index}`} fill priority={index === 0} className="object-cover" sizes="100vw" unoptimized={isRiskyImage(imgUrl)} />
                                                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-                                                        <span className="text-white opacity-0 group-hover:opacity-100 bg-black/50 px-4 py-2 rounded-full text-sm font-semibold transition-opacity">
-                                                            Click to view gallery
-                                                        </span>
+                                                        <span className="text-white opacity-0 group-hover:opacity-100 bg-black/50 px-4 py-2 rounded-full text-sm font-semibold transition-opacity">Click to view gallery</span>
                                                     </div>
                                                 </div>
                                             );
@@ -385,18 +616,12 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
                         {/* LEFT COLUMN */}
                         <div className="flex flex-col gap-8">
                             <div className="w-[631px] flex flex-col gap-[24px]">
-                                <h2 className="font-inter font-black text-[36px] leading-[100%] tracking-normal text-[#194473]">
-                                    About
-                                </h2>
-                                <p className="font-inter font-normal text-[16px] leading-normal tracking-normal text-left text-[#212121]">
-                                    {place.description_long || place.description_short || "No description available."}
-                                </p>
+                                <h2 className="font-inter font-black text-[36px] leading-[100%] tracking-normal text-[#194473]">About</h2>
+                                <p className="font-inter font-normal text-[16px] leading-normal tracking-normal text-left text-[#212121]">{place.description_long || place.description_short || "No description available."}</p>
                             </div>
 
                             <section>
-                                <h2 className="font-inter font-black text-[36px] leading-[100%] tracking-normal text-[#194473] mb-6">
-                                    Best Season to Visit
-                                </h2>
+                                <h2 className="font-inter font-black text-[36px] leading-[100%] tracking-normal text-[#194473] mb-6">Best Season to Visit</h2>
                                 <div className="w-[631px] rounded-[8px] overflow-hidden border border-[#EF9A9A]">
                                     <div className="w-full h-[40px] flex items-center px-4 gap-2" style={{ backgroundColor: '#E57373' }}>
                                         <Sun size={20} className="text-white" />
@@ -406,13 +631,7 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
                                         <div className="flex gap-1 items-start">
                                             <span className="font-semibold text-[#EF6C00] whitespace-nowrap">Suggest: </span>
                                             <p className="font-inter text-[14px] text-left text-[#212121] leading-relaxed whitespace-pre-line">
-                                                {place.best_season
-                                                    ? place.best_season
-                                                        .replace(/;|and/gi, '')
-                                                        .replace(/\s+/g, ' ')
-                                                        .replace(/(?<!^)(Summer|Winter|Spring|Autumn|Fall|Rainy|Dry|Monsoon)/gi, '\n$1')
-                                                        .trim()
-                                                    : "Check local weather forecast before visiting."}
+                                                {place.best_season ? place.best_season.replace(/;|and/gi, '').replace(/\s+/g, ' ').replace(/(?<!^)(Summer|Winter|Spring|Autumn|Fall|Rainy|Dry|Monsoon)/gi, '\n$1').trim() : "Check local weather forecast before visiting."}
                                             </p>
                                         </div>
                                     </div>
@@ -427,24 +646,21 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
                             </section>
 
                             <section className="h-auto flex flex-col gap-[24px]">
-
-                                {/* 1. Title (ลบ mb-6 ออก ใช้ gap ของแม่แทน) */}
-                                <h2 className="font-inter font-bold text-[36px] leading-none tracking-normal text-[#194473]">
-                                    Reviews
-                                </h2>
-
-                                {/* 2. Search & Filter (ลบ mb-4 ออก) */}
+                                <h2 className="font-inter font-bold text-[36px] leading-none tracking-normal text-[#194473]">Reviews</h2>
                                 <div className="flex flex-col gap-4 flex-shrink-0">
                                     <div className="relative w-full">
                                         <div className="flex items-center w-[631px] h-[31px] gap-[8px] px-[8px] py-[4px] bg-[#194473] border-[1px] border-[#EEEEEE] rounded-[8px] transition">
-                                            {/* Search Icon */}
                                             <Search className="w-[24px] h-[24px] p-[4px] text-white flex-shrink-0" />
-
-                                            {/* Input Wrapper */}
                                             <div className="flex items-center w-[583px] h-[23px] bg-[#FFFFFF] rounded-[4px] px-[8px] py-[4px] gap-[10px]">
+                                                {/* ✅ Update Input: Bind State */}
                                                 <input
                                                     type="text"
                                                     placeholder="Search"
+                                                    value={searchQuery}
+                                                    onChange={(e) => {
+                                                        setSearchQuery(e.target.value);
+                                                        setReviewPage(1); // Reset page to 1 on search
+                                                    }}
                                                     className="w-full h-full outline-none bg-transparent font-inter font-normal text-[12px] text-[#9E9E9E] placeholder-[#9E9E9E] leading-none tracking-normal"
                                                 />
                                             </div>
@@ -452,17 +668,20 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
                                     </div>
                                     <div className="flex w-[631px] h-[25px] gap-[32px] items-center">
                                         {["All", "1 Star", "2 Star", "3 star", "4 Star", "5 Star"].map((filter) => (
-                                            <button key={filter} onClick={() => setActiveStarFilter(filter)} className={`w-[58px] h-[25px] flex items-center justify-center rounded-[4px] text-[12px] font-inter font-[400] transition-colors leading-none border ${activeStarFilter === filter ? "bg-[#0D47A1] text-white border-[#90CAF9]" : "bg-[#757575] text-white border-transparent hover:bg-gray-600"}`}>
+                                            <button key={filter} onClick={() => {
+                                                setActiveStarFilter(filter);
+                                                setReviewPage(1); // Reset page to 1 on filter
+                                            }} className={`w-[58px] h-[25px] flex items-center justify-center rounded-[4px] text-[12px] font-inter font-[400] transition-colors leading-none border ${activeStarFilter === filter ? "bg-[#0D47A1] text-white border-[#90CAF9]" : "bg-[#757575] text-white border-transparent hover:bg-gray-600"}`}>
                                                 {filter}
                                             </button>
                                         ))}
                                     </div>
                                 </div>
 
-                                {/* 3. Review List (ลบ mt-6 ออก, เพิ่ม flex-1 overflow-y-auto เพื่อให้ Scroll ได้ในความสูงที่จำกัด) */}
                                 <div className="flex flex-col gap-4 flex-1 overflow-y-auto pr-2 scrollbar-hide">
-                                    {filteredReviews.length > 0 ? (
-                                        filteredReviews.map((review: any, index: number) => {
+                                    {/* ✅ Render: ใช้ displayedReviews แทน filteredReviews เพื่อทำ Pagination */}
+                                    {displayedReviews.length > 0 ? (
+                                        displayedReviews.map((review: any, index: number) => {
                                             const userName = review.profiles?.username || review.profiles?.name || review.name || "Anonymous";
                                             const userAvatar = review.profiles?.avatar_url || review.profiles?.image || review.avatar || "https://placehold.co/100x100?text=U";
                                             const reviewDate = review.visit_date ? new Date(review.visit_date).toLocaleDateString() : review.date || "";
@@ -491,15 +710,8 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
                                                         {reviewImgs.length > 0 && (
                                                             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300">
                                                                 {reviewImgs.map((img: string, idx: number) => (
-                                                                    <div key={idx} className="relative w-[60px] h-[60px] flex-shrink-0">
-                                                                        <Image
-                                                                            src={img}
-                                                                            alt={`Review ${idx}`}
-                                                                            fill
-                                                                            className="object-cover rounded-[4px] border border-[#E0E0E0] hover:opacity-90"
-                                                                            sizes="60px"
-                                                                            unoptimized={isRiskyImage(img)}
-                                                                        />
+                                                                    <div key={idx} className="relative w-[60px] h-[60px] flex-shrink-0 cursor-pointer hover:opacity-80" onClick={() => openReviewImageModal(img)}>
+                                                                        <Image src={img} alt={`Review ${idx}`} fill className="object-cover rounded-[4px] border border-[#E0E0E0]" sizes="60px" unoptimized={isRiskyImage(img)} />
                                                                     </div>
                                                                 ))}
                                                             </div>
@@ -510,40 +722,65 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
                                         })
                                     ) : (
                                         <div className="w-[631px] py-8 text-center text-gray-500 bg-gray-50 rounded-[8px] border border-gray-200">
-                                            No reviews found for {activeStarFilter} rating.
+                                            No reviews found matching your criteria.
                                         </div>
                                     )}
                                 </div>
 
-                                {/* 4. Pagination (ลบ mb-10 ออก) */}
-                                <div className="w-[631px] h-[30px] flex items-center justify-between gap-[8px] rounded-[8px] flex-shrink-0">
-                                    <div className="flex items-center gap-2">
-                                        <button onClick={() => setReviewPage((p) => Math.max(1, p - 1))} disabled={reviewPage === 1} className="flex items-center justify-center w-[32px] h-[24px] gap-[8px] px-[8px] py-[4px] rounded-[4px] bg-[#9E9E9E] border border-[#EEEEEE] disabled:opacity-50 transition hover:bg-[#757575]">
-                                            <ChevronLeft size={16} className="text-white" />
-                                        </button>
-                                        <div className="flex gap-2">
-                                            {[1, 2, 3, 4, 5].map((page) => (
-                                                <button key={page} onClick={() => setReviewPage(page)} className={`flex items-center justify-center w-[25px] h-[25px] px-[8px] py-[4px] rounded-[4px] border border-[#EEEEEE] text-[12px] font-medium transition-colors ${reviewPage === page ? "bg-[#194473] text-white" : "bg-[#9E9E9E] text-white hover:bg-gray-400"}`}>
-                                                    {page}
-                                                </button>
-                                            ))}
+                                {/* ✅ Updated Pagination Controls */}
+                                {totalPages > 1 && (
+                                    <div className="w-[631px] h-[30px] flex items-center justify-between gap-[8px] rounded-[8px] flex-shrink-0">
+                                        <div className="flex items-center gap-2">
+                                            <button 
+                                                onClick={() => setReviewPage((p) => Math.max(1, p - 1))} 
+                                                disabled={reviewPage === 1} 
+                                                className="flex items-center justify-center w-[32px] h-[24px] gap-[8px] px-[8px] py-[4px] rounded-[4px] bg-[#9E9E9E] border border-[#EEEEEE] disabled:opacity-50 transition hover:bg-[#757575]"
+                                            >
+                                                <ChevronLeft size={16} className="text-white" />
+                                            </button>
+                                            <div className="flex gap-2">
+                                                {/* ✅ Render dynamic page numbers */}
+                                                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                                                    <button 
+                                                        key={page} 
+                                                        onClick={() => setReviewPage(page)} 
+                                                        className={`flex items-center justify-center w-[25px] h-[25px] px-[8px] py-[4px] rounded-[4px] border border-[#EEEEEE] text-[12px] font-medium transition-colors ${reviewPage === page ? "bg-[#194473] text-white" : "bg-[#9E9E9E] text-white hover:bg-gray-400"}`}
+                                                    >
+                                                        {page}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <button 
+                                                onClick={() => setReviewPage((p) => Math.min(totalPages, p + 1))} 
+                                                disabled={reviewPage === totalPages} 
+                                                className="flex items-center justify-center w-[32px] h-[24px] gap-[8px] px-[8px] py-[4px] rounded-[4px] bg-[#9E9E9E] border border-[#EEEEEE] disabled:opacity-50 transition hover:bg-[#757575]"
+                                            >
+                                                <ChevronRight size={16} className="text-white" />
+                                            </button>
                                         </div>
-                                        <button onClick={() => setReviewPage((p) => Math.min(5, p + 1))} disabled={reviewPage === 5} className="flex items-center justify-center w-[32px] h-[24px] gap-[8px] px-[8px] py-[4px] rounded-[4px] bg-[#9E9E9E] border border-[#EEEEEE] disabled:opacity-50 transition hover:bg-[#757575]">
-                                            <ChevronRight size={16} className="text-white" />
+                                        <button
+                                            onClick={handleReviewClick}
+                                            className="h-[30px] px-4 bg-[#194473] text-white rounded-[8px] font-bold text-[14px] hover:bg-[#153a61] cursor-pointer"
+                                        >
+                                            Review
                                         </button>
                                     </div>
-                                    <button
-                                        onClick={() => router.push(`/review?placeId=${place.id}`)}
-                                        className="h-[30px] px-4 bg-[#194473] text-white rounded-[8px] font-bold text-[14px] hover:bg-[#153a61] cursor-pointer"
-                                    >
-                                        Review
-                                    </button>
-                                </div>
-
+                                )}
+                                {/* Case: No pagination needed but need Review Button */}
+                                {totalPages <= 1 && (
+                                     <div className="w-[631px] h-[30px] flex items-center justify-end gap-[8px] rounded-[8px] flex-shrink-0">
+                                        <button
+                                            onClick={handleReviewClick}
+                                            className="h-[30px] px-4 bg-[#194473] text-white rounded-[8px] font-bold text-[14px] hover:bg-[#153a61] cursor-pointer"
+                                        >
+                                            Review
+                                        </button>
+                                     </div>
+                                )}
                             </section>
                         </div>
 
-                        {/* RIGHT COLUMN */}
+                        {/* RIGHT COLUMN (Unchanged) */}
                         <div className="flex flex-col gap-8">
                             <div className="w-[456px] rounded-[8px] overflow-hidden shadow-sm">
                                 <div className="h-[40px] bg-[#C0C0C0] flex items-center px-4 py-2">
@@ -572,12 +809,8 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
                                     <div className="flex items-start gap-[8px]">
                                         <Clock className="w-5 h-5 text-[#212121] mt-[3px] flex-shrink-0" strokeWidth={1.5} />
                                         <div className="flex-1 flex items-start gap-2 text-[14px] leading-relaxed text-[#212121]">
-                                            <span className="font-semibold text-[#194473] whitespace-nowrap flex-shrink-0">
-                                                Open daily:
-                                            </span>
-                                            <span className="font-normal break-words">
-                                                {place.opening_hours || "24 hours"}
-                                            </span>
+                                            <span className="font-semibold text-[#194473] whitespace-nowrap flex-shrink-0">Open daily:</span>
+                                            <span className="font-normal break-words">{place.opening_hours || "24 hours"}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -590,9 +823,7 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
                                 <div className="h-[49px] bg-[#F5F5F5] px-4 flex items-center">
                                     <div className="flex items-center gap-3">
                                         <div className="flex items-center gap-1 text-[14px]">
-                                            <span className="font-normal text-[#212121]">
-                                                {place.price_detail || "Free entry"}
-                                            </span>
+                                            <span className="font-normal text-[#212121]">{place.price_detail || "Free entry"}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -613,21 +844,14 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
                                 </div>
                             )}
 
-                            {morePictures.length > 0 && (
+                            {morePictures.length > 0 && currentReviews.length > 0 && (
                                 <div className="w-[456px] flex flex-col gap-4">
                                     <h3 className="font-inter font-bold text-[20px] text-[#194473] leading-none">More Picture</h3>
                                     <div className="flex gap-[13px]">
                                         {morePictures.slice(0, 3).map((img, idx) => {
                                             return (
-                                                <div key={idx} className="relative w-[140px] h-[140px] rounded-[8px] overflow-hidden cursor-pointer group">
-                                                    <Image
-                                                        src={img}
-                                                        alt={`More pic ${idx}`}
-                                                        fill
-                                                        className="object-cover transition-transform group-hover:scale-110"
-                                                        sizes="140px"
-                                                        unoptimized={isRiskyImage(img)}
-                                                    />
+                                                <div key={idx} className="relative w-[140px] h-[140px] rounded-[8px] overflow-hidden cursor-pointer group" onClick={() => openReviewImageModal(img)}>
+                                                    <Image src={img} alt={`More pic ${idx}`} fill className="object-cover transition-transform group-hover:scale-110" sizes="140px" unoptimized={isRiskyImage(img)} />
                                                     {idx === 2 && morePictures.length > 3 && (
                                                         <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white font-bold text-xl backdrop-blur-[1px]">
                                                             <Plus size={24} strokeWidth={3} /> {morePictures.length - 3}
@@ -645,37 +869,16 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
                                     <h3 className="font-inter font-bold text-[20px] text-[#194473] leading-none">Best near by</h3>
                                     <div className="flex flex-col gap-3">
                                         {nearbyPlaces.map((nearby) => {
-                                            const thumbUrl = nearby.images && nearby.images.length > 0
-                                                ? (typeof nearby.images[0] === 'string' ? nearby.images[0] : (nearby.images[0] as any).url)
-                                                : "https://placehold.co/80x80?text=No+Image"; // ✅ เปลี่ยนจาก via.placeholder เป็น placehold.co
-
-                                            const locationText = (nearby.province_state && nearby.province_state !== nearby.country)
-                                                ? `${nearby.province_state}, ${nearby.country}`
-                                                : nearby.country;
-
+                                            const thumbUrl = nearby.images && nearby.images.length > 0 ? (typeof nearby.images[0] === 'string' ? nearby.images[0] : (nearby.images[0] as any).url) : "https://placehold.co/80x80?text=No+Image";
+                                            const locationText = (nearby.province_state && nearby.province_state !== nearby.country) ? `${nearby.province_state}, ${nearby.country}` : nearby.country;
                                             return (
-                                                <div
-                                                    key={nearby.id}
-                                                    onClick={() => router.push(`/detail?id=${nearby.id}`)}
-                                                    className="w-full h-[96px] bg-[#F5F5F5] rounded-[8px] p-2 flex gap-3 cursor-pointer hover:bg-gray-200 transition-colors shadow-sm"
-                                                >
+                                                <div key={nearby.id} onClick={() => router.push(`/detail?id=${nearby.id}`)} className="w-full h-[96px] bg-[#F5F5F5] rounded-[8px] p-2 flex gap-3 cursor-pointer hover:bg-gray-200 transition-colors shadow-sm">
                                                     <div className="relative w-[80px] h-[80px] flex-shrink-0">
-                                                        <Image
-                                                            src={thumbUrl}
-                                                            alt={nearby.name}
-                                                            fill
-                                                            className="rounded-[8px] object-cover"
-                                                            sizes="80px"
-                                                            unoptimized={isRiskyImage(thumbUrl)}
-                                                        />
+                                                        <Image src={thumbUrl} alt={nearby.name} fill className="rounded-[8px] object-cover" sizes="80px" unoptimized={isRiskyImage(thumbUrl)} />
                                                     </div>
                                                     <div className="flex flex-col justify-center gap-1 min-w-0">
-                                                        <h4 className="font-inter font-bold text-[16px] text-[#212121] leading-tight truncate">
-                                                            {nearby.name}
-                                                        </h4>
-                                                        <p className="font-inter text-[12px] text-[#757575] leading-tight truncate">
-                                                            {locationText}
-                                                        </p>
+                                                        <h4 className="font-inter font-bold text-[16px] text-[#212121] leading-tight truncate">{nearby.name}</h4>
+                                                        <p className="font-inter text-[12px] text-[#757575] leading-tight truncate">{locationText}</p>
                                                         <div className="flex items-center gap-1 mt-1">
                                                             <div className="flex">
                                                                 {[1, 2, 3, 4, 5].map((star) => (

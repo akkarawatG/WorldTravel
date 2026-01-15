@@ -2,7 +2,8 @@
 
 import { LogOut, ChevronLeft, Search, MapPin, Globe, Map } from "lucide-react";
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+// ✅ เพิ่ม useSearchParams
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Icon from '@mdi/react';
 import { mdiLockOutline } from '@mdi/js';
@@ -30,13 +31,12 @@ interface NavbarProps {
   onLogout?: () => void;
 }
 
-// ✅ 1. เพิ่ม field 'country' ใน Interface เพื่อเก็บข้อมูลประเทศแม่ของจังหวัดนั้น
 interface SearchResult {
   type: 'country' | 'province' | 'place';
   name: string;
   id?: number | string;
   subText?: string;
-  country?: string; // <--- เพิ่มตรงนี้
+  country?: string;
 }
 
 const getCountryCode = (countryName: string): string => {
@@ -60,6 +60,7 @@ export default function Navbar({
   onLogout
 }: NavbarProps) {
   const router = useRouter();
+  const searchParams = useSearchParams(); // ✅ Hook สำหรับอ่าน Query Params
   const supabase = createClient();
 
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(user);
@@ -74,6 +75,17 @@ export default function Navbar({
   useEffect(() => {
     if (user) setCurrentUser(user);
   }, [user]);
+
+  // ✅ Effect: ตรวจสอบ URL เมื่อโหลดหน้าเสร็จ
+  useEffect(() => {
+    if (searchParams.get('action') === 'edit-profile') {
+      setShowEditProfileModal(true);
+      
+      // (Optional) ลบ Query Params ออกจาก URL เพื่อความสวยงาม โดยไม่ Reload หน้า
+      const newUrl = window.location.pathname;
+      window.history.replaceState(null, '', newUrl);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const checkUserStatus = async () => {
@@ -105,6 +117,7 @@ export default function Navbar({
 
         const isProfileIncomplete = !profile || !profile.username;
 
+        // ถ้า Profile ยังไม่สมบูรณ์ บังคับเปิด Modal (Logic เดิม)
         if (isProfileIncomplete) {
           setShowEditProfileModal(true);
         }
@@ -189,15 +202,14 @@ export default function Navbar({
       });
 
       // --- Province ---
-      // ✅ แก้ไข: เก็บ country ของจังหวัดนั้นๆ ลงไปด้วย
       places.forEach(place => {
         const province = place.province_state;
         if (province && province.toLowerCase().includes(lowerQuery) && !addedKeys.has(`province-${province}`)) {
-          tempResults.push({ 
-            type: 'province', 
-            name: province, 
-            subText: place.country, 
-            country: place.country // <--- สำคัญ: เก็บประเทศไว้ใช้ตอน redirect
+          tempResults.push({
+            type: 'province',
+            name: province,
+            subText: place.country,
+            country: place.country 
           });
           addedKeys.add(`province-${province}`);
         }
@@ -227,32 +239,24 @@ export default function Navbar({
 
   }, [localQuery]);
 
-  // ✅ แก้ไข Logic การเลือกผลลัพธ์
   const handleSelectResult = (result: SearchResult) => {
     setShowDropdown(false);
     setLocalQuery(result.name);
     if (setSearchQuery) setSearchQuery(result.name);
 
     if (result.type === 'country') {
-      // ค้นหาทั้งประเทศ
       router.push(`/explore?country=${encodeURIComponent(result.name)}`);
     } else if (result.type === 'province') {
-      // ✅ แก้ไข: ส่งทั้ง search (จังหวัด) และ country (ประเทศ) ไปด้วย
-      // เพื่อไม่ให้ ExplorePage default เป็น Thailand
-      const targetCountry = result.country || "Thailand"; // Fallback กันเหนียว
+      const targetCountry = result.country || "Thailand"; 
       router.push(`/explore?country=${encodeURIComponent(targetCountry)}&search=${encodeURIComponent(result.name)}`);
     } else if (result.type === 'place' && result.id) {
-      // ไปหน้า Detail โดยตรง
       router.push(`/detail?id=${result.id}`);
     }
   };
 
-  // ✅ เพิ่ม: Handle การกด Enter ใน Input Box
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       setShowDropdown(false);
-      // ถ้ากด Enter เฉยๆ โดยไม่เลือก Dropdown ให้ค้นหาด้วยคำนั้น (Default อาจไป Thailand)
-      // หรือถ้าอยากให้ฉลาดกว่านี้ อาจจะต้องดึงผลลัพธ์แรกมาใช้
       router.push(`/explore?search=${encodeURIComponent(localQuery)}`);
     }
   };
@@ -299,7 +303,7 @@ export default function Navbar({
                     value={localQuery}
                     onChange={handleInputChange}
                     onFocus={() => setShowDropdown(true)}
-                    onKeyDown={handleKeyDown} // ✅ เพิ่ม event onKeyDown
+                    onKeyDown={handleKeyDown}
                   />
                 </div>
               </div>
@@ -399,11 +403,12 @@ export default function Navbar({
                   <div className="w-[158px] h-[62px] flex flex-col gap-2">
                     <button
                       onClick={() => {
+                        // ✅ สั่งเปลี่ยนหน้า พร้อมแนบ Params
+                        router.push('/review-history?action=edit-profile');
                         setShowUserMenu(false);
-                        setShowEditProfileModal(true);
                       }}
                       className="w-[158px] h-[27px] rounded-[8px] flex items-center gap-4 px-[8px] py-[4px] text-left hover:text-[#194473] transition-colors
-                                 font-inter font-normal text-[16px] leading-none tracking-normal text-[#212121]"
+             font-inter font-normal text-[16px] leading-none tracking-normal text-[#212121]"
                     >
                       Edit profile
                     </button>
@@ -414,7 +419,7 @@ export default function Navbar({
                         router.push('/review-history');
                       }}
                       className="w-[158px] h-[27px] rounded-[8px] flex items-center gap-4 px-[8px] py-[4px] text-left hover:text-[#194473] transition-colors
-                                 font-inter font-normal text-[16px] leading-none tracking-normal text-[#212121]"
+             font-inter font-normal text-[16px] leading-none tracking-normal text-[#212121]"
                     >
                       Review
                     </button>
@@ -423,7 +428,7 @@ export default function Navbar({
                   <button
                     onClick={handleLogoutTrigger}
                     className="w-[158px] h-[32px] rounded-[8px] flex items-center justify-center gap-2 px-[8px] py-[4px] border border-[#EF9A9A] bg-[#F44336] hover:bg-[#d32f2f] transition-colors mt-auto
-                               font-inter font-normal text-[16px] leading-none text-white"
+                       font-inter font-normal text-[16px] leading-none text-white"
                   >
                     <LogOut className="w-[16px] h-[16px]" /> Logout
                   </button>
@@ -441,6 +446,7 @@ export default function Navbar({
         />
       )}
 
+      {/* ✅ EditProfileModal ถูกเรียกใช้งานผ่าน state ที่ useEffect ตั้งค่าไว้ */}
       {showEditProfileModal && currentUser && (
         <EditProfileModal
           user={currentUser}

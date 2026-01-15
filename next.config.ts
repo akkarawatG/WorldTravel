@@ -18,10 +18,14 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'upload.wikimedia.org',
       },
-      // 👇 เพิ่มโดเมน CloudFront ที่ Error แจ้งเตือนล่าสุดเข้าไปครับ
       {
         protocol: 'https',
         hostname: 'd1bv4heaa2n05k.cloudfront.net',
+      },
+      // ✅ เพิ่มอันนี้เข้าไปครับ เพื่อแก้ Error ล่าสุด
+      {
+        protocol: 'https',
+        hostname: 'placehold.co',
       },
     ],
   },
