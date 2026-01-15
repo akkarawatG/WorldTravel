@@ -219,7 +219,7 @@ export default function ReviewHistoryPage() {
                                         </div>
 
                                         {/* Content */}
-                                        <p className="text-[14px] text-[#212121] leading-relaxed mb-4 line-clamp-4 min-h-[40px]">
+                                        <p className="text-[14px] text-[#212121] leading-relaxed line-clamp-4 min-auto">
                                             {review.content}
                                         </p>
                                     </div>
