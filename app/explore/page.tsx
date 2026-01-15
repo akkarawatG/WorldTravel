@@ -112,7 +112,7 @@ const DB_TAG_TO_DISPLAY: Record<string, string> = {
   "lakes_rivers": "Lakes / Rivers",
   "hot_springs": "Hot Spring",
   "botanical_gardens": "Gardens",
-  
+
   "temples_shrines": "Temples",
   "churches_mosques": "Church / Mosque",
   "ancient_ruins": "Ancient ruins",
@@ -191,14 +191,14 @@ function ExploreContent() {
       setIsLoading(true);
       try {
         // 1. Fetch from Supabase (Get all by country/search first)
-        const dbPlaces = await searchPlaces(searchQuery, currentCountry, []); 
+        const dbPlaces = await searchPlaces(searchQuery, currentCountry, []);
         let finalPlaces: Place[] = [];
 
         if (dbPlaces && dbPlaces.length > 0) {
-           finalPlaces = dbPlaces;
+          finalPlaces = dbPlaces;
         } else {
-           // Fallback Mock Data
-           let mockFiltered = MOCK_ATTRACTIONS.filter((p: any) => {
+          // Fallback Mock Data
+          let mockFiltered = MOCK_ATTRACTIONS.filter((p: any) => {
             const matchCountry = p.location?.country?.toLowerCase() === currentCountry.toLowerCase();
             const searchLower = searchQuery.toLowerCase();
             const district = p.district || p.location?.district || "";
@@ -224,12 +224,12 @@ function ExploreContent() {
         if (selectedFilters.length > 0) {
           finalPlaces = finalPlaces.filter(p => {
             const placeTags = p.category_tags || [];
-            
+
             // วนลูป Filter ที่ user เลือก (ต้องตรงอย่างน้อย 1 อัน)
             return selectedFilters.some(filterName => {
               // หาว่า Filter Name นี้ สัมพันธ์กับ Tags อะไรใน DB บ้าง
               const validDbTags = UI_FILTER_TO_DB_TAGS[filterName] || [];
-              
+
               // เช็คว่าสถานที่นี้ มี Tag ที่ตรงกับ validDbTags ไหม (แบบ Exact Match)
               return placeTags.some(tag => validDbTags.includes(tag));
             });
@@ -239,13 +239,13 @@ function ExploreContent() {
         // 3. Sorting
         if (searchQuery) {
           finalPlaces = finalPlaces.sort((a, b) => {
-             const scoreA = calculateRelevanceScore({ ...a, province_state: a.province_state, district: (a as any).district }, searchQuery);
-             const scoreB = calculateRelevanceScore({ ...b, province_state: b.province_state, district: (b as any).district }, searchQuery);
-             if (scoreB !== scoreA) return scoreB - scoreA;
-             return (b.rating || 0) - (a.rating || 0);
+            const scoreA = calculateRelevanceScore({ ...a, province_state: a.province_state, district: (a as any).district }, searchQuery);
+            const scoreB = calculateRelevanceScore({ ...b, province_state: b.province_state, district: (b as any).district }, searchQuery);
+            if (scoreB !== scoreA) return scoreB - scoreA;
+            return (b.rating || 0) - (a.rating || 0);
           });
         } else {
-           finalPlaces = finalPlaces.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+          finalPlaces = finalPlaces.sort((a, b) => (b.rating || 0) - (a.rating || 0));
         }
 
         setAttractions(finalPlaces);
@@ -292,10 +292,10 @@ function ExploreContent() {
     const tempPlaces: SearchResult[] = [];
     const addedKeys = new Set();
 
-    attractions.forEach((place: any) => { 
+    attractions.forEach((place: any) => {
       const province = place.province_state || place.location?.province_state || "";
       const country = place.country || place.location?.country || "";
-      
+
       if (province.toLowerCase().startsWith(lowerQuery) && !addedKeys.has(`province-${province}`)) {
         tempProvinces.push({ type: 'province', name: province, subText: country });
         addedKeys.add(`province-${province}`);
@@ -317,8 +317,8 @@ function ExploreContent() {
 
   return (
     <div className="min-h-screen bg-[#FFFFFF] font-inter text-gray-800 pb-20" onClick={() => setShowDropdown(false)}>
-      
-<style jsx global>{`
+
+      <style jsx global>{`
   /* 1. จัดการ Container ให้ลูกๆ อยู่กึ่งกลางเสมอ */
   .custom-pagination-container {
     display: flex !important;
@@ -381,7 +381,7 @@ function ExploreContent() {
                     bullets.forEach((bullet, index) => {
                       bullet.classList.remove('bg-[#E0E0E0]', 'bg-[#121212]', 'w-[16px]', 'h-[16px]', 'w-[8px]', 'h-[8px]', 'border', 'border-[4px]', 'border-[#EEEEEE]', 'border-[#E0E0E0]');
                       bullet.classList.add('rounded-full', 'transition-all', 'duration-300');
-                      if (index === realIndex) { bullet.classList.add('w-[16px]', 'h-[16px]', 'bg-[#121212]', 'border-[4px]', 'border-[#E0E0E0]'); } 
+                      if (index === realIndex) { bullet.classList.add('w-[16px]', 'h-[16px]', 'bg-[#121212]', 'border-[4px]', 'border-[#E0E0E0]'); }
                       else { bullet.classList.add('w-[16px]', 'h-[16px]', 'bg-[#E0E0E0]', 'border', 'border-[#EEEEEE]'); }
                     });
                   }}
@@ -420,9 +420,9 @@ function ExploreContent() {
                 {searchResults.map((result, idx) => (
                   <div key={idx} onClick={(e) => { e.stopPropagation(); setSearchQuery(result.name); setShowDropdown(false); }} className="px-4 py-2 hover:bg-blue-50 cursor-pointer flex items-center gap-3 transition-colors border-b border-gray-50 last:border-none">
                     <div className="text-gray-400">
-                      {result.type === 'province' ? <Map size={14} /> : 
-                       result.type === 'district' ? <Building2 size={14} /> : 
-                       <MapPin size={14} />}
+                      {result.type === 'province' ? <Map size={14} /> :
+                        result.type === 'district' ? <Building2 size={14} /> :
+                          <MapPin size={14} />}
                     </div>
                     <div className="flex flex-col">
                       <span className="text-[12px] font-medium text-gray-800 line-clamp-1">{result.name}</span>
@@ -478,12 +478,20 @@ function ExploreContent() {
                             <button onClick={(e) => e.stopPropagation()} className={`next-btn-${place.id} absolute right-2 top-1/2 -translate-y-1/2 z-10 w-[24px] h-[24px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-all shadow-sm cursor-pointer text-white`}><ArrowRight className="w-[14px] h-[14px]" /></button>
                             <div className={`pagination-custom-${place.id} custom-pagination-container absolute bottom-3 left-0 w-full flex justify-center gap-1 z-20 !pointer-events-none`}></div>
                           </Swiper>
-                          
+
                           <div className="absolute top-2 right-2 z-20"><button onClick={(e) => { e.stopPropagation(); console.log(`Add ${place.name} to trip`); }} className="flex h-[24px] w-[32px] group-hover:w-[60px] items-center justify-center rounded-[8px] border border-white bg-[#00000066] group-hover:bg-[#1565C0] text-white shadow-sm transition-all duration-300 ease-in-out overflow-hidden cursor-pointer backdrop-blur-[2px]"><Icon path={mdiPlus} size="16px" className="flex-shrink-0" /><span className="max-w-0 opacity-0 group-hover:max-w-[40px] group-hover:opacity-100 group-hover:ml-[4px] text-[12px] font-inter font-normal whitespace-nowrap transition-all duration-300">Add</span></button></div>
                         </div>
                         <div className="w-full h-[87px] flex flex-col gap-[4px] min-w-0">
                           <h4 className="text-[20px] font-inter font-normal text-[#212121] leading-none w-full"><span className="inline-block max-w-full truncate border-b border-transparent group-hover:border-[#212121] pb-[1px] transition-colors duration-200 align-bottom">{place.name}</span></h4>
-                          <p className="text-[14px] font-inter font-normal text-[#9E9E9E] truncate leading-none w-full">{place.province_state}, {place.country}</p>
+                          <p className="flex items-center gap-1 text-[14px] font-inter font-normal text-[#9E9E9E] w-full">
+                            {/* shrink-0 ป้องกันไอคอนเบี้ยวเวลามี text ยาวๆ */}
+                            <MapPin className="w-4 h-4 shrink-0" />
+
+                            {/* truncate ย้ายมาตรงนี้เพื่อให้ตัดคำเฉพาะ Text */}
+                            <span className="truncate leading-none">
+                              {place.province_state}, {place.country}
+                            </span>
+                          </p>
                           <div className="flex items-center gap-[4px]">{[1, 2, 3, 4, 5].map((star) => (<Star key={star} className={`w-[12px] h-[12px] ${star <= Math.round(place.rating || 0) ? "fill-yellow-400 text-yellow-400" : "fill-gray-200 text-gray-200"}`} />))}<span className="text-xs font-medium text-[#9E9E9E] ml-1">({place.rating})</span></div>
                           <p className="text-[14px] font-inter font-semibold text-[#212121] truncate leading-none w-full">{displayString}</p>
                         </div>

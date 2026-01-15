@@ -137,10 +137,19 @@ export const searchPlaces = async (
   return results;
 };
 
-// ... (getPlaceById, getNearbyPlaces คงเดิม) ...
 export const getPlaceById = async (id: string): Promise<Place | null> => {
-  const { data, error } = await supabase.from('places').select('*').eq('id', id).single();
-  if (error) return null;
+  // ✅ แก้ไข: เพิ่ม reviews(*, profiles(*)) เข้าไปใน select
+  const { data, error } = await supabase
+    .from('places')
+    .select('*, reviews(*, profiles(*))') 
+    .eq('id', id)
+    .single();
+
+  if (error) {
+    console.error("Error fetching place:", error.message);
+    return null;
+  }
+  
   return data;
 };
 

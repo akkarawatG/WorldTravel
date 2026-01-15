@@ -132,16 +132,16 @@ function DetailContent() {
                     console.log("✅ [Page] Found in Supabase");
 
                     // ✅ FIX: Force Mapping เพื่อแก้ปัญหาชื่อ field ไม่ตรง หรือเป็น null
-                    // ทำเหมือนหน้า Explore เพื่อความชัวร์
                     currentPlaceData = {
                         ...dbPlace,
-                        province_state: dbPlace.province_state || "", // ถ้า null ให้เป็นว่าง
+                        province_state: dbPlace.province_state || "",
                         country: dbPlace.country || "",
-                        // จัดการรูปภาพให้เป็น Array of Strings ให้หมด หรือ Array of Objects ตาม Interface
                         images: Array.isArray(dbPlace.images)
                             ? dbPlace.images.map((img: any) => typeof img === 'string' ? img : img.url)
                             : [],
-                        // Default tips logic
+                        // ✅ Map reviews from DB to Place structure
+                        // Note: Ensure getPlaceById includes reviews in the select query.
+                        reviews: (dbPlace as any).reviews || [],
                         travel_tips: (dbPlace.travel_tips && Object.keys(dbPlace.travel_tips).length > 0)
                             ? dbPlace.travel_tips
                             : {
@@ -186,8 +186,11 @@ function DetailContent() {
                     setPlace(currentPlaceData);
 
                     // --- 2. PREPARE MORE PICTURES ---
+                    // ดึงรูปจากรีวิวมาแสดงใน More Picture
                     const reviewImages = (currentPlaceData as any).reviews?.reduce((acc: string[], r: any) => {
-                        return r.images ? [...acc, ...r.images] : acc;
+                        const imgs = r.images || [];
+                        const urls = imgs.map((img: any) => typeof img === 'string' ? img : img.url);
+                        return [...acc, ...urls];
                     }, []) || [];
 
                     if (reviewImages.length > 0) {
@@ -260,14 +263,16 @@ function DetailContent() {
     const rawImages = place?.images || [];
     const allImages = rawImages.length > 0
         ? rawImages.map(img => (typeof img === 'object' && 'url' in img ? img : { url: img as string }))
-        : [{ url: "https://via.placeholder.com/1200x600?text=No+Image" }];
+        : [{ url: "https://placehold.co/1200x600?text=No+Image" }]; // ✅ ใช้ placehold.co แทน via.placeholder
 
     const extendedImages = allImages.length > 1
         ? [...allImages, allImages[0]]
         : allImages;
 
+    // ✅ ใช้ข้อมูลรีวิวจาก place state โดยตรง
     const currentReviews = (place as any)?.reviews || [];
 
+    // Filter Logic
     const filteredReviews = currentReviews.filter((review: any) => {
         if (activeStarFilter === "All") return true;
         const starValue = parseInt(activeStarFilter.split(" ")[0]);
@@ -279,12 +284,10 @@ function DetailContent() {
         const displayCategories: string[] = [];
         tags.forEach(tag => {
             const lowerTag = tag?.toLowerCase().trim();
-            // 1. Direct Map
             if (CATEGORY_DISPLAY_MAP[lowerTag]) {
                 displayCategories.push(CATEGORY_DISPLAY_MAP[lowerTag]);
                 return;
             }
-            // 2. Keyword Match
             let foundMatch = false;
             for (const [displayTitle, keywords] of Object.entries(CATEGORY_MATCHING_KEYWORDS)) {
                 if (keywords.some(k => lowerTag.split(/[\s_]+/).includes(k.toLowerCase()))) {
@@ -293,12 +296,10 @@ function DetailContent() {
                     break;
                 }
             }
-            // 3. Fallback
             if (!foundMatch) {
                 displayCategories.push(tag?.replace(/_/g, " ") || "Attraction");
             }
         });
-        // Remove duplicates
         return Array.from(new Set(displayCategories));
     };
 
@@ -599,41 +600,80 @@ function DetailContent() {
                                         ))}
                                     </div>
                                 </div>
+
+                                {/* ✅ REVIEW LIST: Mapped from DB Data */}
+                                {/* ... ส่วนอื่นเหมือนเดิม ... */}
+
                                 <div className="flex flex-col gap-4 mt-6">
                                     {filteredReviews.length > 0 ? (
-                                        filteredReviews.map((review: any) => (
-                                            <div key={review.id} className="w-[631px] bg-white rounded-[8px] overflow-hidden shadow-sm border border-[#E0E0E0]">
-                                                <div className="h-[32px] bg-[#9E9E9E] flex items-center px-3 gap-2">
-                                                    <img src={review.avatar} alt={review.name} className="w-6 h-6 rounded-full border border-white object-cover" />
-                                                    <span className="font-inter font-bold text-[16px] text-white">{review.name}</span>
-                                                </div>
-                                                <div className="p-3">
-                                                    <div className="flex items-center gap-2 mb-2">
-                                                        <span className="text-[12px] text-[#9E9E9E] font-inter">{review.date}</span>
-                                                        <div className="flex items-center">
-                                                            {[1, 2, 3, 4, 5].map((star) => (
-                                                                <Star key={star} size={14} className={`${star <= review.rating ? "fill-[#FFCC00] text-[#FFCC00]" : "fill-gray-300 text-gray-300"}`} />
-                                                            ))}
-                                                            <span className="text-[12px] text-[#212121] ml-1">({review.rating})</span>
-                                                        </div>
+                                        filteredReviews.map((review: any, index: number) => {
+
+                                            // 🔥 DEBUG: เช็คข้อมูลที่ได้จาก Supabase ตรงนี้
+                                            console.log(`[Review #${index}]`, review);
+                                            console.log(`[Review #${index}] Profile Data:`, review.profiles);
+
+                                            // 1. ลองดึงค่าตามชื่อคอลัมน์ที่เป็นไปได้ทั้งหมด
+                                            // profiles.username (ตามที่เคยเห็นใน EditProfile) หรือ profiles.name
+                                            const userName =
+                                                review.profiles?.username ||
+                                                review.profiles?.name ||
+                                                review.name ||
+                                                "Anonymous";
+
+                                            // 2. ลองดึงรูปตามชื่อคอลัมน์ที่เป็นไปได้
+                                            // profiles.avatar_url หรือ profiles.image
+                                            const userAvatar =
+                                                review.profiles?.avatar_url ||
+                                                review.profiles?.image ||
+                                                review.avatar ||
+                                                "https://placehold.co/100x100?text=U";
+
+                                            // Handle Date
+                                            const reviewDate = review.visit_date ? new Date(review.visit_date).toLocaleDateString() : review.date || "";
+
+                                            // Handle Images
+                                            let reviewImgs: string[] = [];
+                                            if (Array.isArray(review.images)) {
+                                                reviewImgs = review.images.map((img: any) => typeof img === 'string' ? img : img.url);
+                                            }
+
+                                            return (
+                                                <div key={review.id} className="w-[631px] bg-white rounded-[8px] overflow-hidden shadow-sm border border-[#E0E0E0]">
+                                                    {/* ... ส่วนแสดงผล UI เหมือนเดิม ... */}
+                                                    <div className="h-[32px] bg-[#9E9E9E] flex items-center px-3 gap-2">
+                                                        <img src={userAvatar} alt={userName} className="w-6 h-6 rounded-full border border-white object-cover" />
+                                                        <span className="font-inter font-bold text-[16px] text-white">{userName}</span>
                                                     </div>
-                                                    <p className="text-[14px] text-[#212121] font-inter leading-relaxed mb-3">{review.comment}</p>
-                                                    {review.images && (
-                                                        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300">
-                                                            {review.images.map((img: string, idx: number) => (
-                                                                <img key={idx} src={img} alt={`Review image ${idx}`} className="w-[60px] h-[60px] object-cover rounded-[4px] border border-[#E0E0E0] hover:opacity-90 cursor-pointer" />
-                                                            ))}
+                                                    {/* ... เนื้อหา Review ... */}
+                                                    <div className="p-3">
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <span className="text-[12px] text-[#9E9E9E] font-inter">{reviewDate}</span>
+                                                            <div className="flex items-center">
+                                                                {[1, 2, 3, 4, 5].map((star) => (
+                                                                    <Star key={star} size={14} className={`${star <= review.rating ? "fill-[#FFCC00] text-[#FFCC00]" : "fill-gray-300 text-gray-300"}`} />
+                                                                ))}
+                                                                <span className="text-[12px] text-[#212121] ml-1">({review.rating})</span>
+                                                            </div>
                                                         </div>
-                                                    )}
+                                                        <p className="text-[14px] text-[#212121] font-inter leading-relaxed mb-3">{review.content || review.comment}</p>
+                                                        {reviewImgs.length > 0 && (
+                                                            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300">
+                                                                {reviewImgs.map((img: string, idx: number) => (
+                                                                    <img key={idx} src={img} alt={`Review image ${idx}`} className="w-[60px] h-[60px] object-cover rounded-[4px] border border-[#E0E0E0] hover:opacity-90 cursor-pointer" />
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        ))
+                                            );
+                                        })
                                     ) : (
                                         <div className="w-[631px] py-8 text-center text-gray-500 bg-gray-50 rounded-[8px] border border-gray-200">
                                             No reviews found for {activeStarFilter} rating.
                                         </div>
                                     )}
                                 </div>
+
                                 <div className="w-[631px] h-[30px] flex items-center justify-between gap-[8px] rounded-[8px] mb-10">
                                     <div className="flex items-center gap-2">
                                         <button onClick={() => setReviewPage((p) => Math.max(1, p - 1))} disabled={reviewPage === 1} className="flex items-center justify-center w-[32px] h-[24px] gap-[8px] px-[8px] py-[4px] rounded-[4px] bg-[#9E9E9E] border border-[#EEEEEE] disabled:opacity-50 transition hover:bg-[#757575]">
@@ -650,8 +690,9 @@ function DetailContent() {
                                             <ChevronRight size={16} className="text-white" />
                                         </button>
                                     </div>
+                                    {/* ✅ Navigate to Review Page */}
                                     <button
-                                        onClick={() => router.push(`/review?placeId=${id}`)} // Navigate to review page with ID
+                                        onClick={() => router.push(`/review?placeId=${id}`)}
                                         className="h-[30px] px-4 bg-[#194473] text-white rounded-[8px] font-bold text-[14px] hover:bg-[#153a61] cursor-pointer"
                                     >
                                         Review
@@ -766,51 +807,97 @@ function DetailContent() {
                             )}
 
                             {nearbyPlaces.length > 0 && (
+
                                 <div className="w-[456px] flex flex-col gap-4 mt-2">
+
                                     <h3 className="font-inter font-bold text-[20px] text-[#194473] leading-none">Best near by</h3>
+
                                     <div className="flex flex-col gap-3">
+
                                         {nearbyPlaces.map((nearby) => {
+
                                             const thumbUrl = nearby.images && nearby.images.length > 0
+
                                                 ? (typeof nearby.images[0] === 'string' ? nearby.images[0] : (nearby.images[0] as any).url)
+
                                                 : "https://via.placeholder.com/80x80?text=No+Image";
 
+
+
                                             // ✅ FIX: Logic ป้องกัน "India, India" และ "null, Thailand"
+
                                             const locationText = (nearby.province_state && nearby.province_state !== nearby.country)
+
                                                 ? `${nearby.province_state}, ${nearby.country}`
+
                                                 : nearby.country;
 
+
+
                                             return (
+
                                                 <div
+
                                                     key={nearby.id}
+
                                                     onClick={() => router.push(`/detail?id=${nearby.id}`)}
+
                                                     className="w-full h-[96px] bg-[#F5F5F5] rounded-[8px] p-2 flex gap-3 cursor-pointer hover:bg-gray-200 transition-colors shadow-sm"
+
                                                 >
+
                                                     <img
+
                                                         src={thumbUrl}
+
                                                         alt={nearby.name}
+
                                                         className="w-[80px] h-[80px] rounded-[8px] object-cover flex-shrink-0"
+
                                                     />
+
                                                     <div className="flex flex-col justify-center gap-1 min-w-0">
+
                                                         <h4 className="font-inter font-bold text-[16px] text-[#212121] leading-tight truncate">
+
                                                             {nearby.name}
+
                                                         </h4>
+
                                                         <p className="font-inter text-[12px] text-[#757575] leading-tight truncate">
+
                                                             {locationText}
+
                                                         </p>
+
                                                         <div className="flex items-center gap-1 mt-1">
+
                                                             <div className="flex">
+
                                                                 {[1, 2, 3, 4, 5].map((star) => (
+
                                                                     <Star key={star} size={12} className={`${star <= Math.round(nearby.rating || 0) ? "fill-[#FFCC00] text-[#FFCC00]" : "fill-gray-300 text-gray-300"}`} />
+
                                                                 ))}
+
                                                             </div>
+
                                                             <span className="text-[12px] text-[#212121] font-inter">({nearby.rating || 0})</span>
+
                                                         </div>
+
                                                     </div>
+
                                                 </div>
+
                                             );
+
                                         })}
+
                                     </div>
+
                                 </div>
+
                             )}
 
                         </div>

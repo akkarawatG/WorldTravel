@@ -3,9 +3,12 @@
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useState, useEffect } from "react";
 import { Star, MapPin, Upload, Check, ChevronLeft, Image as ImageIcon, Trash2 } from "lucide-react";
-import { getPlaceById } from "@/services/placeService"; // Reuse your service
+import { getPlaceById } from "@/services/placeService"; 
 import { Place } from "@/types/place";
-// Mock data to prevent crashes if ID is missing or service fails
+// ✅ Import Service ใหม่ที่เพิ่งสร้าง
+import { submitReview } from "@/services/reviewService";
+import { createClient } from "@/utils/supabase/client";
+
 const MOCK_PLACE = {
     id: "mock-1",
     name: "Muang Singh Historical Park",
@@ -18,6 +21,7 @@ function ReviewContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const placeId = searchParams.get("placeId");
+    const supabase = createClient();
 
     const [place, setPlace] = useState<Place | any>(null);
     const [rating, setRating] = useState(0);
@@ -26,7 +30,8 @@ function ReviewContent() {
     const [isChecked, setIsChecked] = useState(false);
     const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
     const [hoverRating, setHoverRating] = useState(0);
-    // แก้ไขบรรทัดนี้
+    const [isSubmitting, setIsSubmitting] = useState(false); // ✅ เพิ่ม State สถานะการส่ง
+
     const handleRemoveFile = (indexToRemove: number) => {
         setUploadedFiles((prevFiles) =>
             prevFiles.filter((_, index) => index !== indexToRemove)
@@ -50,28 +55,52 @@ function ReviewContent() {
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
-            // 1. แปลง FileList เป็น Array
             const newFiles = Array.from(e.target.files);
-
-            // 2. ใช้ callback function ใน setState เพื่อเข้าถึงค่าเก่า (prevFiles)
             setUploadedFiles((prevFiles) => {
-                // รวมไฟล์เก่า + ไฟล์ใหม่
                 const combinedFiles = [...prevFiles, ...newFiles];
-
-                // (Optional) ตัดให้เหลือแค่ 5 รูป ถ้าเกิน
-                return combinedFiles.slice(0, 5);
+                return combinedFiles.slice(0, 5); // Limit 5 images
             });
         }
-
-        // 3. Reset value ของ input เพื่อให้ Event onChange ทำงาน
-        // แม้ว่าผู้ใช้จะเลือกไฟล์ชื่อเดิมซ้ำ (กรณี Upload -> ลบ -> Upload ใหม่ทันที)
         e.target.value = '';
     };
 
-    const handleSubmit = () => {
-        alert("Review Submitted! (Implement actual submission logic here)");
-        // Logic to send data to Supabase would go here
-        router.back();
+    // ✅ ฟังก์ชัน Submit จริง เชื่อมต่อกับ Database
+    const handleSubmit = async () => {
+        if (!placeId) return;
+        setIsSubmitting(true);
+
+        try {
+            // 1. ตรวจสอบว่า Login หรือยัง
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
+                alert("Please login before submitting a review.");
+                setIsSubmitting(false);
+                return;
+            }
+
+            // 2. เรียก Service เพื่อส่งข้อมูล
+            const result = await submitReview(
+                placeId,
+                user.id,
+                rating,
+                visitType,
+                reviewText,
+                uploadedFiles
+            );
+
+            if (result.success) {
+                // ส่งสำเร็จ -> กลับไปหน้า Detail หรือ Refresh
+                router.push(`/detail?id=${placeId}`);
+            } else {
+                alert(`Failed to submit review: ${result.error}`);
+            }
+
+        } catch (err) {
+            console.error(err);
+            alert("Something went wrong.");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -88,24 +117,14 @@ function ReviewContent() {
                     <span className="hover:underline cursor-pointer" onClick={() => router.push(`/explore?country=${place.country}&search=${place.province_state}`)}>
                         {place.province_state || place.country}
                     </span>/
-
-                    {/* 1. เปลี่ยนชื่อสถานที่ให้เป็น Link สีเทา และกดกลับหน้า Detail ได้ */}
-                    <span
-                        className="truncate max-w-[200px] md:max-w-none hover:underline cursor-pointer"
-                        onClick={() => router.push(`/detail?id=${place.id}`)}
-                    >
+                    <span className="truncate max-w-[200px] md:max-w-none hover:underline cursor-pointer" onClick={() => router.push(`/detail?id=${place.id}`)}>
                         {place.name}
                     </span>/
-
-                    {/* 2. เพิ่ม Review เป็นสีดำ (Active) */}
                     <span className="text-[#101828]">Review</span>
                 </div>
 
                 {/* Main Content Section */}
                 <div className="mt-8">
-
-                    {/* ✅ 1. ย้าย Header ออกมาไว้นอก Grid (เพื่อให้ด้านล่างเริ่ม Grid พร้อมกัน) */}
-                    {/* กำหนดความกว้าง 511px ให้ตรงกับคอลัมน์ซ้าย และเว้นระยะล่าง 24px */}
                     <div className="w-full lg:w-[511px] mb-[24px]">
                         <h1 className="font-inter font-bold text-[36px] text-[#194473] leading-none mb-2">
                             Tell us, how was your visit?
@@ -115,10 +134,9 @@ function ReviewContent() {
                         </p>
                     </div>
 
-                    {/* ✅ 2. Main Grid: ตอนนี้ทั้ง 2 ฝั่งจะเริ่มที่จุดสูงสุดเท่ากัน (ตรงรูปภาพ) */}
                     <div className="grid grid-cols-1 lg:grid-cols-[511px_1fr] gap-[32px] items-start">
 
-                        {/* Left Column: เหลือแค่ Place Card (Sticky) */}
+                        {/* Left Column */}
                         <div className="sticky top-4">
                             <div className="w-full h-[548.5px] bg-white rounded-[16px] overflow-hidden border border-[#C2DCF3] shadow-[0px_1px_3px_0px_#0000001A,0px_1px_2px_-1px_#0000001A] p-[1px]">
                                 <div className="w-full h-[442.5px] bg-gray-200 relative">
@@ -149,18 +167,11 @@ function ReviewContent() {
                             {/* Rating & Visit Type Card */}
                             <div className="w-[585px] h-[235px] flex flex-col gap-[32px] bg-white rounded-[16px] border border-[#C2DCF3] shadow-[0px_1px_3px_0px_#0000001A,0px_1px_2px_-1px_#0000001A] p-[16px]">
                                 {/* Rating Section */}
-                                {/* Rating Section Wrapper */}
-                                {/* ✅ ปรับแก้: Width 331px, Height 86px, Gap 16px */}
                                 <div className="w-[331px] h-[86px] flex flex-col gap-[16px]">
                                     <h3 className="font-inter font-bold text-[18px] text-[#194473] leading-none tracking-normal">
                                         How would you rate your experience?
                                     </h3>
-
-                                    {/* Star Container: 272px width, 48px height, 16px gap */}
-                                    <div
-                                        className="w-[272px] h-[48px] flex items-center gap-[16px]"
-                                        onMouseLeave={() => setHoverRating(0)}
-                                    >
+                                    <div className="w-[272px] h-[48px] flex items-center gap-[16px]" onMouseLeave={() => setHoverRating(0)}>
                                         {[1, 2, 3, 4, 5].map((star) => (
                                             <button
                                                 key={star}
@@ -169,11 +180,8 @@ function ReviewContent() {
                                                 className="focus:outline-none transition-transform hover:scale-110 cursor-pointer"
                                             >
                                                 <Star
-                                                    size={42} // ขนาด 42px
-                                                    className={`transition-colors duration-200 ${star <= (hoverRating || rating)
-                                                        ? "fill-[#FFCC00] text-[#FFCC00]"
-                                                        : "text-gray-300"
-                                                        }`}
+                                                    size={42}
+                                                    className={`transition-colors duration-200 ${star <= (hoverRating || rating) ? "fill-[#FFCC00] text-[#FFCC00]" : "text-gray-300"}`}
                                                     strokeWidth={1.5}
                                                 />
                                             </button>
@@ -182,7 +190,6 @@ function ReviewContent() {
                                 </div>
 
                                 {/* Visit Type Section */}
-                                {/* ✅ ปรับแก้: Width 553px, Height 85px, Gap 16px */}
                                 <div className="w-[553px] h-[85px] flex flex-col gap-[16px]">
                                     <h3 className="font-inter font-bold text-[18px] text-[#194473] leading-none tracking-normal">
                                         Who did you go with?
@@ -206,14 +213,10 @@ function ReviewContent() {
                             </div>
 
                             {/* Main Review Form Card */}
-                            {/* ✅ รวมทุกส่วนไว้ใน div เดียว: Width 585px, Height 840px, Gap 32px */}
                             <div className="w-[585px] h-auto flex flex-col gap-[32px] bg-white rounded-[16px] border border-[#C2DCF3] shadow-[0px_1px_3px_0px_#0000001A,0px_1px_2px_-1px_#0000001A] p-[16px]">
 
-                                {/* 1. Write Review Section */}
-                                {/* ✅ ปรับแก้: Width 558px, Height 236px, Gap 8px */}
+                                {/* Write Review Section */}
                                 <div className="w-[558px] h-[236px] flex flex-col gap-[8px]">
-                                    {/* 1. Write Review Section */}
-                                    {/* ✅ ปรับแก้: Width 558px, Height 208px, Gap 16px */}
                                     <div className="w-[558px] h-[208px] flex flex-col gap-[16px]">
                                         <h3 className="font-inter font-bold text-[18px] text-[#194473] leading-none tracking-normal">
                                             Write your review
@@ -224,7 +227,6 @@ function ReviewContent() {
                                             placeholder="Share your experience... What did you like? What could be improved?"
                                             className="w-full h-[170px] p-4 rounded-[16px] border border-[#D1D5DC] outline-none focus:border-[#194473] resize-none text-[14px]"
                                         />
-                                        {/* หมายเหตุ: ใช้ flex-1 ที่ textarea เพื่อให้ความสูงยืดเต็มพื้นที่ที่เหลือของ 208px พอดี (ประมาณ 174px) */}
                                     </div>
                                     <div className="flex justify-between w-full h-[20px]">
                                         <span className="font-inter font-normal text-[14px] leading-none text-[#616161]">
@@ -236,38 +238,25 @@ function ReviewContent() {
                                     </div>
                                 </div>
 
-                                {/* 2. Add Photos Section */}
-                                {/* เพิ่ม class: w-[553px] h-[457px] gap-4 */}
+                                {/* Add Photos Section */}
                                 <div className="flex flex-col w-[553px] h-auto gap-4">
-                                    {/* 2. Add Photos Section */}
-                                    {/* 1. เปลี่ยน h-[293px] เป็น min-h-[293px] หรือ h-auto เพื่อให้กล่องยืดได้เมื่อรูปเยอะขึ้น */}
                                     <div className="flex flex-col w-[553px] min-h-[293px] gap-4">
-
                                         <h3 className="font-inter font-bold text-[18px] text-[#194473] leading-[28px] tracking-[0px]">
                                             Add some photos
                                         </h3>
-
-                                        {/* Upload Box */}
                                         <div className="w-[553px] h-[249px] p-8 gap-4 rounded-[16px] border border-[#EEEEEE] flex flex-col items-center justify-center relative  transition-colors shrink-0">
                                             <div className="w-[64px] h-[64px] bg-[#F5F5F5] rounded-full flex items-center justify-center p-4 gap-[10px]">
                                                 <ImageIcon size={32} className="text-gray-500" />
                                             </div>
-                                            {/* Inner Content Wrapper: w-[489px] h-[105px] gap-6 */}
                                             <div className="w-[489px] h-[105px] flex flex-col items-center justify-center gap-6">
-
-                                                {/* Text Group: w-[489px] h-[52px] gap-2 */}
                                                 <div className="w-[489px] h-[52px] flex flex-col items-center justify-center gap-2 text-center">
-                                                    {/* Text 1: Inter, 16px, Normal(400), Color #364153 */}
                                                     <p className="font-inter font-normal text-[16px] text-[#364153] leading-[24px]">
                                                         Click to upload or drag and drop
                                                     </p>
-
-                                                    {/* Text 2: Inter, 14px, Normal(400), Color #9E9E9E */}
                                                     <p className="font-inter font-normal text-[14px] text-[#9E9E9E] leading-[20px]">
                                                         PNG, JPG up to 10MB
                                                     </p>
                                                 </div>
-                                                {/* Button */}
                                                 <label className="cursor-pointer">
                                                     <span className="w-[105px] h-[37px] bg-[#2196F3] text-white rounded-[16px] border border-[#C2DCF3] flex items-center justify-center gap-[10px] p-[10px] text-[14px] font-medium hover:bg-[#1976D2] transition-colors">
                                                         Choose Files
@@ -278,38 +267,19 @@ function ReviewContent() {
                                         </div>
                                     </div>
 
-                                    {/* 3. Preview Section (Stack Images) */}
+                                    {/* Preview Section */}
                                     {uploadedFiles.length > 0 && (
-                                        /* Wrapper: w-[553px] min-h-[148px] gap-2 (8px) */
                                         <div className="flex flex-col w-[553px] min-h-[148px] gap-2">
-
-                                            {/* Image Container */}
                                             <div className="flex flex-wrap gap-4">
                                                 {uploadedFiles.map((file, index) => (
-                                                    <div
-                                                        key={index}
-                                                        // ปรับขนาดเป็น w-[120px] h-[120px] และ border-black
-                                                        className="relative w-[120px] h-[120px] rounded-[16px] overflow-hidden border border-black group shrink-0"
-                                                    >
-                                                        <img
-                                                            src={URL.createObjectURL(file)}
-                                                            alt={`preview-${index}`}
-                                                            className="w-full h-full object-cover"
-                                                        />
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleRemoveFile(index)}
-                                                            className="absolute inset-0 bg-white/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer"
-                                                        >
-                                                            {/* ปรับขนาดไอคอนเป็น 32px */}
+                                                    <div key={index} className="relative w-[120px] h-[120px] rounded-[16px] overflow-hidden border border-black group shrink-0">
+                                                        <img src={URL.createObjectURL(file)} alt={`preview-${index}`} className="w-full h-full object-cover" />
+                                                        <button type="button" onClick={() => handleRemoveFile(index)} className="absolute inset-0 bg-white/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer">
                                                             <Trash2 size={32} className="text-black" />
                                                         </button>
                                                     </div>
                                                 ))}
                                             </div>
-
-                                            {/* Counter */}
-                                            {/* Wrapper: w-[553px] h-[20px] */}
                                             <div className="w-[553px] h-[20px] flex justify-end items-center">
                                                 <span className="font-inter font-normal text-[14px] leading-none tracking-normal text-[#9E9E9E]">
                                                     {uploadedFiles.length}/5 Pictures
@@ -317,21 +287,15 @@ function ReviewContent() {
                                             </div>
                                         </div>
                                     )}
-
                                 </div>
-                                {/* 3. Fraud Declaration & Submit Section */}
-                                {/* Wrapper: w-[553px] h-[135px] gap-2 (8px) */}
+
+                                {/* Fraud Declaration & Submit */}
                                 <label className="w-[553px] h-[135px] flex items-start gap-2 cursor-pointer group">
                                     <div className={`w-5 h-5 rounded border flex-shrink-0 flex items-center justify-center mt-0.5 transition-colors
                                     ${isChecked ? "bg-[#3A82CE] border-[#3A82CE]" : "border-gray-400 bg-white group-hover:border-[#3A82CE]"}`}>
                                         {isChecked && <Check size={14} className="text-white" />}
                                     </div>
-                                    <input
-                                        type="checkbox"
-                                        className="hidden"
-                                        checked={isChecked}
-                                        onChange={(e) => setIsChecked(e.target.checked)}
-                                    />
+                                    <input type="checkbox" className="hidden" checked={isChecked} onChange={(e) => setIsChecked(e.target.checked)} />
                                     <span className="text-[12px] text-gray-500 leading-relaxed">
                                         I certify that this review is based on my own experience and is my genuine opinion of this establishment, and that I have no personal or business relationship with this establishment, and have not been offered any incentive or payment originating from the establishment to write this review. I understand that TripVibe has a zero-tolerance policy on fake reviews. <br />
                                         <span className="text-[#3A82CE] hover:underline">Learn more about the consequences of review fraud</span>
@@ -340,13 +304,13 @@ function ReviewContent() {
 
                                 <button
                                     onClick={handleSubmit}
-                                    disabled={!rating || !reviewText || !visitType || !isChecked}
+                                    disabled={!rating || !reviewText || !visitType || !isChecked || isSubmitting}
                                     className="w-[553px] h-[48px] rounded-[16px] p-[10px] gap-[10px] flex items-center justify-center transition-all border
                                                 font-inter font-bold text-[18px] leading-[28px] tracking-[0px]
                                                 disabled:bg-[#E0E0E0] disabled:text-[#757575] disabled:border-transparent disabled:cursor-not-allowed
                                                 enabled:bg-[#3A82CE] enabled:text-white enabled:border-[#C2DCF3] enabled:hover:bg-[#2c6eb5]"
                                 >
-                                    Submit Review
+                                    {isSubmitting ? "Submitting..." : "Submit Review"}
                                 </button>
 
                             </div>
