@@ -6,10 +6,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Icon from '@mdi/react';
 import { mdiLockOutline } from '@mdi/js';
-// Import Library ธงชาติ
 import ReactCountryFlag from "react-country-flag";
 
-// ✅ Import Service & Supabase
 import { searchPlaces } from "@/services/placeService";
 import { createClient } from "@/utils/supabase/client";
 
@@ -32,27 +30,22 @@ interface NavbarProps {
   onLogout?: () => void;
 }
 
+// ✅ 1. เพิ่ม field 'country' ใน Interface เพื่อเก็บข้อมูลประเทศแม่ของจังหวัดนั้น
 interface SearchResult {
   type: 'country' | 'province' | 'place';
   name: string;
   id?: number | string;
   subText?: string;
+  country?: string; // <--- เพิ่มตรงนี้
 }
 
-// ฟังก์ชันแปลงชื่อประเทศเป็น ISO Code (2 ตัวอักษร)
 const getCountryCode = (countryName: string): string => {
   const mapping: { [key: string]: string } = {
-    // --- Asia ---
     "China": "CN", "Thailand": "TH", "Malaysia": "MY", "Japan": "JP", "United Arab Emirates": "AE", "Saudi Arabia": "SA", "Singapore": "SG", "Vietnam": "VN", "India": "IN", "South Korea": "KR", "Indonesia": "ID", "Taiwan": "TW", "Bahrain": "BH", "Kuwait": "KW", "Kazakhstan": "KZ", "Philippines": "PH", "Uzbekistan": "UZ", "Cambodia": "KH", "Jordan": "JO", "Laos": "LA", "Brunei": "BN", "Oman": "OM", "Qatar": "QA", "Sri Lanka": "LK", "Iran": "IR",
-    // --- Europe ---
     "France": "FR", "Spain": "ES", "Italy": "IT", "Poland": "PL", "Hungary": "HU", "Croatia": "HR", "Turkey": "TR", "United Kingdom": "GB", "Germany": "DE", "Greece": "GR", "Denmark": "DK", "Austria": "AT", "Netherlands": "NL", "Portugal": "PT", "Romania": "RO", "Switzerland": "CH", "Belgium": "BE", "Latvia": "LV", "Georgia": "GE", "Sweden": "SE", "Lithuania": "LT", "Estonia": "EE", "Norway": "NO", "Finland": "FI", "Iceland": "IS",
-    // --- North America ---
     "United States": "US", "Mexico": "MX", "Canada": "CA", "Dominican Republic": "DO", "Bahamas": "BS", "Cuba": "CU", "Jamaica": "JM", "Costa Rica": "CR", "Guatemala": "GT", "Panama": "PA",
-    // --- South America ---
     "Argentina": "AR", "Brazil": "BR", "Chile": "CL", "Peru": "PE", "Paraguay": "PY", "Colombia": "CO", "Uruguay": "UY", "Ecuador": "EC",
-    // --- Africa ---
     "South Africa": "ZA", "Morocco": "MA", "Egypt": "EG", "Kenya": "KE", "Namibia": "NA", "Tanzania": "TZ",
-    // --- Oceania ---
     "Australia": "AU", "New Zealand": "NZ"
   };
   return mapping[countryName] || "";
@@ -173,7 +166,6 @@ export default function Navbar({
     setLocalQuery(searchQuery);
   }, [searchQuery]);
 
-  // ✅ New Effect for Search with Supabase (Debounce logic recommended but simple here)
   useEffect(() => {
     const fetchSearchResults = async () => {
       if (!localQuery || localQuery.trim() === "") {
@@ -182,14 +174,10 @@ export default function Navbar({
       }
 
       const lowerQuery = localQuery.toLowerCase();
-
-      // 1. เรียกใช้ searchPlaces service จาก Supabase
       const places = await searchPlaces(lowerQuery);
 
       const tempResults: SearchResult[] = [];
       const addedKeys = new Set();
-
-      // 2. Process Results (Extract Country, Province, Place)
 
       // --- Country ---
       places.forEach(place => {
@@ -201,10 +189,16 @@ export default function Navbar({
       });
 
       // --- Province ---
+      // ✅ แก้ไข: เก็บ country ของจังหวัดนั้นๆ ลงไปด้วย
       places.forEach(place => {
         const province = place.province_state;
         if (province && province.toLowerCase().includes(lowerQuery) && !addedKeys.has(`province-${province}`)) {
-          tempResults.push({ type: 'province', name: province, subText: place.country });
+          tempResults.push({ 
+            type: 'province', 
+            name: province, 
+            subText: place.country, 
+            country: place.country // <--- สำคัญ: เก็บประเทศไว้ใช้ตอน redirect
+          });
           addedKeys.add(`province-${province}`);
         }
       });
@@ -216,7 +210,8 @@ export default function Navbar({
             type: 'place',
             name: place.name,
             id: place.id,
-            subText: `${place.province_state}, ${place.country}`
+            subText: `${place.province_state}, ${place.country}`,
+            country: place.country
           });
         }
       });
@@ -224,7 +219,6 @@ export default function Navbar({
       setResults(tempResults.slice(0, 8));
     };
 
-    // Debounce (Wait 300ms after typing stops)
     const timeoutId = setTimeout(() => {
       fetchSearchResults();
     }, 300);
@@ -233,16 +227,33 @@ export default function Navbar({
 
   }, [localQuery]);
 
+  // ✅ แก้ไข Logic การเลือกผลลัพธ์
   const handleSelectResult = (result: SearchResult) => {
     setShowDropdown(false);
     setLocalQuery(result.name);
     if (setSearchQuery) setSearchQuery(result.name);
+
     if (result.type === 'country') {
+      // ค้นหาทั้งประเทศ
       router.push(`/explore?country=${encodeURIComponent(result.name)}`);
     } else if (result.type === 'province') {
-      router.push(`/explore?search=${encodeURIComponent(result.name)}`);
+      // ✅ แก้ไข: ส่งทั้ง search (จังหวัด) และ country (ประเทศ) ไปด้วย
+      // เพื่อไม่ให้ ExplorePage default เป็น Thailand
+      const targetCountry = result.country || "Thailand"; // Fallback กันเหนียว
+      router.push(`/explore?country=${encodeURIComponent(targetCountry)}&search=${encodeURIComponent(result.name)}`);
     } else if (result.type === 'place' && result.id) {
+      // ไปหน้า Detail โดยตรง
       router.push(`/detail?id=${result.id}`);
+    }
+  };
+
+  // ✅ เพิ่ม: Handle การกด Enter ใน Input Box
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      setShowDropdown(false);
+      // ถ้ากด Enter เฉยๆ โดยไม่เลือก Dropdown ให้ค้นหาด้วยคำนั้น (Default อาจไป Thailand)
+      // หรือถ้าอยากให้ฉลาดกว่านี้ อาจจะต้องดึงผลลัพธ์แรกมาใช้
+      router.push(`/explore?search=${encodeURIComponent(localQuery)}`);
     }
   };
 
@@ -288,6 +299,7 @@ export default function Navbar({
                     value={localQuery}
                     onChange={handleInputChange}
                     onFocus={() => setShowDropdown(true)}
+                    onKeyDown={handleKeyDown} // ✅ เพิ่ม event onKeyDown
                   />
                 </div>
               </div>
@@ -326,7 +338,7 @@ export default function Navbar({
                             {item.name}
                           </span>
                           <span className="text-[10px] text-gray-400 capitalize">
-                            {item.type === 'place' ? item.subText : item.type}
+                            {item.type === 'place' ? item.subText : item.type === 'province' ? item.subText : item.type}
                           </span>
                         </div>
                       </div>
@@ -371,26 +383,19 @@ export default function Navbar({
                 </button>
               )}
 
-              {/* ✅ MODIFIED: Dropdown Menu (190x202px) */}
+              {/* Dropdown Menu */}
               {showUserMenu && currentUser && (
                 <div className="absolute right-0 top-[35px] w-[190px] h-[202px] bg-white rounded-[8px] border border-[#EEEEEE] p-4 flex flex-col gap-4 z-50 shadow-[0px_4px_20px_rgba(0,0,0,0.1)] font-inter animate-in fade-in zoom-in-95 duration-200">
 
-                  {/* User Info */}
-                  {/* Wrapper: w-[158px] h-[49px] gap-2 */}
                   <div className="w-[158px] h-[49px] flex flex-col gap-2 justify-center">
-                    {/* Name: Inter, Bold, 20px, Leading-none */}
                     <p className="font-inter font-bold text-[20px] leading-none text-[#212121] truncate">
                       {currentUser.name || "User"}
                     </p>
-
-                    {/* Email: Inter, Regular, 14px, Leading-none */}
                     <p className="font-inter font-normal text-[14px] leading-none text-[#757575] truncate">
                       {currentUser.email || ""}
                     </p>
                   </div>
 
-                  {/* Menu Links Group */}
-                  {/* Wrapper: w-[158px] h-[62px] gap-2 */}
                   <div className="w-[158px] h-[62px] flex flex-col gap-2">
                     <button
                       onClick={() => {
@@ -406,7 +411,7 @@ export default function Navbar({
                     <button
                       onClick={() => {
                         setShowUserMenu(false);
-                        // router.push('/review-history');
+                        router.push('/review-history');
                       }}
                       className="w-[158px] h-[27px] rounded-[8px] flex items-center gap-4 px-[8px] py-[4px] text-left hover:text-[#194473] transition-colors
                                  font-inter font-normal text-[16px] leading-none tracking-normal text-[#212121]"
@@ -415,7 +420,6 @@ export default function Navbar({
                     </button>
                   </div>
 
-                  {/* Logout Button (ดันลงล่างด้วย mt-auto หรือปล่อยตาม flow gap-4) */}
                   <button
                     onClick={handleLogoutTrigger}
                     className="w-[158px] h-[32px] rounded-[8px] flex items-center justify-center gap-2 px-[8px] py-[4px] border border-[#EF9A9A] bg-[#F44336] hover:bg-[#d32f2f] transition-colors mt-auto

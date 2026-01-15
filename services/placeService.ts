@@ -1,214 +1,210 @@
 import { createClient } from '@/utils/supabase/client';
 import { Place } from '@/types/place';
 
-const supabase = createClient();
-
-// ✅ 1. เพิ่ม Interface นี้ (ป้องกัน Error TS)
 export interface CountryData {
   name: string;
   continent: string;
   image: string;
 }
 
-// ✅ 2. เพิ่ม Helper Function: คำนวณคะแนนความตรงกัน (Province > District > Name)
+// ✅ ปรับปรุง Relevance Score ให้แม่นยำขึ้น
 export const calculateRelevanceScore = (place: any, query: string): number => {
   if (!query) return 0;
   const q = query.toLowerCase().trim();
   
-  // ดึงค่า (รองรับทั้งโครงสร้าง DB และ Mock)
-  const province = (place.province_state || place.location?.province_state || "").toLowerCase();
-  
-  // ✅ เพิ่มการดึง District (จาก DB หรือ Mock)
-  const district = (place.district || place.location?.district || "").toLowerCase(); 
-  
+  const province = (place.province_state || "").toLowerCase();
+  const district = (place.district || "").toLowerCase(); 
   const name = (place.name || "").toLowerCase();
+  const country = (place.country || "").toLowerCase();
 
-  // Priority 1: Province (จังหวัด) -> คะแนนสูงสุด
-  if (province === q) return 100;       
-  if (province.startsWith(q)) return 90; 
-  if (province.includes(q)) return 80;   
+  // 1. ตรงกับจังหวัดเป๊ะๆ -> คะแนนเต็ม (100)
+  if (province === q) return 100;
+  
+  // 2. ตรงกับชื่อสถานที่เป๊ะๆ -> (95)
+  if (name === q) return 95;
 
-  // Priority 2: District (อำเภอ) -> คะแนนรองลงมา
-  if (district === q) return 70;
-  if (district.startsWith(q)) return 60;
-  if (district.includes(q)) return 50;
+  // 3. เริ่มต้นด้วยชื่อจังหวัด -> (90)
+  if (province.startsWith(q)) return 90;
 
-  // Priority 3: Name (ชื่อสถานที่) -> คะแนนต่ำสุด
-  if (name === q) return 40;
-  if (name.startsWith(q)) return 30;
-  if (name.includes(q)) return 20;
+  // 4. ตรงกับอำเภอเป๊ะๆ -> (85)
+  if (district === q) return 85;
+
+  // 5. ชื่อสถานที่มีคำค้นหาอยู่ -> (80)
+  if (name.includes(q)) return 80;
+
+  // 6. จังหวัดมีคำค้นหาอยู่ -> (70)
+  if (province.includes(q)) return 70;
 
   return 0;
 };
 
-// ... (ฟังก์ชันเดิม getTopAttractionsByContinent, getCountriesByContinent คงเดิม) ...
+// ... (getTopAttractionsByContinent และ getCountriesByContinent คงเดิม) ...
 export const getTopAttractionsByContinent = async (continent: string, limit = 8): Promise<Place[]> => {
-  const { data, error } = await supabase
-    .from('places')
-    .select('*')
-    .eq('continent', continent)
-    .order('rating', { ascending: false })
-    .limit(limit);
+  const supabase = createClient();
+  try {
+    const { data, error } = await supabase
+      .from('places')
+      .select('*') 
+      .ilike('continent', continent) 
+      .order('rating', { ascending: false })
+      .limit(limit);
 
-  if (error) {
-    console.error('Error fetching top attractions:', error);
-    return [];
-  }
-  return (data || []) as Place[];
+    if (error) { console.error(`⚠️ Fetch failed: ${error.message}`); return []; }
+    return (data || []) as Place[];
+  } catch (err) { console.error(`⚠️ Connection failed.`, err); return []; }
 };
 
 export const getCountriesByContinent = async (continent: string): Promise<CountryData[]> => {
-  const { data, error } = await supabase
-    .from('places')
-    .select('country, images, rating')
-    .eq('continent', continent)
-    .eq('approval_status', 'approved')
-    .order('rating', { ascending: false });
+  const supabase = createClient();
+  try {
+    const { data, error } = await supabase
+      .from('places')
+      .select('country, images, rating')
+      .ilike('continent', continent)
+      .eq('approval_status', 'approved')
+      .order('rating', { ascending: false });
 
-  if (error) {
-    console.error('Error fetching countries:', error);
-    return [];
-  }
+    if (error) { console.error('Error fetching countries:', error); return []; }
 
-  const countryMap = new Map<string, CountryData>();
-  data?.forEach((place: any) => {
-    if (!countryMap.has(place.country)) {
-      let imageUrl = "https://via.placeholder.com/300x200?text=No+Image";
-      if (place.images) {
-          if (Array.isArray(place.images) && place.images.length > 0) {
-             imageUrl = typeof place.images[0] === 'string' ? place.images[0] : place.images[0].url;
-          } else if (typeof place.images === 'string') {
-             imageUrl = place.images;
-          }
+    const countryMap = new Map<string, CountryData>();
+    data?.forEach((place: any) => {
+      if (!countryMap.has(place.country)) {
+        let imageUrl = "https://placehold.co/300x200?text=No+Image";
+        if (place.images) {
+            if (Array.isArray(place.images) && place.images.length > 0) {
+               imageUrl = typeof place.images[0] === 'string' ? place.images[0] : place.images[0].url;
+            } else if (typeof place.images === 'string') { imageUrl = place.images; }
+        }
+        countryMap.set(place.country, { name: place.country, continent: continent, image: imageUrl });
       }
-      countryMap.set(place.country, {
-        name: place.country,
-        continent: continent,
-        image: imageUrl, 
-      });
-    }
-  });
-  return Array.from(countryMap.values());
+    });
+    return Array.from(countryMap.values());
+  } catch (err) { return []; }
 };
 
-// ✅ 3. searchPlaces (แก้ไขให้ค้นหา district ได้)
 export const searchPlaces = async (
   query: string, 
   country?: string, 
   filters?: string[]
 ): Promise<Place[]> => {
-  let dbQuery = supabase.from('places').select('*');
+  const supabase = createClient();
+  
+  // 1. Clean Data: ตัดช่องว่างหน้าหลังออก เพื่อป้องกันการค้นหาด้วย " " (Spacebar)
+  const cleanQuery = query?.trim() || "";
+  const cleanCountry = country?.trim() || "";
 
-  // 1. Filter by Country
-  if (country) {
-    dbQuery = dbQuery.ilike('country', `%${country}%`);
-  }
+  console.log(`🔍 [Debug] Search Params:`, { query: cleanQuery, country: cleanCountry });
 
-  // 2. Filter by Search Query
-  if (query) {
-    // ✅ เพิ่ม district.ilike.%${query}% เข้าไปใน OR
-    dbQuery = dbQuery.or(`name.ilike.%${query}%,province_state.ilike.%${query}%,district.ilike.%${query}%`);
-  }
+  try {
+    let dbQuery = supabase.from('places').select('*');
 
-  const { data, error } = await dbQuery;
+    // 2. Strict Country Filter: กรองประเทศก่อนเสมอ
+    if (cleanCountry) {
+      // ใช้ ilike แบบไม่ใส่ % เพื่อเอาประเทศนั้นจริงๆ (เช่น 'Thailand' ไม่เอา 'Thailandia')
+      dbQuery = dbQuery.ilike('country', cleanCountry); 
+    }
 
-  if (error) {
-    console.error('Error searching places:', error);
+    // 3. Search Logic
+    if (cleanQuery) {
+      // สร้าง Search String สำหรับ Supabase .or()
+      // รูปแบบ: column.ilike.%value%
+      // ⚠️ สำคัญ: ต้องระวังเรื่อง syntax ใน .or()
+      const searchString = `name.ilike.%${cleanQuery}%,province_state.ilike.%${cleanQuery}%,district.ilike.%${cleanQuery}%`;
+      
+      console.log(`🔍 [Debug] OR Query String:`, searchString);
+      
+      dbQuery = dbQuery.or(searchString);
+    }
+
+    // 4. ยิง Request ไป Supabase
+    const { data, error, status, statusText } = await dbQuery;
+
+    // 5. เช็ค Error
+    if (error) {
+      console.error(`❌ [Error] Supabase Search Failed:`, error);
+      console.error(`   - Status: ${status} ${statusText}`);
+      console.error(`   - Message: ${error.message}`);
+      return [];
+    }
+
+    // 6. เช็คผลลัพธ์
+    if (!data || data.length === 0) {
+      console.warn(`⚠️ [Warning] Search completed but found 0 results.`);
+      return [];
+    }
+
+    console.log(`✅ [Success] Found ${data.length} items.`);
+    
+    // (Optional Debug) ปริ้นท์ชื่อจังหวัดของ 3 ตัวแรกมาดูว่าตรงไหม
+    console.log(`   - Sample Result:`, data.slice(0, 3).map(p => `${p.name} (${p.province_state})`));
+
+    let results = data as Place[];
+
+    // 7. Client-side Sorting (Relevance Score)
+    if (cleanQuery) {
+      results = results.sort((a, b) => {
+        const scoreA = calculateRelevanceScore(a, cleanQuery);
+        const scoreB = calculateRelevanceScore(b, cleanQuery);
+        
+        if (scoreB !== scoreA) {
+            return scoreB - scoreA; 
+        }
+        return (b.rating || 0) - (a.rating || 0);
+      });
+    } else {
+      results = results.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    }
+
+    return results;
+
+  } catch (err) {
+    console.error(`💥 [Critical Error] searchPlaces crashed:`, err);
     return [];
   }
-  
-  let results = (data || []) as Place[];
-
-  // 3. Client-side Sort ตามคะแนนความตรงกัน
-  if (query) {
-    results = results.sort((a, b) => {
-      const scoreA = calculateRelevanceScore(a, query);
-      const scoreB = calculateRelevanceScore(b, query);
-      
-      if (scoreB !== scoreA) {
-          return scoreB - scoreA; 
-      }
-      return (b.rating || 0) - (a.rating || 0);
-    });
-  } else {
-    results = results.sort((a, b) => (b.rating || 0) - (a.rating || 0));
-  }
-
-  return results;
 };
 
+// ... (getPlaceById และ getNearbyPlaces คงเดิม) ...
 export const getPlaceById = async (id: string): Promise<Place | null> => {
-  // ✅ แก้ไข: เพิ่ม reviews(*, profiles(*)) เข้าไปใน select
-  const { data, error } = await supabase
-    .from('places')
-    .select('*, reviews(*, profiles(*))') 
-    .eq('id', id)
-    .single();
+  const supabase = createClient();
+  try {
+    const { data, error } = await supabase
+      .from('places')
+      .select('*, reviews(*, profiles(username, avatar_url))') 
+      .eq('id', id)
+      .single();
 
-  if (error) {
-    console.error("Error fetching place:", error.message);
-    return null;
-  }
-  
-  return data;
+    if (error) { console.error("Error fetching place:", error.message); return null; }
+    return data;
+  } catch (err) { return null; }
 };
 
 export const getNearbyPlaces = async (lat: number, lon: number, excludedId: string, radiusKm: number = 500, filterCountry: string | null = null): Promise<Place[]> => {
-  console.log("🚀 [Service] Step 1: Calling RPC for Distance...");
-  
-  // 1. เรียก RPC เพื่อคำนวณระยะทางและหา ID ของสถานที่ใกล้เคียง
-  const { data: rpcData, error: rpcError } = await supabase.rpc('get_best_nearby_places', { 
-    ref_lat: lat, 
-    ref_lon: lon, 
-    excluded_id: excludedId, 
-    radius_km: radiusKm, 
-    filter_country: filterCountry 
-  });
-
-  if (rpcError) { 
-    console.error('❌ [Service] RPC Failed:', rpcError.message); 
-    return []; 
-  }
-
-  // ถ้าไม่มีข้อมูลก็จบเลย
-  if (!rpcData || rpcData.length === 0) return [];
-
-  // ------------------------------------------------------------------
-  // ✅ ส่วนที่เพิ่มมา: ดึง province_state จาก ID ที่ได้มา (วิธีแก้ปัญหา)
-  // ------------------------------------------------------------------
-  console.log(`🚀 [Service] Step 2: Fetching missing details for ${rpcData.length} items...`);
-  
-  // ดึง ID ออกมาเป็น Array เช่น ['id1', 'id2', 'id3']
-  const placeIds = rpcData.map((item: any) => item.id);
-
-  // สั่ง Select ข้อมูลเพิ่มเติม โดยระบุ ID
-  const { data: detailsData } = await supabase
-    .from('places')
-    .select('id, province_state') // ดึงแค่สิ่งที่ขาด
-    .in('id', placeIds);
-
-  // สร้าง Map เพื่อให้ค้นหาเร็วๆ (จับคู่ ID -> Province)
-  const provinceMap = new Map();
-  if (detailsData) {
-    detailsData.forEach((d: any) => {
-      provinceMap.set(d.id, d.province_state);
+  const supabase = createClient();
+  try {
+    const { data: rpcData, error: rpcError } = await supabase.rpc('get_best_nearby_places', { 
+      ref_lat: lat, ref_lon: lon, excluded_id: excludedId, radius_km: radiusKm, filter_country: filterCountry 
     });
-  }
-  // ------------------------------------------------------------------
 
-  console.log(`✅ [Service] Merge Complete!`);
-  
-  // Return ข้อมูลโดยประกบค่าจาก RPC และค่าที่ดึงมาใหม่
-  return rpcData.map((item: any) => ({
-    id: item.id,
-    name: item.name,
-    rating: item.rating,
-    images: Array.isArray(item.images) ? item.images : [item.images],
+    if (rpcError || !rpcData) return [];
+
+    const placeIds = rpcData.map((item: any) => item.id);
+    const { data: detailsData } = await supabase.from('places').select('id, province_state, category_tags').in('id', placeIds);
+
+    const extraMap = new Map();
+    if (detailsData) detailsData.forEach((d: any) => extraMap.set(d.id, d));
     
-    // ✅ จุดสำคัญ: ดึงค่าจาก Map ที่เราไป query มาเพิ่ม
-    province_state: provinceMap.get(item.id) || "", 
-    
-    country: item.country,
-    description_short: `${(item.dist_meters / 1000).toFixed(1)} km away`
-  })) as Place[];
+    return rpcData.map((item: any) => {
+        const extra = extraMap.get(item.id) || {};
+        return {
+            id: item.id,
+            name: item.name,
+            rating: item.rating,
+            images: Array.isArray(item.images) ? item.images : [item.images],
+            province_state: extra.province_state || "", 
+            category_tags: extra.category_tags || [],
+            country: item.country,
+            description_short: `${(item.dist_meters / 1000).toFixed(1)} km away`
+        };
+    }) as Place[];
+  } catch (err) { return []; }
 };
