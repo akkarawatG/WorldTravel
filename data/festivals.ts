@@ -89,7 +89,7 @@ export const THAI_FESTIVALS: Festival[] = [
   },
   {
     id: 13,
-    name: "Pattaya International Music Festival",
+    name: "Pattaya Music Festival",
     name_th: "เทศกาลดนตรีพัทยา",
     about: "One of the longest-running beach music festivals in Asia, featuring artists from Thailand and around the world on stages along the beach.",
     when: "Weekends in March",
@@ -239,7 +239,7 @@ export const THAI_FESTIVALS: Festival[] = [
   // --- AUGUST ---
   {
     id: 24,
-    name: "Mother's Day (Queen Sirikit's Birthday)",
+    name: "Mother's Day",
     name_th: "วันแม่แห่งชาติ",
     about: "Celebrated on the birthday of Queen Mother Sirikit. Buildings are decorated with lights and portraits, and children offer jasmine garlands to their mothers.",
     when: "12 August",
@@ -291,7 +291,7 @@ export const THAI_FESTIVALS: Festival[] = [
   },
   {
     id: 28,
-    name: "Sat Thai Festival (Tenth Lunar Month)",
+    name: "Sat Thai Festival ",
     name_th: "ประเพณีสารทเดือนสิบ",
     about: "A southern tradition to make merit for deceased ancestors. The highlight is the 'Hing Prets' parade representing spirits seeking merit.",
     when: "Late September",

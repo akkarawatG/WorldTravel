@@ -108,7 +108,8 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
   const [currentPage, setCurrentPage] = useState(1);
 
   // Festival State
-  const [selectedMonth, setSelectedMonth] = useState<string>("APR");
+  // ✅ แก้ไข: กำหนดค่าเริ่มต้นให้เป็นเดือนปัจจุบัน
+  const [selectedMonth, setSelectedMonth] = useState<string>(MONTHS[new Date().getMonth()]);
   const [festivalPage, setFestivalPage] = useState(1);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
@@ -221,7 +222,6 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
         .custom-pagination-container .swiper-pagination-bullet { width: 4px !important; height: 4px !important; background-color: #deecf9 !important; border: 1px solid #c2dcf3 !important; opacity: 1 !important; margin: 0 4px !important; transition: all 0.3s ease-in-out !important; border-radius: 50% !important; flex-shrink: 0 !important; }
         .custom-pagination-container .swiper-pagination-bullet-active { width: 8px !important; height: 8px !important; background-color: #041830 !important; border: 1px solid #c2dcf3 !important; }
         
-        /* ✅ ปรับปรุง CSS ของปุ่มลูกศร Festival */
         .festival-nav-btn {
             position: absolute;
             top: 50%;
@@ -488,7 +488,7 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
                       <div className="flex flex-col flex-1 overflow-hidden gap-[8px]">
                         <div className="w-[288px] flex flex-col gap-[4px] overflow-hidden">
                           <h3 className="font-inter font-bold text-[18px] text-[#212121] leading-tight line-clamp-2">{festival.name}</h3>
-                          <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight line-clamp-3">
+                          <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight line-clamp-4">
                             {festival.about}
                           </p>
                         </div>
@@ -506,7 +506,7 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
 
         </div>
         {/* Month Filter (Replacing Pagination) */}
-        <div className="flex justify-end items-center gap-[8px]">
+        <div className="flex justify-end items-center gap-[8px] mt-4">
           <button onClick={() => setSelectedMonth("ALL")} className={`flex items-center justify-center w-[40px] h-[24px] px-2 rounded-[4px] border border-[#EEEEEE] text-[12px] font-medium transition-colors ${selectedMonth === "ALL" ? "bg-[#194473] text-white" : "bg-[#9E9E9E] text-white hover:bg-gray-400"}`}>All</button>
           {MONTHS.map((month) => (
             <button key={month} onClick={() => setSelectedMonth(month)} className={`flex items-center justify-center w-[40px] h-[24px] px-2 rounded-[4px] border border-[#EEEEEE] text-[12px] font-medium transition-colors ${selectedMonth === month ? "bg-[#194473] text-white" : "bg-[#9E9E9E] text-white hover:bg-gray-400"}`}>{month}</button>
