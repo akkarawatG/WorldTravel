@@ -40,3 +40,16 @@ export interface Place {
   created_at?: string;
   updated_at?: string;
 }
+// types/festival.ts
+export interface Festival {
+  id: string; // Supabase default ID is usually UUID (string) or int8 (number). Check your schema if needed.
+  name: string;
+  name_native?: string;
+  description?: string;
+  period_str?: string;
+  month_index?: number;
+  city?: string;
+  province_state?: string;
+  country?: string;
+  images?: string[] | { url: string }[] | any; // รองรับ JSONB images
+}

@@ -9,18 +9,21 @@ import { mdiPlus } from '@mdi/js';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Navigation, Pagination, A11y, Autoplay } from 'swiper/modules';
 
+// ✅ Import Supabase Client (ปรับ path ให้ตรงกับโปรเจคของคุณ)
+import { createClient } from '@/utils/supabase/client';
+
 import 'swiper/css';
 import 'swiper/css/navigation';
 import 'swiper/css/pagination';
 
 import { Place } from '@/types/place';
 import { calculateRelevanceScore } from '@/services/placeService';
-import { THAI_FESTIVALS } from "@/data/festivals";
 
 // --- CONFIGURATION ---
 const ITEMS_PER_PAGE = 6;
 const FESTIVALS_PER_PAGE = 3;
 
+// ... (KEEP CONSTANTS & MAPPINGS UNCHANGED) ...
 const FILTER_GROUPS = [
   { title: "Nature & Outdoors", items: ["Mountains", "National parks", "Islands", "Lakes / Rivers", "Hot Spring", "Gardens"] },
   { title: "History & Culture", items: ["Temples", "Church / Mosque", "Ancient ruins", "Castles", "Old towns", "Museums", "Monuments"] },
@@ -80,6 +83,17 @@ const getDisplayCategories = (tags: string[] = []) => {
   return Array.from(new Set(displayCategories));
 };
 
+// ✅ Helper function to extract image from Supabase JSON response
+const getFestivalImageUrl = (images: any): string => {
+  if (Array.isArray(images) && images.length > 0) {
+    // Check if it's an object with url property or a direct string
+    return (typeof images[0] === 'object' && images[0] !== null && 'url' in images[0])
+      ? images[0].url
+      : images[0];
+  }
+  return "https://placehold.co/600x400?text=No+Image"; // Default placeholder
+};
+
 interface ExploreClientProps {
   initialPlaces: Place[];
   searchParams: { [key: string]: string | string[] | undefined };
@@ -93,6 +107,7 @@ interface SearchResult {
 
 export default function ExploreClient({ initialPlaces, searchParams }: ExploreClientProps) {
   const router = useRouter();
+  const supabase = createClient(); // ✅ Init Supabase Client
 
   // Params
   const paramCountry = typeof searchParams.country === 'string' ? searchParams.country : "Thailand";
@@ -107,11 +122,30 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
   const [showDropdown, setShowDropdown] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Festival State
-  // ✅ แก้ไข: กำหนดค่าเริ่มต้นให้เป็นเดือนปัจจุบัน
+  // ✅ Festival State: Real Data
+  const [dbFestivals, setDbFestivals] = useState<any[]>([]); // Store fetched festivals
   const [selectedMonth, setSelectedMonth] = useState<string>(MONTHS[new Date().getMonth()]);
   const [festivalPage, setFestivalPage] = useState(1);
   const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  // --- Fetch Festivals from Supabase ---
+  useEffect(() => {
+    const fetchFestivals = async () => {
+      // ดึงข้อมูล Festivals ตามประเทศ
+      const { data, error } = await supabase
+        .from('festivals')
+        .select('*')
+        .eq('country', paramCountry); // กรองตามประเทศก่อน
+
+      if (error) {
+        console.error('Error fetching festivals:', error);
+      } else if (data) {
+        setDbFestivals(data);
+      }
+    };
+
+    fetchFestivals();
+  }, [paramCountry]);
 
   // --- Sync State & Logic ---
   useEffect(() => { if (urlTag) setSelectedFilters(urlTag.split(",")); else setSelectedFilters([]); }, [urlTag]);
@@ -145,13 +179,19 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
   const totalPages = Math.ceil(filteredPlaces.length / ITEMS_PER_PAGE);
   const paginatedItems = filteredPlaces.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-  // Festival Logic
-  const filteredFestivals = THAI_FESTIVALS.filter((festival) => {
-    const isCountryMatch = festival.country === paramCountry;
-    if (selectedMonth === "ALL") return isCountryMatch;
+  // ✅ Festival Logic: Filter & Paginate from Real DB Data
+  const filteredFestivals = dbFestivals.filter((festival) => {
+    if (selectedMonth === "ALL") return true;
+
+    // Logic 1: Filter by period_str (Text matching)
     const monthName = MONTH_FULL_NAMES[selectedMonth];
-    const isMonthMatch = festival.when.toLowerCase().includes(monthName.toLowerCase());
-    return isCountryMatch && isMonthMatch;
+    const isPeriodMatch = festival.period_str?.toLowerCase().includes(monthName.toLowerCase());
+
+    // Logic 2: Filter by month_index (Database Column) - Optional if your DB has consistent month_index
+    // const targetMonthIndex = MONTHS.indexOf(selectedMonth) + 1; // 1-12
+    // const isIndexMatch = festival.month_index === targetMonthIndex;
+
+    return isPeriodMatch; // Using Text Match to be safe with existing data format
   });
 
   const totalFestivalPages = Math.ceil(filteredFestivals.length / FESTIVALS_PER_PAGE);
@@ -162,6 +202,7 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
 
   useEffect(() => { setFestivalPage(1); }, [selectedMonth]);
 
+  // ... (Other Handlers: updateUrlParams, toggleFilter, clearAllFilters, etc. UNCHANGED) ...
   const updateUrlParams = (newFilters: string[]) => {
     const params = new URLSearchParams();
     if (newFilters.length > 0) params.set("tag", newFilters.join(","));
@@ -481,20 +522,30 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
 
                       {/* Image: Adjusted width to fit padding (320 - 32 = 288px width) */}
                       <div className="relative w-[288px] h-[178px] rounded-[8px] overflow-hidden flex-shrink-0">
-                        <Image src={festival.image_url} alt={festival.name} fill className="object-cover" unoptimized />
+                        <Image
+                          src={getFestivalImageUrl(festival.images)} // ✅ Use helper function
+                          alt={festival.name}
+                          fill
+                          className="object-cover"
+                          unoptimized
+                        />
                       </div>
 
                       {/* Content Container */}
                       <div className="flex flex-col flex-1 overflow-hidden gap-[8px]">
                         <div className="w-[288px] flex flex-col gap-[4px] overflow-hidden">
                           <h3 className="font-inter font-bold text-[18px] text-[#212121] leading-tight line-clamp-2">{festival.name}</h3>
-                          <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight line-clamp-4">
-                            {festival.about}
+                          <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight line-clamp-3">
+                            {festival.description} {/* ✅ Map to 'description' */}
                           </p>
                         </div>
                         <div className="w-[288px] flex flex-col gap-[4px] mt-auto">
-                          <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight break-words"><span className="font-bold">When: </span>{festival.when}</p>
-                          <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight break-words line-clamp-1"><span className="font-bold">Top Spot : </span>{festival.top_spot}</p>
+                          <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight break-words">
+                            <span className="font-bold">When: </span>{festival.period_str} {/* ✅ Map to 'period_str' */}
+                          </p>
+                          <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight break-words line-clamp-1">
+                            <span className="font-bold">Top Spot : </span>{festival.province_state} {/* ✅ Map to 'province_state' */}
+                          </p>
                         </div>
                       </div>
                     </div>
