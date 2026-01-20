@@ -521,7 +521,7 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
                     <div key={festival.id} className="w-[320px] h-[373px] flex flex-col gap-[8px] p-[16px] rounded-[24px] bg-[#F5F5F5] hover:shadow-md transition-shadow">
 
                       {/* Image: Adjusted width to fit padding (320 - 32 = 288px width) */}
-                      <div className="relative w-[288px] h-[178px] rounded-[8px] overflow-hidden flex-shrink-0">
+                      <div className="relative w-[288px] h-[115px] rounded-[8px] overflow-hidden flex-shrink-0">
                         <Image
                           src={getFestivalImageUrl(festival.images)} // ✅ Use helper function
                           alt={festival.name}
@@ -535,11 +535,9 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
                       <div className="flex flex-col flex-1 overflow-hidden gap-[8px]">
                         <div className="w-[288px] flex flex-col gap-[4px] overflow-hidden">
                           <h3 className="font-inter font-bold text-[18px] text-[#212121] leading-tight line-clamp-2">{festival.name}</h3>
-                          <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight line-clamp-3">
+                          <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight line-clamp-5">
                             {festival.description} {/* ✅ Map to 'description' */}
                           </p>
-                        </div>
-                        <div className="w-[288px] flex flex-col gap-[4px] mt-auto">
                           <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight break-words">
                             <span className="font-bold">When: </span>{festival.period_str} {/* ✅ Map to 'period_str' */}
                           </p>
@@ -547,6 +545,7 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
                             <span className="font-bold">Top Spot : </span>{festival.province_state} {/* ✅ Map to 'province_state' */}
                           </p>
                         </div>
+
                       </div>
                     </div>
                   ))}
