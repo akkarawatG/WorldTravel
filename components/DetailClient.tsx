@@ -4,7 +4,7 @@
 import { useState, useEffect, MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { MapPin, Clock, Star, ArrowLeft, ExternalLink, Sun, X, ChevronLeft, ChevronRight, Lightbulb, Search, Plus, ChevronDown, ArrowRight, ChevronUp } from "lucide-react";
+import { MapPin, Clock, Star, ArrowLeft, ExternalLink, Sun, X, ChevronLeft, ChevronRight, Lightbulb, Search, Plus, ChevronDown, ArrowRight, ChevronUp, ThumbsUp, Share2 } from "lucide-react";
 import { Place } from "@/types/place";
 import { createClient } from "@/utils/supabase/client";
 import AuthModal from "@/components/AuthModal";
@@ -767,6 +767,21 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
                                                                 </div>
                                                             </div>
                                                         )}
+                                                        <div className="flex items-center gap-6 ">
+
+                                                            <button className="flex items-center gap-2 text-[14px] text-[#194473] font-medium hover:opacity-80 transition-opacity">
+
+                                                                <ThumbsUp size={16} /> Like
+
+                                                            </button>
+
+                                                            <button className="flex items-center gap-2 text-[14px] text-[#194473] font-medium hover:opacity-80 transition-opacity">
+
+                                                                <Share2 size={16} /> Share
+
+                                                            </button>
+
+                                                        </div>
                                                     </div>
                                                 </div>
                                             );
