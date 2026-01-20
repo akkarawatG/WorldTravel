@@ -121,7 +121,7 @@ export default function AllCountriesPage() {
                             onClick={() => handleFilterChange(setActiveContinent, "All")}
                             className={`h-[40px] min-w-[40px] px-[8px] flex items-center justify-center rounded-[8px] text-[20px] font-inter font-[400] leading-none border transition-all ${activeContinent === "All"
                                 ? "bg-[#194473] text-white border-[#C2DCF3]"
-                                : "bg-white text-gray-600 border-[#C2DCF3] hover:bg-gray-50"
+                                : "bg-white text-gray-600 border-[#1E518C] hover:bg-gray-50"
                                 }`}
                         >
                             All
@@ -132,7 +132,7 @@ export default function AllCountriesPage() {
                                 onClick={() => handleFilterChange(setActiveContinent, continent)}
                                 className={`h-[40px] min-w-[56px] px-[8px] flex items-center justify-center rounded-[8px] text-[20px] font-inter font-[400] leading-none border transition-all ${activeContinent === continent
                                     ? "bg-[#194473] text-white border-[#C2DCF3]"
-                                    : "bg-white text-gray-600 border-[#C2DCF3] hover:bg-gray-50"
+                                    : "bg-white text-gray-600 border-[#1E518C] hover:bg-gray-50"
                                     }`}
                             >
                                 {continent}
@@ -167,7 +167,7 @@ export default function AllCountriesPage() {
                                         ${letter === "All" ? "w-[40px]" : "w-[30px]"} 
                                         ${activeLetter === letter
                                                 ? "bg-[#194473] text-white border-[#C2DCF3] shadow-md" // สไตล์ Active
-                                                : "bg-white text-gray-600 border-[#C2DCF3] hover:bg-gray-50" // สไตล์ Normal
+                                                : "bg-white text-gray-600 border-[#1E518C] hover:bg-gray-50" // สไตล์ Normal
                                             }`}
                                     >
                                         {letter}
@@ -186,7 +186,7 @@ export default function AllCountriesPage() {
                                 key={`${country.name}-${index}`}
                                 onClick={() => router.push(`/explore?country=${country.name}`)}
                                 // overflow-hidden ตรงนี้จะช่วยตัดส่วนที่รูปซูมเกินออกไป ทำให้ขนาดการ์ดเท่าเดิม
-                                className="relative w-full max-w-[264px] h-[331px] rounded-[16px] overflow-hidden cursor-pointer group shadow-sm hover:shadow-md transition-all duration-300 border border-[#C2DCF3] flex flex-col bg-white mx-auto"
+                                className="relative w-full max-w-[264px] h-[331px] rounded-[16px] overflow-hidden cursor-pointer group shadow-sm hover:shadow-md transition-all duration-300 border border-[#1E518C] flex flex-col bg-white mx-auto"
                             >
                                 {/* Image Section (Top 256px) */}
                                 <div className="relative w-full h-[256px] overflow-hidden">
@@ -196,21 +196,7 @@ export default function AllCountriesPage() {
                                         /* 1. ใส่ group-hover:scale-110 กลับมาเพื่อให้รูปซูม */
                                         className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
                                     />
-                                    {/* Add Button (Top Right) */}
-                                    <div className="absolute top-2 right-2 z-20">
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                alert(`Add ${country.name} to list`);
-                                            }}
-                                            className="flex h-[24px] w-[32px] group-hover:w-[60px] items-center justify-center rounded-[8px] border border-white bg-[#00000066] group-hover:bg-[#1565C0] text-white shadow-sm transition-all duration-300 ease-in-out overflow-hidden cursor-pointer backdrop-blur-[2px]"
-                                        >
-                                            <Plus size={16} className="flex-shrink-0" />
-                                            <span className="max-w-0 opacity-0 group-hover:max-w-[40px] group-hover:opacity-100 group-hover:ml-[4px] text-[12px] font-inter font-normal whitespace-nowrap transition-all duration-300">
-                                                Add
-                                            </span>
-                                        </button>
-                                    </div>
+
                                 </div>
 
                                 {/* Content Section (Bottom 75px) */}

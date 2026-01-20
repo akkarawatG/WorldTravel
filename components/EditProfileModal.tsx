@@ -173,7 +173,7 @@ export default function EditProfileModal({ user, onClose, onSuccess }: EditProfi
           <button
             type="submit"
             disabled={loading}
-            className="w-full h-10 bg-[#194473] hover:bg-[#14365d] text-white font-medium rounded-lg transition-all flex items-center justify-center gap-2 mt-auto disabled:opacity-70 disabled:cursor-not-allowed"
+            className="w-full h-10 bg-[#194473] hover:bg-[#14365d] text-white font-medium rounded-lg transition-all flex items-center justify-center gap-2 mt-auto disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
           >
             {loading ? (
               <>

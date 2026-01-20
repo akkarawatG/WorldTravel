@@ -355,7 +355,7 @@ export default function Navbar({
 
           {/* RIGHT: Menu */}
           <div className="relative w-[151px] h-[24px] flex items-center justify-between z-40">
-            <Link href="" className="text-[20px] font-inter font-[400] text-[#000000] hover:text-[#1976D2] transition leading-none whitespace-nowrap">
+            <Link href="/mytrips" className="text-[20px] font-inter font-[400] text-[#000000] hover:text-[#1976D2] transition leading-none whitespace-nowrap">
               MyTrip
             </Link>
 

@@ -92,7 +92,7 @@ export default function ReviewHistoryPage() {
             <main className="max-w-[1128px] mx-auto ">
 
                 {/* Profile Header */}
-                <div className="w-full bg-[#DEECF94D] rounded-[16px] p-6 mb-8 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="w-full bg-[#DEECF94D] rounded-[16px] p-6 mb-8 flex flex-col md:flex-row items-center justify-between gap-4 border border-[#1E518C]">
                     <div className="flex items-center w-[284px] h-[85px] gap-[18px]">
                         <div className="w-[85px] h-[85px] rounded-full overflow-hidden border-2 border-white shadow-sm relative flex-shrink-0">
                             <Image
@@ -120,7 +120,7 @@ export default function ReviewHistoryPage() {
                     <div className="flex flex-col items-end w-[550px] h-[89px] gap-[32px]">
 
                         {/* Edit Profile Button */}
-                        <button className="flex items-center justify-center w-[138px] h-[35px] gap-[8px] bg-[#C0C0C0] border border-[#EEEEEE] rounded-[8px] px-[16px] py-[8px] hover:bg-[#b0b0b0] transition-colors"
+                        <button className="flex items-center justify-center w-[138px] h-[35px] gap-[8px] bg-[#C0C0C0] border border-[#EEEEEE] rounded-[8px] px-[16px] py-[8px] hover:bg-[#b0b0b0] transition-colors cursor-pointer"
                                               onClick={() => {
                         // ✅ สั่งเปลี่ยนหน้า พร้อมแนบ Params
                         router.push('/review-history?action=edit-profile');
@@ -152,7 +152,7 @@ export default function ReviewHistoryPage() {
                     <div className="w-[1128px] mx-auto grid grid-cols-2 gap-[16px]">
                         {reviews.map((review) => (
                             /* ✅ Card Item: เอา p-4 ออก และเพิ่ม overflow-hidden */
-                            <div key={review.id} className="w-[553px] h-auto border border-[#EEEEEE] rounded-[16px] bg-white shadow-sm hover:shadow-md transition-shadow relative flex flex-col overflow-hidden">
+                            <div key={review.id} className="w-[553px] h-auto border border-[#1E518C] rounded-[16px] bg-white shadow-sm hover:shadow-md transition-shadow relative flex flex-col overflow-hidden">
 
                                 {/* ✅ Header: ปรับให้เต็มพื้นที่ (w-full), ลบ border รอบตัวเหลือแค่ border-b, ลบ rounded */}
                                 <div className="flex justify-between items-center w-full h-[55px] bg-[#F0F6FC] border-b border-[#EEEEEE] px-[16px] flex-shrink-0">
@@ -168,7 +168,7 @@ export default function ReviewHistoryPage() {
                                     </div>
 
                                     <div className="relative">
-                                        <button onClick={() => setOpenMenuId(openMenuId === review.id ? null : review.id)} className="p-1 hover:bg-white rounded-full text-gray-500 transition-colors">
+                                        <button onClick={() => setOpenMenuId(openMenuId === review.id ? null : review.id)} className="p-1 hover:bg-white rounded-full text-gray-500 transition-colors cursor-pointer">
                                             <MoreHorizontal size={20} />
                                         </button>
 
@@ -184,7 +184,7 @@ export default function ReviewHistoryPage() {
                                                         className="w-full h-[33px] flex items-center gap-[8px] px-[12px] py-[8px] text-[14px] text-[#194473] 
                                                              rounded-t-[16px] border border-transparent border-b-0
                                                              hover:bg-[#2666B0] hover:text-white hover:border-[#C2DCF3] hover:border-t hover:border-l hover:border-r hover:border-b-0
-                                                             transition-colors"
+                                                             transition-colors cursor-pointer"
                                                     >
                                                         <Pencil size={14} /> Edit
                                                     </button>
@@ -195,7 +195,7 @@ export default function ReviewHistoryPage() {
                                                         className="w-full h-[33px] flex items-center gap-[8px] px-[12px] py-[8px] text-[14px] text-[#F44336] 
                                                              rounded-b-[16px] border border-transparent
                                                              hover:bg-[#F44336] hover:text-white hover:border-[#EF9A9A]
-                                                             transition-colors"
+                                                             transition-colors cursor-pointer"
                                                     >
                                                         <Trash2 size={14} /> Delete
                                                     </button>
@@ -225,7 +225,7 @@ export default function ReviewHistoryPage() {
                                     </div>
 
                                     {/* Place Card (Bottom) */}
-                                    <div onClick={() => router.push(`/detail?id=${review.place.id}`)} className="flex gap-3 bg-[#F5F5F5] p-2 rounded-[8px] cursor-pointer hover:bg-[#E3F2FD] transition-colors border border-transparent hover:border-[#BBDEFB]">
+                                    <div onClick={() => router.push(`/detail?id=${review.place.id}`)} className="flex gap-3 bg-[#F5F5F5] p-2 rounded-[8px] cursor-pointer hover:bg-gray-200 transition-colors border border-[#1E518C] hover:border-[#1E518C]">
                                         <div className="w-[80px] h-[80px] rounded-[8px] overflow-hidden flex-shrink-0 relative">
                                             <Image src={review.place.image} alt={review.place.name} fill className="object-cover" unoptimized={isRiskyImage(review.place.image)} />
                                         </div>

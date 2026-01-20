@@ -181,7 +181,7 @@ export default function EditReviewPage() {
 
                         {/* Left Column */}
                         <div className="sticky top-4">
-                            <div className="w-full h-[548.5px] bg-white rounded-[16px] overflow-hidden border border-[#C2DCF3] shadow-[0px_1px_3px_0px_#0000001A,0px_1px_2px_-1px_#0000001A] p-[1px]">
+                            <div className="w-full h-[548.5px] bg-white rounded-[16px] overflow-hidden border border-[#1E518C] shadow-[0px_1px_3px_0px_#0000001A,0px_1px_2px_-1px_#0000001A] p-[1px]">
                                 <div className="w-full h-[442.5px] bg-gray-200 relative">
                                     <Image
                                         src={place.image}
@@ -209,7 +209,7 @@ export default function EditReviewPage() {
                         <div className="w-[585px] h-auto flex flex-col gap-[16px]">
                             
                             {/* Rating & Visit Type Card */}
-                            <div className="w-[585px] h-[235px] flex flex-col gap-[32px] bg-white rounded-[16px] border border-[#C2DCF3] shadow-[0px_1px_3px_0px_#0000001A,0px_1px_2px_-1px_#0000001A] p-[16px]">
+                            <div className="w-[585px] h-[235px] flex flex-col gap-[32px] bg-white rounded-[16px] border border-[#1E518C] shadow-[0px_1px_3px_0px_#0000001A,0px_1px_2px_-1px_#0000001A] p-[16px]">
                                 {/* Rating Section */}
                                 <div className="w-[331px] h-[86px] flex flex-col gap-[16px]">
                                     <h3 className="font-inter font-bold text-[18px] text-[#194473] leading-none tracking-normal">
@@ -250,7 +250,7 @@ export default function EditReviewPage() {
                                                 className={`px-6 py-2 rounded-full border text-[14px] font-medium transition-all
                                                     ${visitType === type
                                                         ? "bg-[#194473] text-white border-[#194473]"
-                                                        : "bg-white text-gray-600 border-gray-300 hover:bg-[#EEEEEE]"
+                                                        : "bg-white text-gray-600 border-[#1E518C] hover:bg-[#EEEEEE]"
                                                     }`}
                                             >
                                                 {type}
@@ -261,7 +261,7 @@ export default function EditReviewPage() {
                             </div>
 
                             {/* Main Review Form Card */}
-                            <div className="w-[585px] h-auto flex flex-col gap-[32px] bg-white rounded-[16px] border border-[#C2DCF3] shadow-[0px_1px_3px_0px_#0000001A,0px_1px_2px_-1px_#0000001A] p-[16px]">
+                            <div className="w-[585px] h-auto flex flex-col gap-[32px] bg-white rounded-[16px] border border-[#1E518C] shadow-[0px_1px_3px_0px_#0000001A,0px_1px_2px_-1px_#0000001A] p-[16px]">
 
                                 {/* Write Review Section */}
                                 <div className="w-[558px] h-[236px] flex flex-col gap-[8px]">

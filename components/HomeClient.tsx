@@ -350,7 +350,7 @@ export default function HomeClient({ initialAttractions, initialCountries }: Hom
                   onClick={() => setSelectedContinent(cont)}
                   className={`text-[20px] font-Inter leading-none transition-all whitespace-nowrap relative h-full flex items-center px-2 ${selectedContinent === cont
                     ? "font-[700] text-[#0D47A1] after:content-[''] after:absolute after:-bottom-[1px] after:left-0 after:h-[2px] after:w-full after:bg-[#0D47A1]"
-                    : "font-[400] text-[#212121] hover:text-[#0D47A1]"
+                    : "font-[400] text-[#212121] hover:text-[#0D47A1] cursor-pointer"
                     }`}
                 >
                   {cont}
@@ -492,7 +492,7 @@ export default function HomeClient({ initialAttractions, initialCountries }: Hom
                 <div
                   key={country.name}
                   onClick={() => router.push(`/explore?country=${country.name}`)}
-                  className="relative w-full max-w-[264px] h-[331px] rounded-[16px] overflow-hidden cursor-pointer group shadow-sm hover:shadow-md transition-all duration-300 border border-[#C2DCF3] flex flex-col bg-white mx-auto"
+                  className="relative w-full max-w-[264px] h-[331px] rounded-[16px] overflow-hidden cursor-pointer group shadow-sm hover:shadow-md transition-all duration-300 border border-[#1E518C] flex flex-col bg-white mx-auto"
                 >
                   <div className="relative w-full h-[256px] overflow-hidden">
                     {/* ✅ ใช้ Image แทน img */}
@@ -504,15 +504,6 @@ export default function HomeClient({ initialAttractions, initialCountries }: Hom
                       sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
                       unoptimized={isRiskySource}
                     />
-                    <div className="absolute top-2 right-2 z-20">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); alert(`Add ${country.name} to list`); }}
-                        className="flex h-[24px] w-[32px] group-hover:w-[60px] items-center justify-center rounded-[8px] border border-white bg-[#00000066] group-hover:bg-[#1565C0] text-white shadow-sm transition-all duration-300 ease-in-out overflow-hidden cursor-pointer backdrop-blur-[2px]"
-                      >
-                        <Plus size={16} className="flex-shrink-0" />
-                        <span className="max-w-0 opacity-0 group-hover:max-w-[40px] group-hover:opacity-100 group-hover:ml-[4px] text-[12px] font-inter font-normal whitespace-nowrap transition-all duration-300">Add</span>
-                      </button>
-                    </div>
                   </div>
                   <div className="w-full h-[75px] bg-white px-[16px] flex flex-col justify-center border-t border-[#C2DCF3]">
                     <h4 className="text-[20px] font-Inter font-bold text-[#194473] leading-none truncate group-hover:underline">

@@ -886,18 +886,18 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
                             )}
 
                             {nearbyPlaces.length > 0 && (
-                                <div className="w-[456px] flex flex-col gap-4 mt-2">
+                                <div className="w-[456px] flex flex-col gap-4 mt-2 ">
                                     <h3 className="font-inter font-bold text-[20px] text-[#194473] leading-none">Best near by</h3>
                                     <div className="flex flex-col gap-3">
                                         {nearbyPlaces.map((nearby) => {
                                             const thumbUrl = nearby.images && nearby.images.length > 0 ? (typeof nearby.images[0] === 'string' ? nearby.images[0] : (nearby.images[0] as any).url) : "https://placehold.co/80x80?text=No+Image";
                                             const locationText = (nearby.province_state && nearby.province_state !== nearby.country) ? `${nearby.province_state}, ${nearby.country}` : nearby.country;
                                             return (
-                                                <div key={nearby.id} onClick={() => router.push(`/detail?id=${nearby.id}`)} className="w-full h-[96px] bg-[#F5F5F5] rounded-[8px] p-2 flex gap-3 cursor-pointer hover:bg-gray-200 transition-colors shadow-sm">
+                                                <div key={nearby.id} onClick={() => router.push(`/detail?id=${nearby.id}`)} className="w-full h-[96px] bg-[#F5F5F5] rounded-[8px] p-2 flex gap-3 cursor-pointer hover:bg-gray-200 transition-colors shadow-sm border border-[#1E518C]">
                                                     <div className="relative w-[80px] h-[80px] flex-shrink-0">
                                                         <Image src={thumbUrl} alt={nearby.name} fill className="rounded-[8px] object-cover" sizes="80px" unoptimized={isRiskyImage(thumbUrl)} />
                                                     </div>
-                                                    <div className="flex flex-col justify-center gap-1 min-w-0">
+                                                    <div className="flex flex-col justify-center gap-1 min-w-0 ">
                                                         <h4 className="font-inter font-bold text-[16px] text-[#212121] leading-tight truncate">{nearby.name}</h4>
                                                         <p className="font-inter text-[12px] text-[#757575] leading-tight truncate">{locationText}</p>
                                                         <div className="flex items-center gap-1 mt-1">
