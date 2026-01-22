@@ -540,13 +540,13 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
                       <div className="flex flex-col flex-1 overflow-hidden gap-[8px]">
                         <div className="w-[288px] flex flex-col gap-[4px] overflow-hidden">
                           <h3 className="font-inter font-bold text-[18px] text-[#212121] leading-tight line-clamp-2">{festival.name}</h3>
-                          <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight line-clamp-5">
+                          <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight ">
                             {festival.description} {/* ✅ Map to 'description' */}
                           </p>
                           <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight break-words">
                             <span className="font-bold">When: </span>{festival.period_str} {/* ✅ Map to 'period_str' */}
                           </p>
-                          <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight break-words line-clamp-3">
+                          <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight break-words">
                             <span className="font-bold">Top Spot : </span>{festival.province_state} {/* ✅ Map to 'province_state' */}
                           </p>
                         </div>
