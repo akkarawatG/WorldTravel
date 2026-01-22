@@ -292,7 +292,12 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
       <div className="max-w-[1440px] mx-auto px-[156px] pt-6 mb-4">
         <div className="flex items-center gap-2 flex-wrap mb-2 font-Inter font-[600] text-[14px] leading-[100%] text-[#9E9E9E]">
           <span className="hover:underline cursor-pointer" onClick={() => router.push('/')}>Home</span> /
-          <span>{currentContinent}</span> /
+          <span
+            className="hover:underline cursor-pointer" // เพิ่มสีให้รู้ว่ากดได้ (option)
+            onClick={() => router.push(`/countries?continent=${currentContinent}`)}
+          >
+            {currentContinent}
+          </span> /
           <span className="text-[#101828] hover:underline cursor-pointer">{paramCountry}</span>
         </div>
       </div>
@@ -473,13 +478,13 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
             {/* Pagination Controls */}
             {totalPages > 1 && (
               <div className="flex justify-end items-center gap-[8px] mt-auto pt-10">
-                <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="flex items-center justify-center w-[32px] h-[24px] gap-[8px] px-[8px] py-[4px] rounded-[4px] bg-[#9E9E9E] border border-[#EEEEEE] disabled:opacity-50 transition hover:bg-[#757575]"><ChevronLeft size={16} className="text-white" /></button>
+                <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="flex items-center justify-center w-[32px] h-[24px] gap-[8px] px-[8px] py-[4px] rounded-[4px] bg-[#9E9E9E] border border-[#EEEEEE] disabled:opacity-50 transition hover:bg-[#757575] cursor-pointer"><ChevronLeft size={16} className="text-white" /></button>
                 {getPaginationGroup().map((page, index) => (
-                  <button key={index} onClick={() => setCurrentPage(page)} className={`flex items-center justify-center w-[25px] h-[25px] px-[8px] py-[4px] rounded-[4px] border border-[#EEEEEE] text-[12px] font-medium transition-colors ${currentPage === page ? "bg-[#194473] text-white" : "bg-[#9E9E9E] text-white hover:bg-gray-400"}`}>{page}</button>
+                  <button key={index} onClick={() => setCurrentPage(page)} className={`flex items-center justify-center w-[25px] h-[25px] px-[8px] py-[4px] rounded-[4px] border border-[#EEEEEE] text-[12px] font-medium transition-colors cursor-pointer ${currentPage === page ? "bg-[#194473] text-white" : "bg-[#9E9E9E] text-white hover:bg-gray-400"}`}>{page}</button>
                 ))}
                 {totalPages > 5 && currentPage < totalPages - 2 && <span className="text-gray-400">...</span>}
-                {totalPages > 5 && currentPage < totalPages - 2 && (<button onClick={() => setCurrentPage(totalPages)} className={`flex items-center justify-center w-[25px] h-[25px] px-[8px] py-[4px] rounded-[4px] border border-[#EEEEEE] text-[12px] font-medium transition-colors bg-[#9E9E9E] text-white hover:bg-gray-400`}>{totalPages}</button>)}
-                <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="flex items-center justify-center w-[32px] h-[24px] gap-[8px] px-[8px] py-[4px] rounded-[4px] bg-[#9E9E9E] border border-[#EEEEEE] disabled:opacity-50 transition hover:bg-[#757575]"><ChevronRight size={20} className="text-white" /></button>
+                {totalPages > 5 && currentPage < totalPages - 2 && (<button onClick={() => setCurrentPage(totalPages)} className={`flex items-center justify-center w-[25px] h-[25px] px-[8px] py-[4px] rounded-[4px] border border-[#EEEEEE] text-[12px] font-medium transition-colors bg-[#9E9E9E] text-white hover:bg-gray-400 cursor-pointer`}>{totalPages}</button>)}
+                <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="flex items-center justify-center w-[32px] h-[24px] gap-[8px] px-[8px] py-[4px] rounded-[4px] bg-[#9E9E9E] border border-[#EEEEEE] disabled:opacity-50 transition hover:bg-[#757575] cursor-pointer"><ChevronRight size={20} className="text-white" /></button>
               </div>
             )}
           </div>
@@ -541,7 +546,7 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
                           <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight break-words">
                             <span className="font-bold">When: </span>{festival.period_str} {/* ✅ Map to 'period_str' */}
                           </p>
-                          <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight break-words line-clamp-1">
+                          <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight break-words line-clamp-3">
                             <span className="font-bold">Top Spot : </span>{festival.province_state} {/* ✅ Map to 'province_state' */}
                           </p>
                         </div>
@@ -557,9 +562,9 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
         </div>
         {/* Month Filter (Replacing Pagination) */}
         <div className="flex justify-end items-center gap-[8px] mt-4">
-          <button onClick={() => setSelectedMonth("ALL")} className={`flex items-center justify-center w-[40px] h-[24px] px-2 rounded-[4px] border border-[#EEEEEE] text-[12px] font-medium transition-colors ${selectedMonth === "ALL" ? "bg-[#194473] text-white" : "bg-[#9E9E9E] text-white hover:bg-gray-400"}`}>All</button>
+          <button onClick={() => setSelectedMonth("ALL")} className={`flex items-center justify-center w-[40px] h-[24px] px-2 rounded-[4px] border border-[#EEEEEE] text-[12px] font-medium transition-colors cursor-pointer ${selectedMonth === "ALL" ? "bg-[#194473] text-white" : "bg-[#9E9E9E] text-white hover:bg-gray-400"}`}>All</button>
           {MONTHS.map((month) => (
-            <button key={month} onClick={() => setSelectedMonth(month)} className={`flex items-center justify-center w-[40px] h-[24px] px-2 rounded-[4px] border border-[#EEEEEE] text-[12px] font-medium transition-colors ${selectedMonth === month ? "bg-[#194473] text-white" : "bg-[#9E9E9E] text-white hover:bg-gray-400"}`}>{month}</button>
+            <button key={month} onClick={() => setSelectedMonth(month)} className={`flex items-center justify-center w-[40px] h-[24px] px-2 rounded-[4px] border border-[#EEEEEE] text-[12px] font-medium transition-colors cursor-pointer ${selectedMonth === month ? "bg-[#194473] text-white" : "bg-[#9E9E9E] text-white hover:bg-gray-400"}`}>{month}</button>
           ))}
         </div>
 

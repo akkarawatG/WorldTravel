@@ -571,7 +571,12 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
             <div className="max-w-[1440px] mx-auto px-[156px] pt-6 mb-4">
                 <div className="flex items-center gap-2 flex-wrap mb-2 font-Inter font-[600] text-[14px] leading-[100%] text-[#9E9E9E]">
                     <span className="hover:underline cursor-pointer" onClick={() => router.push("/")}>Home</span>/
-                    <span>{place.continent}</span>/
+                    <span
+                        className="hover:underline cursor-pointer"
+                        onClick={() => router.push(`/countries?continent=${place.continent}`)}
+                    >
+                        {place.continent}
+                    </span>/
                     <span className="hover:underline cursor-pointer" onClick={() => router.push(`/explore?country=${place.country}`)}>{place.country}</span>/
                     <span className="hover:underline cursor-pointer" onClick={() => router.push(`/explore?country=${place.country}&search=${place.province_state}`)}>{place.province_state || place.country}</span>/
                     <span className="truncate max-w-[200px] md:max-w-none text-[#101828] hover:underline cursor-pointer">{place.name}</span>

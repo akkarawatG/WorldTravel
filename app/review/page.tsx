@@ -3,7 +3,7 @@
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useState, useEffect } from "react";
 import { Star, MapPin, Upload, Check, ChevronLeft, Image as ImageIcon, Trash2 } from "lucide-react";
-import { getPlaceById } from "@/services/placeService"; 
+import { getPlaceById } from "@/services/placeService";
 import { Place } from "@/types/place";
 // ✅ Import Service ใหม่ที่เพิ่งสร้าง
 import { submitReview } from "@/services/reviewService";
@@ -110,7 +110,12 @@ function ReviewContent() {
             <div className="max-w-[1128px] mx-auto pt-6 ">
                 <div className="flex items-center gap-2 flex-wrap pt 6 mb-4 font-Inter font-[600] text-[14px] leading-[100%] text-[#9E9E9E]">
                     <span className="hover:underline cursor-pointer" onClick={() => router.push("/")}>Home</span>/
-                    <span>{place.continent}</span>/
+                    <span
+                        className="hover:underline cursor-pointer"
+                        onClick={() => router.push(`/countries?continent=${place.continent}`)}
+                    >
+                        {place.continent}
+                    </span>/
                     <span className="hover:underline cursor-pointer" onClick={() => router.push(`/explore?country=${place.country}`)}>
                         {place.country}
                     </span>/

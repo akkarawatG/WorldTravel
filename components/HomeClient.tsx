@@ -477,7 +477,7 @@ export default function HomeClient({ initialAttractions, initialCountries }: Hom
               Top list in {selectedContinent}
             </h2>
             <Link href="/countries">
-              <button className="w-[112px] h-[22px] flex items-center justify-center gap-[10px] font-inter font-bold text-[18px] leading-none text-[#616161] hover:text-[#3A82CE] hover:underline transition-colors">
+              <button className="w-[112px] h-[22px] flex items-center justify-center gap-[10px] font-inter font-bold text-[18px] leading-none text-[#616161] hover:text-[#3A82CE] hover:underline transition-colors cursor-pointer">
                 All Countries
               </button>
             </Link>
