@@ -5,65 +5,47 @@ import { ComposableMap, ZoomableGroup } from "react-simple-maps";
 import { geoIdentity, geoPath } from "d3-geo";
 import { feature } from "topojson-client"; 
 
-interface DynamicMapProps {
-  countryCode: string;
-  visitedList: string[];
-  selectedRegionName: string | null;
-  onRegionClick: (regionName: string) => void;
+interface MapProps {
+   countryCode: string;
+   visitedList: string[];
+   selectedRegions: string[]; // ✅ รับเป็น Array
+   onRegionClick: (name: string) => void;
 }
 
 export default function DynamicMap({ 
   countryCode, 
   visitedList, 
-  selectedRegionName, 
+  selectedRegions, 
   onRegionClick 
-}: DynamicMapProps) {
+}: MapProps) {
   
   const [geoData, setGeoData] = useState<any>(null);
   const [tooltipContent, setTooltipContent] = useState("");
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   
-  // State สำหรับ Loading และ Error
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  // เพิ่ม State เก็บว่าเมาส์ชี้ตัวไหนอยู่
   const [hoveredRegion, setHoveredRegion] = useState<string | null>(null);
-
-  // Config Map
   const [mapConfig, setMapConfig] = useState({ scale: 1, offset: [0, 0] as [number, number] });
 
   useEffect(() => {
     const fetchMap = async () => {
       setIsLoading(true);
-      setErrorMsg(null); // Reset error
+      setErrorMsg(null);
       setGeoData(null);
 
       try {
         let code = countryCode.toLowerCase().trim();
-        
-        // 🔧 แก้ไขรหัสประเทศให้ตรงกับ Highcharts
-        const codeMap: Record<string, string> = {
-            'uk': 'gb',
-            'usa': 'us',
-            'uae': 'ae',
-            // เพิ่มประเทศอื่นๆ ที่มีปัญหาได้ที่นี่
-        };
+        const codeMap: Record<string, string> = { 'uk': 'gb', 'usa': 'us', 'uae': 'ae' };
         if (codeMap[code]) code = codeMap[code];
 
         const url = `https://code.highcharts.com/mapdata/countries/${code}/${code}-all.topo.json`;
-        console.log(`Fetching Map: ${url}`);
-
         const response = await fetch(url);
         
-        // 🚨 เช็ค Error จากการโหลด
-        if (!response.ok) {
-            throw new Error(`ไม่พบข้อมูลแผนที่สำหรับรหัส "${code}" (${response.status})`);
-        }
+        if (!response.ok) throw new Error(`Map data not found (${response.status})`);
         
         const topology = await response.json();
         
-        // หา Key ข้อมูล
         let objectKey = Object.keys(topology.objects)[0];
         for (const key in topology.objects) {
             if (topology.objects[key].geometries) {
@@ -73,8 +55,6 @@ export default function DynamicMap({
         }
         
         const geojson = feature(topology, topology.objects[objectKey]);
-
-        // คำนวณ Scale (Auto-fit)
         const width = 800;
         const height = 600;
         const projection = geoIdentity().reflectY(true).fitSize([width, height], geojson as any);
@@ -88,7 +68,7 @@ export default function DynamicMap({
 
       } catch (err: any) {
         console.error("Map Error:", err);
-        setErrorMsg(err.message || "เกิดข้อผิดพลาดในการโหลดแผนที่");
+        setErrorMsg(err.message || "Failed to load map");
       } finally {
         setIsLoading(false);
       }
@@ -107,29 +87,21 @@ export default function DynamicMap({
     setMousePos({ x: event.clientX, y: event.clientY - 40 });
   };
 
-  // 🔴 1. แสดง Error ถ้าโหลดไม่สำเร็จ
   if (errorMsg) {
     return (
       <div className="w-full h-full flex flex-col items-center justify-center bg-red-50 rounded-xl border border-red-200 text-red-500 p-6 text-center">
          <div className="text-3xl mb-2">⚠️</div>
-         <h3 className="font-bold text-lg">โหลดแผนที่ล้มเหลว</h3>
-         <p className="text-sm opacity-80">{errorMsg}</p>
-         <button 
-            onClick={() => window.location.reload()} 
-            className="mt-4 px-4 py-2 bg-white border border-red-200 rounded-lg text-sm hover:bg-red-50 transition"
-         >
-            ลองใหม่
-         </button>
+         <h3 className="font-bold text-lg">Map Load Failed</h3>
+         <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-white border border-red-200 rounded-lg text-sm hover:bg-red-50 transition">Retry</button>
       </div>
     );
   }
 
-  // 🟡 2. แสดง Loading
   if (isLoading || !geoData || !pathGenerator) {
     return (
       <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 rounded-xl text-gray-400 animate-pulse border border-gray-200">
          <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin mb-3"></div>
-         <span className="text-xs">กำลังโหลดแผนที่...</span>
+         <span className="text-xs">Loading Map...</span>
       </div>
     );
   }
@@ -153,20 +125,22 @@ export default function DynamicMap({
                 const regionName = geo.properties["name"] || geo.properties["NAME_1"] || "Unknown";
 
                 const isVisited = visitedList.includes(regionName);
-                const isSelected = selectedRegionName === regionName;
+                
+                // ✅ Check if region is in selected array
+                const isSelected = selectedRegions.includes(regionName); 
                 const isHovered = hoveredRegion === regionName;
 
                 const pathData = pathGenerator(geo) || undefined;
 
-                // 🎨 คำนวณสี
+                // 🎨 Color Logic
                 let fillColor = "#E5E7EB"; // Default Gray
                 
                 if (isSelected) {
-                    fillColor = isHovered ? "#1D4ED8" : "#3B82F6"; // ฟ้า
+                    fillColor = isHovered ? "#1D4ED8" : "#3B82F6"; // Blue (Selected)
                 } else if (isVisited) {
-                    fillColor = isHovered ? "#DB2777" : "#F472B6"; // ชมพู
+                    fillColor = isHovered ? "#DB2777" : "#F472B6"; // Pink (Visited)
                 } else {
-                    fillColor = isHovered ? "#9CA3AF" : "#E5E7EB"; // เทา
+                    fillColor = isHovered ? "#9CA3AF" : "#E5E7EB"; // Gray (Default)
                 }
 
                 const strokeWidth = isHovered ? 1.5 : 0.5;
@@ -174,7 +148,7 @@ export default function DynamicMap({
 
                 return (
                   <path
-                    key={index}
+                    key={`${regionName}-${index}`}
                     d={pathData}
                     fill={fillColor}
                     stroke="#FFFFFF"
@@ -186,7 +160,6 @@ export default function DynamicMap({
                         position: 'relative',
                         zIndex: zIndex
                     }}
-                    
                     onClick={() => onRegionClick(regionName)}
                     onMouseEnter={() => {
                         setTooltipContent(regionName);
