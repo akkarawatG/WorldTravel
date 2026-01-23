@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react"; // ✅ เพิ่ม useEffect
-import { useRouter, useSearchParams } from "next/navigation"; // ✅ เพิ่ม useSearchParams
-import { Search, MapPin, Plus, ChevronLeft, ChevronRight } from "lucide-react";
-// import Navbar from "@/components/Navbar"; // (ถ้ามี)
+import { useState, useMemo, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Search, MapPin, ChevronLeft, ChevronRight } from "lucide-react";
 import { COUNTRIES_DATA, CONTINENTS } from "@/data/mockData";
 
-// ... (CONSTANTS และ Data Flattening เหมือนเดิม) ...
+// รวมข้อมูลประเทศทั้งหมดให้อยู่ใน Array เดียว และเพิ่ม field 'continent' เข้าไปใน object
 const ALL_COUNTRIES_FLAT = Object.entries(COUNTRIES_DATA).flatMap(([continent, countries]) =>
     countries.map((country) => ({
         ...country,
@@ -14,12 +13,12 @@ const ALL_COUNTRIES_FLAT = Object.entries(COUNTRIES_DATA).flatMap(([continent, c
     }))
 );
 
-const ITEMS_PER_PAGE = 12;
+const ITEMS_PER_PAGE = 12; // จำนวนประเทศต่อ 1 หน้า
 const ALPHABET = ["All", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("")];
 
 export default function AllCountriesPage() {
     const router = useRouter();
-    const searchParams = useSearchParams(); // ✅ เรียกใช้ hook นี้
+    const searchParams = useSearchParams();
 
     // State สำหรับ Filter ต่างๆ
     const [activeContinent, setActiveContinent] = useState("All");
@@ -27,20 +26,17 @@ export default function AllCountriesPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
 
-    // ✅ เพิ่ม useEffect เพื่อดึงค่า continent จาก URL เมื่อเข้ามาหน้านี้
+    // ดึงค่า continent จาก URL
     useEffect(() => {
         const continentParam = searchParams.get("continent");
-        // เช็คว่ามีค่าส่งมา และค่านั้นเป็นชื่อทวีปที่ถูกต้องหรือไม่
         if (continentParam && CONTINENTS.includes(continentParam)) {
             setActiveContinent(continentParam);
         } else {
-            // ถ้าไม่ส่งมา หรือส่งมาผิด ให้เป็น All (หรือจะลบ else นี้ออกถ้าอยากให้จำค่าเดิม)
-            setActiveContinent("All"); 
+            setActiveContinent("All");
         }
     }, [searchParams]);
 
-    // ... (Logic availableLetters, filteredCountries, Pagination เหมือนเดิม) ...
-    // ✅ Logic 1: คำนวณว่าในทวีปที่เลือก มีตัวอักษรขึ้นต้นอะไรบ้าง
+    // Logic: Available Letters
     const availableLetters = useMemo(() => {
         const countriesInContinent = ALL_COUNTRIES_FLAT.filter((country) =>
             activeContinent === "All" || country.continent === activeContinent
@@ -49,6 +45,7 @@ export default function AllCountriesPage() {
         return letters;
     }, [activeContinent]);
 
+    // Logic: Filtered Countries
     const filteredCountries = useMemo(() => {
         return ALL_COUNTRIES_FLAT.filter((country) => {
             const matchContinent = activeContinent === "All" || country.continent === activeContinent;
@@ -58,6 +55,7 @@ export default function AllCountriesPage() {
         }).sort((a, b) => a.name.localeCompare(b.name));
     }, [activeContinent, activeLetter, searchQuery]);
 
+    // Pagination Logic
     const totalPages = Math.ceil(filteredCountries.length / ITEMS_PER_PAGE);
     const currentData = filteredCountries.slice(
         (currentPage - 1) * ITEMS_PER_PAGE,
@@ -67,14 +65,12 @@ export default function AllCountriesPage() {
     const handleFilterChange = (setter: any, value: any) => {
         setter(value);
         setCurrentPage(1);
-        // Optional: ถ้ากดเปลี่ยน filter เอง อาจจะอยาก clear query param ออกจาก url ให้สวยงามก็ได้
-        // router.replace("/countries", { scroll: false }); 
     };
 
     return (
         <div className="min-h-screen bg-white pb-20">
-            {/* ... (Breadcrumb และ UI ส่วนอื่นๆ เหมือนเดิม) ... */}
-             <div className="max-w-[1440px] mx-auto px-[156px] pt-6 mb-4">
+            {/* Breadcrumb */}
+            <div className="max-w-[1440px] mx-auto px-[156px] pt-6 mb-4">
                 <div className="flex items-center gap-2 flex-wrap mb-2 font-Inter font-[600] text-[14px] leading-[100%] text-[#9E9E9E]">
                     <span className="hover:underline cursor-pointer" onClick={() => router.push("/")}>Home</span>/
                     <span className="text-[#101828] hover:underline cursor-pointer" onClick={() => router.push(`/countries`)}>All countries</span>
@@ -82,19 +78,46 @@ export default function AllCountriesPage() {
             </div>
 
             <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-[156px] pt-10">
-                {/* ... (Header & Search Bar) ... */}
-                
+
+                {/* --- Header Section --- */}
+                <div className="text-center mb-10 space-y-4">
+                    <h1 className="text-[48px] font-[900] md:text-4xl font-Inter text-[#000000]">
+                        Discover Amazing Destinations Worldwide
+                    </h1>
+                    <p className="text-[20px] font-Inter font-[400] text-[#000000] text-sm md:text-base">
+                        Explore countries from all continents in alphabetical order
+                    </p>
+
+                    {/* ✅ Search Bar (Fixed Button Position) */}
+                    <div className="relative max-w-[744px] mx-auto mt-6">
+                        <div className="flex items-center w-[744px] h-[48px] gap-[8px] p-[8px] bg-[#194473] border border-[#E0E0E0] rounded-[16px] shadow-sm transition">
+                            {/* ✅ Search Icon Button (Restore) */}
+                                <Search className="w-[20px] h-[20px] text-white" />
+                            {/* Input Field Container */}
+                            <div className="flex items-center flex-1 h-[32px] bg-[#FFFFFF] rounded-[8px] px-[8px] py-[4px]">
+                                <input
+                                    type="text"
+                                    placeholder="Search for a country, city..."
+                                    className="w-full h-full bg-transparent border-none outline-none text-[12px] font-inter font-[400] text-[#212121] placeholder-[#9E9E9E]"
+                                    value={searchQuery}
+                                    onChange={(e) => handleFilterChange(setSearchQuery, e.target.value)}
+                                />
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+
                 {/* --- Filters Section --- */}
                 <div className="space-y-6 mb-10">
                     {/* Continent Tabs */}
                     <div className="flex flex-wrap justify-center gap-[16px]">
                         <button
                             onClick={() => handleFilterChange(setActiveContinent, "All")}
-                            className={`h-[40px] min-w-[40px] px-[8px] flex items-center justify-center rounded-[8px] text-[20px] font-inter font-[400] leading-none border transition-all cursor-pointer ${
-                                activeContinent === "All"
-                                    ? "bg-[#194473] text-white border-[#C2DCF3]"
-                                    : "bg-white text-gray-600 border-[#1E518C] hover:bg-gray-50"
-                            }`}
+                            className={`h-[40px] min-w-[40px] px-[8px] flex items-center justify-center rounded-[8px] text-[20px] font-inter font-[400] leading-none border transition-all cursor-pointer ${activeContinent === "All"
+                                ? "bg-[#194473] text-white border-[#C2DCF3]"
+                                : "bg-white text-gray-600 border-[#1E518C] hover:bg-gray-50"
+                                }`}
                         >
                             All
                         </button>
@@ -102,18 +125,16 @@ export default function AllCountriesPage() {
                             <button
                                 key={continent}
                                 onClick={() => handleFilterChange(setActiveContinent, continent)}
-                                className={`h-[40px] min-w-[56px] px-[8px] flex items-center justify-center rounded-[8px] text-[20px] font-inter font-[400] leading-none border transition-all cursor-pointer ${
-                                    activeContinent === continent
-                                        ? "bg-[#194473] text-white border-[#C2DCF3]"
-                                        : "bg-white text-gray-600 border-[#1E518C] hover:bg-gray-50"
-                                }`}
+                                className={`h-[40px] min-w-[56px] px-[8px] flex items-center justify-center rounded-[8px] text-[20px] font-inter font-[400] leading-none border transition-all cursor-pointer ${activeContinent === continent
+                                    ? "bg-[#194473] text-white border-[#C2DCF3]"
+                                    : "bg-white text-gray-600 border-[#1E518C] hover:bg-gray-50"
+                                    }`}
                             >
                                 {continent}
                             </button>
                         ))}
                     </div>
 
-                    {/* ... (Alphabet Filters และส่วนที่เหลือ เหมือนเดิม) ... */}
                     {/* Alphabet Filters */}
                     <div className="flex items-center justify-center w-[1128px] h-[40px] gap-[16px] mx-auto mb-10">
                         <div className="flex items-center w-[162px] h-[24px]">
@@ -132,9 +153,9 @@ export default function AllCountriesPage() {
                                         className={`h-[40px] flex items-center justify-center rounded-[8px] border p-[8px] transition-all text-sm font-medium cursor-pointer 
                                         ${letter === "All" ? "w-[40px]" : "w-[30px]"} 
                                         ${activeLetter === letter
-                                            ? "bg-[#194473] text-white border-[#C2DCF3] shadow-md"
-                                            : "bg-white text-gray-600 border-[#1E518C] hover:bg-gray-50"
-                                        }`}
+                                                ? "bg-[#194473] text-white border-[#C2DCF3] shadow-md"
+                                                : "bg-white text-gray-600 border-[#1E518C] hover:bg-gray-50"
+                                            }`}
                                     >
                                         {letter}
                                     </button>
@@ -173,8 +194,7 @@ export default function AllCountriesPage() {
                     </div>
                 ) : (
                     <div className="text-center py-20">
-                        {/* ... Empty State ... */}
-                         <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
+                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
                             <Search className="w-8 h-8 text-gray-400" />
                         </div>
                         <h3 className="text-lg font-medium text-gray-900">No countries found</h3>
@@ -192,14 +212,13 @@ export default function AllCountriesPage() {
                     </div>
                 )}
 
-                {/* --- Pagination --- (เหมือนเดิม) */}
-                 {totalPages > 1 && (
+                {/* --- Pagination --- */}
+                {totalPages > 1 && (
                     <div className="flex justify-start items-center gap-[8px] mt-12">
-                        {/* ... ปุ่ม Pagination ... */}
-                         <button
+                        <button
                             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                             disabled={currentPage === 1}
-                            className="flex items-center justify-center w-[32px] h-[24px] gap-[8px] px-[8px] py-[4px] rounded-[4px] bg-[#9E9E9E] border border-[#EEEEEE] disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex items-center justify-center w-[32px] h-[24px] gap-[8px] px-[8px] py-[4px] rounded-[4px] bg-[#9E9E9E] border border-[#EEEEEE] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                         >
                             <ChevronLeft size={16} className="text-white" />
                         </button>

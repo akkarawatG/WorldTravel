@@ -178,6 +178,7 @@ export interface Trip {
   title: string;
   date: string;
   flagImage: string;
+  image?: string;
   stats: {
     regions: number;
     places: number;
@@ -191,13 +192,15 @@ export const MY_TRIPS: Trip[] = [
     title: "My trip to Thailand", 
     date: "Today", 
     flagImage: "https://flagcdn.com/w320/th.png", 
+    image: "https://images.unsplash.com/photo-1552465011-b4e21bf6e79a?w=800&q=80", // รูปวัดอรุณ
     stats: { regions: 1, places: 1, photos: 0 } 
   },
   { 
     id: 2, 
-    title: "USA 2023 ✈️", 
+    title: "USA 2023", 
     date: "Last Month", 
     flagImage: "https://flagcdn.com/w320/us.png", 
+    image: "https://images.unsplash.com/photo-1485738422979-f5c462d49f74?w=800&q=80", // รูปนิวยอร์ก
     stats: { regions: 2, places: 5, photos: 12 } 
   },
   { 
@@ -205,6 +208,7 @@ export const MY_TRIPS: Trip[] = [
     title: "Japan Adventure", 
     date: "Oct 2023", 
     flagImage: "https://flagcdn.com/w320/jp.png", 
+    image: "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=800&q=80", // รูปภูเขาไฟฟูจิ
     stats: { regions: 3, places: 15, photos: 42 } 
   }
 ];
