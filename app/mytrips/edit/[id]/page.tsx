@@ -2,75 +2,236 @@
 
 import { useState, use, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Save, LayoutTemplate, X, Image as ImageIcon, Check, Ban, MapPin, Camera, Globe, ChevronDown, ChevronUp, Search, Trash2 } from "lucide-react";
+import { createClient } from "@/utils/supabase/client"; 
+import { ArrowLeft, Save, LayoutTemplate, X, MapPin, ChevronDown, ChevronUp, Search, Trash2, Plus, Layers, Settings, StickyNote, Loader2, Check } from "lucide-react";
 import dynamic from 'next/dynamic';
 
-// --------------------------------------------------------
-// ⚙️ DATA MAPPING
-// --------------------------------------------------------
-const COUNTRY_NAMES: Record<string, string> = {
-  cn: "China", th: "Thailand", my: "Malaysia", jp: "Japan", ae: "United Arab Emirates", sa: "Saudi Arabia", sg: "Singapore", vn: "Vietnam", in: "India", kr: "South Korea", id: "Indonesia", tw: "Taiwan", bh: "Bahrain", kw: "Kuwait", kz: "Kazakhstan", ph: "Philippines", uz: "Uzbekistan", kh: "Cambodia", jo: "Jordan", la: "Laos", bn: "Brunei", om: "Oman", qa: "Qatar", lk: "Sri Lanka", ir: "Iran",
-  fr: "France", es: "Spain", it: "Italy", pl: "Poland", hu: "Hungary", hr: "Croatia", tr: "Turkey", gb: "United Kingdom", de: "Germany", gr: "Greece", dk: "Denmark", at: "Austria", nl: "Netherlands", pt: "Portugal", ro: "Romania", ch: "Switzerland", be: "Belgium", lv: "Latvia", ge: "Georgia", se: "Sweden", lt: "Lithuania", ee: "Estonia", no: "Norway", fi: "Finland", is: "Iceland",
-  us: "United States", mx: "Mexico", ca: "Canada", do: "Dominican Republic", bs: "Bahamas", cu: "Cuba", jm: "Jamaica", cr: "Costa Rica", gt: "Guatemala", pa: "Panama",
-  ar: "Argentina", br: "Brazil", cl: "Chile", pe: "Peru", py: "Paraguay", co: "Colombia", uy: "Uruguay", ec: "Ecuador",
-  za: "South Africa", ma: "Morocco", eg: "Egypt", ke: "Kenya", na: "Namibia", tz: "Tanzania",
-  au: "Australia", nz: "New Zealand"
+const COUNTRY_NAMES: Record<string, string> = { 
+    cn: "China", th: "Thailand", my: "Malaysia", jp: "Japan", us: "United States", gb: "United Kingdom", fr: "France",
+    // ... เพิ่มประเทศอื่นๆ
 };
 
-// --------------------------------------------------------
-
-// Import DynamicMap แบบ Lazy Load
-// ⚠️ สำคัญ: ต้องแน่ใจว่า DynamicMap รับ prop 'selectedRegions' (Array) ได้
 const DynamicMap = dynamic(
   () => import('../../../../components/DynamicMap'), 
   { ssr: false, loading: () => <div className="p-10 text-gray-400 flex items-center justify-center h-full">Loading Map...</div> }
 );
 
-interface PageProps {
-  params: Promise<{ id: string }>;
+// --- Interfaces ---
+interface PageProps { params: Promise<{ id: string }>; }
+interface TripStatus { id: string; label: string; color: string; }
+interface RegionData { name: string; statusId: string; }
+interface TripGroup { 
+    id: string; 
+    name: string; 
+    regions: RegionData[]; 
+    notes?: string; 
 }
+
+// ✅ Interface สำหรับ Props ของ RegionItem (แก้ปัญหา 'newId' implicit any)
+interface RegionItemProps {
+  region: RegionData;
+  statuses: TripStatus[];
+  onUpdateStatus: (newId: string) => void;
+  onRemove: () => void;
+  statusActions: {
+    onUpdate: (id: string, key: keyof TripStatus, value: string) => void;
+    onDelete: (id: string) => void;
+    onAdd: () => void;
+  };
+}
+
+const DEFAULT_STATUSES: TripStatus[] = [
+    { id: 'visited', label: 'Visited', color: '#4CAF50' },
+    { id: 'planned', label: 'Plan to go', color: '#2196F3' },
+    { id: 'passed', label: 'Passed', color: '#FF9800' },
+    { id: 'dream', label: 'Dream', color: '#9C27B0' },
+];
 
 export default function EditTripPage({ params }: PageProps) {
   const router = useRouter();
-  
-  // ✅ Unwrap params
+  const supabase = createClient();
   const { id } = use(params);
   const countryCode = id.toLowerCase();
   const countryName = COUNTRY_NAMES[countryCode] || countryCode.toUpperCase();
   
-  // ✅ Data States
+  // Data States
   const [regionList, setRegionList] = useState<string[]>([]);
   const [isLoadingRegions, setIsLoadingRegions] = useState(false);
-  const [visitedList, setVisitedList] = useState<string[]>([]);
-
-  // ✅ Multi-Select State (หัวใจสำคัญ)
-  const [selectedRegions, setSelectedRegions] = useState<string[]>([]); 
+  const [isSaving, setIsSaving] = useState(false);
+  const [dbTripId, setDbTripId] = useState<string | null>(null);
   
-  // ✅ Search State
+  const [tripGroups, setTripGroups] = useState<TripGroup[]>([]);
+  const [tripStatuses, setTripStatuses] = useState<TripStatus[]>(DEFAULT_STATUSES);
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+
+  // Active Edit Form States
+  const [currentGroupRegions, setCurrentGroupRegions] = useState<RegionData[]>([]); 
+  const [groupName, setGroupName] = useState("");
+  const [groupNote, setGroupNote] = useState("");
+
   const [isRegionDropdownOpen, setIsRegionDropdownOpen] = useState(false);
   const [regionSearchQuery, setRegionSearchQuery] = useState("");
   
-  // Form Data
-  const [formData, setFormData] = useState({
-    templateName: "My trip",
-    places: "",
-    notes: "",
-    status: "visited", 
-    customColor: "#4CAF50"
-  });
+  const activeGroup = useMemo(() => tripGroups.find(g => g.id === activeGroupId), [tripGroups, activeGroupId]);
 
-  const isRegionSelected = selectedRegions.length > 0;
+  // ✅ 1. Initialize Data (Supabase)
+  useEffect(() => {
+    const initData = async () => {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return; 
 
-  // ✅ Toggle Selection Logic (ใช้ทั้ง Dropdown และ Map)
-  const toggleRegion = (regionName: string) => {
-    setSelectedRegions(prev => 
-      prev.includes(regionName)
-        ? prev.filter(r => r !== regionName) // เอาออก
-        : [...prev, regionName] // เพิ่มเข้า
-    );
+            // 1.1 Find or Create Trip
+            let { data: trip, error } = await supabase
+                .from('trips')
+                .select('id')
+                .eq('profile_id', user.id)
+                .eq('country', countryCode)
+                .maybeSingle();
+
+            if (!trip) {
+                const { data: newTrip, error: createError } = await supabase
+                    .from('trips')
+                    .insert([{ profile_id: user.id, country: countryCode }])
+                    .select()
+                    .single();
+                if (createError) throw createError;
+                trip = newTrip;
+            }
+
+            // ✅ Check null (แก้ error 'trip' possibly null)
+            if (!trip) throw new Error("Failed to initialize trip");
+
+            setDbTripId(trip.id);
+
+            // 1.2 Load Templates (Groups)
+            const { data: templates, error: tempError } = await supabase
+                .from('templates')
+                .select(`id, template_name, notes, template_provinces ( province_code, status, color )`)
+                .eq('trip_id', trip.id)
+                .is('deleted_at', null)
+                .order('created_at', { ascending: true });
+
+            if (tempError) throw tempError;
+
+            // 1.3 Map DB Data to UI
+            if (templates) {
+                const mappedGroups: TripGroup[] = templates.map((t: any) => {
+                    const mappedRegions = t.template_provinces.map((p: any) => {
+                        let matchedStatus = tripStatuses.find(s => s.label === p.status && s.color === p.color);
+                        if (!matchedStatus) matchedStatus = DEFAULT_STATUSES[0];
+                        return { name: p.province_code, statusId: matchedStatus.id };
+                    });
+                    return { id: t.id, name: t.template_name || "Untitled", notes: t.notes || "", regions: mappedRegions };
+                });
+                setTripGroups(mappedGroups);
+            }
+        } catch (err) { console.error("Error init:", err); }
+    };
+    initData();
+  }, [countryCode, supabase]);
+
+  // ✅ 2. Sync Active Group to Form
+  useEffect(() => {
+    if (activeGroup) {
+        setCurrentGroupRegions(activeGroup.regions);
+        setGroupName(activeGroup.name);
+        setGroupNote(activeGroup.notes || "");
+    } else {
+        setCurrentGroupRegions([]);
+        setGroupName("");
+        setGroupNote("");
+    }
+  }, [activeGroupId, activeGroup]);
+
+  // ✅ 3. Actions
+  const handleAddGroup = () => {
+    const newId = `temp-${Date.now()}`;
+    const newGroup: TripGroup = { id: newId, name: `Trip ${tripGroups.length + 1}`, regions: [], notes: "" };
+    setTripGroups([...tripGroups, newGroup]);
+    setActiveGroupId(newId);
   };
 
-  // ✅ Fetch Region List from Highcharts
+  const toggleRegion = (regionName: string) => {
+    if (!activeGroupId) return;
+    setCurrentGroupRegions(prev => {
+        const exists = prev.find(r => r.name === regionName);
+        if (exists) return prev.filter(r => r.name !== regionName);
+        return [...prev, { name: regionName, statusId: tripStatuses[0].id }];
+    });
+  };
+
+  const updateRegionStatus = (regionName: string, newStatusId: string) => {
+      setCurrentGroupRegions(prev => prev.map(r => r.name === regionName ? { ...r, statusId: newStatusId } : r));
+  };
+
+  // ✅ 4. Save to Database
+  const handleApply = async () => {
+    if (!activeGroupId || !dbTripId) return;
+    setIsSaving(true);
+    try {
+        const isNew = activeGroupId.startsWith('temp-');
+        const templatePayload = {
+            trip_id: dbTripId,
+            template_name: groupName,
+            notes: groupNote,
+            ...(isNew ? {} : { id: activeGroupId })
+        };
+
+        const { data: savedTemplate, error: tmplError } = await supabase.from('templates').upsert(templatePayload).select().single();
+        if (tmplError) throw tmplError;
+        const realTemplateId = savedTemplate.id;
+
+        // Sync Regions (Delete old -> Insert new)
+        await supabase.from('template_provinces').delete().eq('template_id', realTemplateId);
+
+        if (currentGroupRegions.length > 0) {
+            const provincesPayload = currentGroupRegions.map(r => {
+                const statusObj = tripStatuses.find(s => s.id === r.statusId) || DEFAULT_STATUSES[0];
+                return {
+                    template_id: realTemplateId,
+                    province_code: r.name,
+                    status: statusObj.label,
+                    color: statusObj.color
+                };
+            });
+            const { error: provError } = await supabase.from('template_provinces').insert(provincesPayload);
+            if (provError) throw provError;
+        }
+
+        setTripGroups(prev => prev.map(g => g.id === activeGroupId ? { ...g, id: realTemplateId, regions: currentGroupRegions, name: groupName, notes: groupNote } : g));
+        if (isNew) setActiveGroupId(realTemplateId);
+
+    } catch (err) { console.error("Save failed:", err); alert("Failed to save changes"); } finally { setIsSaving(false); }
+  };
+
+  const handleDeleteGroup = async () => {
+      if (!confirm("Delete this group?")) return;
+      if (activeGroupId?.startsWith('temp-')) {
+          setTripGroups(prev => prev.filter(g => g.id !== activeGroupId));
+          setActiveGroupId(null);
+          return;
+      }
+      setIsSaving(true);
+      try {
+          const { error } = await supabase.from('templates').delete().eq('id', activeGroupId);
+          if (error) throw error;
+          setTripGroups(prev => prev.filter(g => g.id !== activeGroupId));
+          setActiveGroupId(null);
+      } catch (err) { console.error("Delete failed:", err); } finally { setIsSaving(false); }
+  };
+
+  // Status Management Helpers
+  const handleAddStatus = () => { setTripStatuses([...tripStatuses, { id: Date.now().toString(), label: 'New', color: '#000000' }]); };
+  const handleUpdateStatus = (id: string, key: keyof TripStatus, value: string) => { setTripStatuses(prev => prev.map(s => s.id === id ? { ...s, [key]: value } : s)); };
+  const handleDeleteStatus = (id: string) => {
+      if (tripStatuses.length <= 1) return;
+      setTripStatuses(prev => prev.filter(s => s.id !== id));
+      const firstAvailable = tripStatuses.find(s => s.id !== id)?.id || "";
+      setCurrentGroupRegions(prev => prev.map(r => r.statusId === id ? { ...r, statusId: firstAvailable } : r));
+  };
+
+  // Map Data Fetching
   useEffect(() => {
     async function fetchHighchartsMapData() {
       if (!countryCode) return;
@@ -80,43 +241,41 @@ export default function EditTripPage({ params }: PageProps) {
         const response = await fetch(mapUrl);
         if (!response.ok) throw new Error("Map data not found");
         const data = await response.json();
-        
         if (data && data.features) {
-            const regions = data.features
-                .map((feature: any) => feature.properties.name) 
-                .filter((name: any) => name) 
-                .sort(); 
+            const regions = data.features.map((feature: any) => feature.properties.name).filter((name: any) => name).sort(); 
             setRegionList(regions);
         }
-      } catch (error) {
-        console.error("Failed to load regions:", error);
-        setRegionList([]);
-      } finally {
-        setIsLoadingRegions(false);
-      }
+      } catch (error) { setRegionList([]); } finally { setIsLoadingRegions(false); }
     }
     fetchHighchartsMapData();
   }, [countryCode]);
 
-  // ✅ Filter Regions for Search
-  const filteredRegions = useMemo(() => {
-    return regionList.filter(region => 
-      region.toLowerCase().includes(regionSearchQuery.toLowerCase())
-    );
-  }, [regionList, regionSearchQuery]);
-
-  // ✅ Handle Apply Button
-  const handleApply = () => {
-    if (selectedRegions.length > 0) {
-       if (formData.status === 'clear') {
-          setVisitedList((prev) => prev.filter(p => !selectedRegions.includes(p)));
-       } else {
-          // Merge selection into visitedList
-          setVisitedList((prev) => Array.from(new Set([...prev, ...selectedRegions])));
-       }
-    }
-    // ไม่เคลียร์ selection เพื่อให้ user เห็นว่าเลือกอะไรไปแล้ว
+  const filteredRegions = useMemo(() => regionList.filter(region => region.toLowerCase().includes(regionSearchQuery.toLowerCase())), [regionList, regionSearchQuery]);
+  const handleRegionClick = (provinceName: string) => {
+     if (activeGroupId) toggleRegion(provinceName);
+     else alert("Please create or select a trip group first!");
   };
+  
+  // Color Calculation
+  const regionColors = useMemo(() => {
+      const mapColors: Record<string, string> = {};
+      tripGroups.forEach(group => {
+          if (group.id === activeGroupId) return; // Skip active group (use real-time data instead)
+          group.regions.forEach(r => {
+              const status = tripStatuses.find(s => s.id === r.statusId);
+              if (status) mapColors[r.name] = status.color;
+          });
+      });
+      if (activeGroupId) {
+          currentGroupRegions.forEach(r => {
+              const status = tripStatuses.find(s => s.id === r.statusId);
+              if (status) mapColors[r.name] = status.color;
+          });
+      }
+      return mapColors;
+  }, [tripGroups, tripStatuses, activeGroupId, currentGroupRegions]);
+
+  const selectedRegionNames = useMemo(() => currentGroupRegions.map(r => r.name), [currentGroupRegions]);
 
   return (
     <div className="min-h-screen bg-[#F5F7FA] font-sans text-gray-800 flex flex-col h-screen overflow-hidden">
@@ -125,293 +284,147 @@ export default function EditTripPage({ params }: PageProps) {
       <div className="bg-white border-b border-gray-200 px-6 py-4 shadow-sm z-20 flex-shrink-0">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
            <div className="flex items-center gap-4">
-              <button onClick={() => router.back()} className="p-2 hover:bg-gray-100 rounded-full transition">
-                <ArrowLeft className="w-5 h-5 text-gray-600" />
-              </button>
-              
+              <button onClick={() => router.back()} className="p-2 hover:bg-gray-100 rounded-full transition"><ArrowLeft className="w-5 h-5 text-gray-600" /></button>
               <div className="flex items-center gap-3">
-                 <img 
-                    src={`https://flagcdn.com/w40/${countryCode}.png`} 
-                    alt={countryCode} 
-                    className="w-8 h-6 rounded shadow-sm object-cover"
-                    onError={(e) => (e.target as HTMLImageElement).src = "https://placehold.co/40x30?text=Flag"}
-                 />
+                 <img src={`https://flagcdn.com/w40/${countryCode}.png`} alt={countryCode} className="w-8 h-6 rounded shadow-sm object-cover"/>
                  <h1 className="text-xl font-bold text-gray-800 mr-2">{countryName}</h1>
-
-                 {/* ✅ Multi-Select Dropdown with Search */}
+                 {/* Search Dropdown */}
                  <div className="relative hidden md:block">
-                    <button 
-                        onClick={() => {
-                            setIsRegionDropdownOpen(!isRegionDropdownOpen);
-                            setRegionSearchQuery("");
-                        }}
-                        disabled={isLoadingRegions}
-                        className={`flex items-center gap-2 px-3 py-1.5 border rounded-md transition min-w-[200px] justify-between disabled:opacity-50
-                            ${isRegionSelected ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-gray-50 border-gray-300 hover:bg-gray-100"}
-                        `}
-                    >
+                    <button onClick={() => { if (!activeGroupId) return; setIsRegionDropdownOpen(!isRegionDropdownOpen); setRegionSearchQuery(""); }} disabled={isLoadingRegions || !activeGroupId} className={`flex items-center gap-2 px-3 py-1.5 border rounded-md transition min-w-[200px] justify-between disabled:opacity-50 disabled:cursor-not-allowed ${activeGroupId ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-gray-50 border-gray-300 hover:bg-gray-100"}`}>
                         <div className="flex items-center gap-2">
-                           <MapPin className={`w-4 h-4 ${isRegionSelected ? "text-blue-600" : "text-red-500"}`} />
-                           <span className="text-sm font-medium truncate max-w-[150px]">
-                             {isLoadingRegions 
-                                ? "Loading..." 
-                                : isRegionSelected 
-                                    ? `${selectedRegions.length} Region${selectedRegions.length > 1 ? 's' : ''}` 
-                                    : "Select Regions"}
-                           </span>
+                           <MapPin className={`w-4 h-4 ${activeGroupId ? "text-blue-600" : "text-gray-400"}`} />
+                           <span className="text-sm font-medium truncate max-w-[150px]">{isLoadingRegions ? "Loading..." : activeGroupId ? (currentGroupRegions.length > 0 ? `${currentGroupRegions.length} Regions` : "Select Regions") : "Select a Group First"}</span>
                         </div>
                         {isRegionDropdownOpen ? <ChevronUp className="w-4 h-4"/> : <ChevronDown className="w-4 h-4"/>}
                     </button>
-
-                    {/* Dropdown Menu */}
-                    {isRegionDropdownOpen && (
-                        <>
-                           <div className="fixed inset-0 z-10" onClick={() => setIsRegionDropdownOpen(false)}></div>
-                           <div className="absolute top-full left-0 mt-2 w-[280px] max-h-[400px] bg-white border border-gray-200 rounded-lg shadow-xl z-20 animate-in fade-in zoom-in-95 duration-100 flex flex-col">
-                              
-                              {/* Search Input */}
-                              <div className="p-2 border-b border-gray-100 sticky top-0 bg-white z-10">
-                                <div className="relative">
-                                    <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-gray-400" />
-                                    <input 
-                                        type="text" 
-                                        placeholder="Search region..." 
-                                        value={regionSearchQuery}
-                                        onChange={(e) => setRegionSearchQuery(e.target.value)}
-                                        className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
-                                        autoFocus
-                                    />
-                                </div>
-                              </div>
-                              
-                              {/* Actions Bar */}
-                              <div className="px-2 py-1.5 bg-gray-50 border-b border-gray-100 flex justify-between items-center text-xs">
-                                  <span className="text-gray-500">{filteredRegions.length} found</span>
-                                  {selectedRegions.length > 0 && (
-                                    <button 
-                                        onClick={() => setSelectedRegions([])}
-                                        className="text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-red-50 transition"
-                                    >
-                                        Clear All
+                    {isRegionDropdownOpen && activeGroupId && (
+                        <div className="absolute top-full left-0 mt-2 w-[280px] max-h-[400px] bg-white border border-gray-200 rounded-lg shadow-xl z-20 animate-in fade-in zoom-in-95 duration-100 flex flex-col">
+                            <div className="p-2 border-b border-gray-100 sticky top-0 bg-white z-10">
+                                <div className="relative"><Search className="absolute left-2.5 top-2.5 w-4 h-4 text-gray-400" /><input type="text" placeholder="Search region..." value={regionSearchQuery} onChange={(e) => setRegionSearchQuery(e.target.value)} className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50" autoFocus /></div>
+                            </div>
+                            <div className="overflow-y-auto flex-1">
+                                {filteredRegions.length > 0 ? filteredRegions.map(region => (
+                                    <button key={region} onClick={() => toggleRegion(region)} className={`w-full text-left px-4 py-2.5 text-sm transition flex items-center justify-between group border-b border-gray-50 last:border-none ${currentGroupRegions.some(r => r.name === region) ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-700 hover:bg-gray-50"}`}>
+                                        {region}
+                                        {currentGroupRegions.some(r => r.name === region) && <Check className="w-4 h-4 text-blue-600"/>}
                                     </button>
-                                  )}
-                              </div>
-
-                              {/* List Container */}
-                              <div className="overflow-y-auto flex-1">
-                                  {filteredRegions.length > 0 ? (
-                                    filteredRegions.map((region) => {
-                                      const isSelected = selectedRegions.includes(region);
-                                      return (
-                                          <button
-                                              key={region}
-                                              onClick={() => toggleRegion(region)} // ✅ Toggle Selection
-                                              className={`w-full text-left px-4 py-2.5 text-sm transition flex items-center justify-between group border-b border-gray-50 last:border-none
-                                                ${isSelected ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-700 hover:bg-gray-50"}
-                                              `}
-                                          >
-                                              {region}
-                                              {isSelected && <Check className="w-4 h-4 text-blue-600"/>}
-                                          </button>
-                                      );
-                                    })
-                                  ) : (
-                                    <div className="px-4 py-8 text-sm text-gray-400 text-center flex flex-col items-center">
-                                        <Ban className="w-6 h-6 mb-2 opacity-50"/>
-                                        No regions found
-                                    </div>
-                                  )}
-                              </div>
-                           </div>
-                        </>
+                                )) : <div className="px-4 py-8 text-sm text-gray-400 text-center flex flex-col items-center"><MapPin className="w-6 h-6 mb-2 opacity-50"/>No regions found</div>}
+                            </div>
+                        </div>
                     )}
                  </div>
               </div>
            </div>
-
            <div className="flex gap-3">
-              <button onClick={() => router.push('/mytrips')} className="flex items-center gap-2 px-4 py-2 border-2 border-blue-400 text-blue-500 font-bold rounded-lg hover:bg-blue-50 transition text-sm">
-                 <LayoutTemplate className="w-4 h-4" /> My Templates
-              </button>
-              <button onClick={() => router.push('/mytrips')} className="flex items-center gap-2 px-6 py-2 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 transition text-sm shadow-sm">
-                 <Save className="w-4 h-4" /> Save
-              </button>
+              <button onClick={() => router.push('/mytrips')} className="flex items-center gap-2 px-4 py-2 border-2 border-blue-400 text-blue-500 font-bold rounded-lg hover:bg-blue-50 transition text-sm"><LayoutTemplate className="w-4 h-4" /> My Templates</button>
+              <button onClick={handleApply} disabled={isSaving || !activeGroupId} className="flex items-center gap-2 px-6 py-2 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 transition text-sm shadow-sm disabled:opacity-50">{isSaving ? <Loader2 className="w-4 h-4 animate-spin"/> : <Save className="w-4 h-4" />} Save</button>
            </div>
         </div>
       </div>
 
       {/* BODY */}
       <div className="flex-1 flex overflow-hidden relative">
-         
-         {/* LEFT: MAP AREA */}
          <div className="flex-1 bg-white flex items-center justify-center p-4 overflow-hidden relative">
             <div className="w-full h-full max-w-5xl">
-                 {/* ✅ ส่ง selectedRegions (Array) ไปให้ DynamicMap */}
                  <DynamicMap 
                    countryCode={countryCode} 
-                   visitedList={visitedList}
-                   selectedRegions={selectedRegions} // ✅ เปลี่ยนจาก selectedRegionName เป็น selectedRegions
-                   onRegionClick={toggleRegion}      // ✅ คลิกที่แมพแล้วให้ Toggle เหมือน Dropdown
+                   regionColors={regionColors} 
+                   selectedRegions={activeGroupId ? selectedRegionNames : []}
+                   onRegionClick={handleRegionClick}
                  />
+                 {!activeGroupId && (
+                    <div className="absolute top-4 left-4 bg-white/90 backdrop-blur border border-gray-200 p-3 rounded-lg shadow-lg flex items-center gap-3 z-10 animate-in fade-in">
+                        <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center"><Layers className="w-4 h-4" /></div>
+                        <div><p className="text-sm font-bold text-gray-800">Map Locked</p><p className="text-xs text-gray-500">Create or select a group to edit.</p></div>
+                    </div>
+                 )}
             </div>
          </div>
 
-         {/* RIGHT: EDIT PANEL (Always Visible) */}
+         {/* RIGHT PANEL */}
          <div className="w-[400px] bg-white border-l border-gray-200 shadow-2xl flex flex-col h-full z-30 md:static">
-            
-            {/* Sidebar Header */}
             <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-white h-[72px] flex-shrink-0">
                <div className="flex items-center gap-2 text-gray-800 font-bold text-lg overflow-hidden">
-                  {isRegionSelected ? (
+                  {activeGroupId ? (
                     <>
                       <MapPin className="w-5 h-5 text-red-500 fill-current flex-shrink-0"/>
-                      <div className="flex flex-col">
-                          <span className="truncate max-w-[250px] leading-tight text-base">
-                             {selectedRegions.length === 1 ? selectedRegions[0] : `${selectedRegions.length} Regions Selected`}
-                          </span>
-                          {selectedRegions.length > 1 && (
-                              <span className="text-[10px] text-gray-500 font-normal truncate max-w-[250px]">
-                                  {selectedRegions.join(", ")}
-                              </span>
-                          )}
-                      </div>
+                      <div className="flex flex-col"><span className="truncate max-w-[200px] leading-tight text-base">{groupName || "Untitled Group"}</span>{currentGroupRegions.length > 0 && <span className="text-[10px] text-gray-500 font-normal truncate max-w-[200px]">{currentGroupRegions.length} Regions Selected</span>}</div>
                     </>
-                  ) : (
-                    <span className="text-gray-500 flex items-center gap-2 text-base font-medium">
-                      <Globe className="w-5 h-5"/> Select Regions to Edit
-                    </span>
-                  )}
+                  ) : <span className="text-gray-500 flex items-center gap-2 text-base font-medium"><Layers className="w-5 h-5"/> Trip Groups</span>}
                </div>
-               {isRegionSelected && (
-                 <button onClick={() => setSelectedRegions([])} className="text-gray-400 hover:text-red-500 transition tooltip" title="Clear Selection">
-                    <Trash2 className="w-5 h-5"/>
-                 </button>
-               )}
+               <button onClick={handleAddGroup} className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full shadow-sm transition tooltip" title="Add New Group"><Plus className="w-5 h-5"/></button>
             </div>
 
-            {/* Sidebar Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin">
-               
-               {isRegionSelected ? (
-                 <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                    <div className="bg-blue-50 border border-blue-100 p-3 rounded-lg text-sm text-blue-700 mb-4 flex gap-2">
-                        <div className="min-w-4 mt-0.5"><Check className="w-4 h-4"/></div>
-                        <div>
-                            You are editing <strong>{selectedRegions.length}</strong> region(s). 
-                            Changes will apply to all of them.
-                        </div>
-                    </div>
-
-                    {/* Template Name */}
-                    <div>
-                       <label className="text-xs font-bold text-gray-600 flex items-center gap-1 mb-2">
-                          <LayoutTemplate className="w-3 h-3"/> Template Name
-                       </label>
-                       <input 
-                          type="text" 
-                          value={formData.templateName} 
-                          onChange={(e) => setFormData({...formData, templateName: e.target.value})} 
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                       />
-                    </div>
-
-                    {/* Places I Visited */}
-                    <div>
-                       <label className="text-xs font-bold text-gray-600 mb-2 block">Places I Visited</label>
-                       <textarea 
-                          rows={4} 
-                          value={formData.places} 
-                          onChange={(e) => setFormData({...formData, places: e.target.value})} 
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none" 
-                          placeholder="- Doi suthep..."
-                       />
-                    </div>
-
-                    {/* Notes */}
-                    <div>
-                       <label className="text-xs font-bold text-gray-600 mb-2 block">Notes (optional)</label>
-                       <textarea 
-                          rows={3} 
-                          placeholder="Memories, dates, recommendations..." 
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-                       />
-                    </div>
-
-                    {/* Photos */}
-                    <div>
-                       <label className="text-xs font-bold text-gray-600 flex items-center gap-1 mb-2"><ImageIcon className="w-3 h-3"/> Photos</label>
-                       <div className="border-2 border-dashed border-gray-200 rounded-xl py-8 flex flex-col items-center justify-center text-center cursor-pointer hover:border-blue-400 transition hover:bg-blue-50 group">
-                          <div className="bg-gray-100 p-3 rounded-full mb-2 group-hover:bg-white transition"><Camera className="w-6 h-6 text-gray-500 group-hover:text-blue-500"/></div>
-                          <p className="text-sm font-bold text-gray-700">Click to upload photos</p>
-                          <p className="text-xs text-gray-400">or drag and drop</p>
-                       </div>
-                    </div>
-
-                    {/* Choose Color Grid */}
-                    <div>
-                       <label className="text-xs font-bold text-gray-600 mb-3 block">Choose Color</label>
-                       <div className="grid grid-cols-4 gap-3">
-                          <ColorButton 
-                             color="bg-[#4CAF50]" label="Visited" active={formData.status === 'visited'} 
-                             onClick={() => setFormData({...formData, status: 'visited', customColor: '#4CAF50'})} 
-                             icon={<Check className="w-6 h-6 text-white stroke-[4]"/>}
-                          />
-                          <ColorButton 
-                             color="bg-[#2196F3]" label="Want to Visit" active={formData.status === 'want'} 
-                             onClick={() => setFormData({...formData, status: 'want', customColor: '#2196F3'})} 
-                          />
-                          <ColorButton 
-                             color="bg-[#FF9800]" label="Passed Through" active={formData.status === 'passed'} 
-                             onClick={() => setFormData({...formData, status: 'passed', customColor: '#FF9800'})} 
-                          />
-                          <ColorButton 
-                             color="bg-[#E0E0E0]" label="Clear Color" active={formData.status === 'clear'} 
-                             onClick={() => setFormData({...formData, status: 'clear', customColor: '#E0E0E0'})} 
-                             icon={<Ban className="w-6 h-6 text-[#FF3B30]"/>}
-                          />
-                       </div>
-                    </div>
-
-                    {/* Custom Color Input */}
-                    <div>
-                       <label className="text-xs font-bold text-gray-600 mb-2 block">Custom Color</label>
-                       <div className="flex gap-3">
-                          <input 
-                             type="text" 
-                             value={formData.customColor} 
-                             readOnly
-                             className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 bg-gray-50 font-mono"
-                          />
-                          <div 
-                             className="w-10 h-10 rounded-lg shadow-sm border border-gray-200" 
-                             style={{ backgroundColor: formData.customColor }}
-                          ></div>
-                       </div>
-                    </div>
-                 </div>
+               {!activeGroupId ? (
+                   // GROUP LIST
+                   <div className="space-y-4">
+                       {tripGroups.length === 0 ? (
+                           <div className="flex flex-col items-center justify-center h-[300px] text-center text-gray-400 gap-4">
+                                <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center"><Layers className="w-10 h-10 text-gray-300" /></div>
+                                <div><p className="text-lg font-bold text-gray-600">No Trip Groups Yet</p><p className="text-sm mb-4">Create a group to start selecting regions.</p><button onClick={handleAddGroup} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 transition">Create First Group</button></div>
+                             </div>
+                       ) : (
+                           <div className="flex flex-col gap-3">
+                               <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Your Groups</p>
+                               {tripGroups.map(group => (
+                                   <div key={group.id} onClick={() => setActiveGroupId(group.id)} className="p-4 bg-white border border-gray-200 rounded-xl hover:border-blue-300 hover:shadow-md transition cursor-pointer flex justify-between items-center group">
+                                       <div className="flex items-center gap-3">
+                                           <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-bold text-xs border border-gray-200">{group.regions.length}</div>
+                                           <div><h4 className="font-bold text-gray-800">{group.name}</h4><p className="text-xs text-gray-500">{group.regions.length} Regions</p></div>
+                                       </div>
+                                       <div className="text-gray-400"><Settings className="w-4 h-4"/></div>
+                                   </div>
+                               ))}
+                           </div>
+                       )}
+                   </div>
                ) : (
-                 // Empty State
-                 <div className="flex flex-col items-center justify-center h-full text-center text-gray-400 gap-4 mt-20 animate-in fade-in duration-500">
-                    <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center">
-                       <MapPin className="w-10 h-10 text-gray-300" />
-                    </div>
+                 /* EDIT FORM */
+                 <div className="animate-in fade-in slide-in-from-right-4 duration-300 space-y-6">
+                    <button onClick={() => setActiveGroupId(null)} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 mb-2 transition"><ArrowLeft className="w-4 h-4"/> Back to Groups</button>
+
                     <div>
-                       <p className="text-lg font-bold text-gray-600">No Region Selected</p>
-                       <p className="text-sm">Click on the map or use the dropdown above</p>
+                       <label className="text-xs font-bold text-gray-600 flex items-center gap-1 mb-2"><LayoutTemplate className="w-3 h-3"/> Group Name</label>
+                       <input type="text" value={groupName} onChange={(e) => setGroupName(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"/>
+                    </div>
+
+                    <div>
+                       <label className="text-xs font-bold text-gray-600 flex items-center gap-1 mb-2"><StickyNote className="w-3 h-3"/> Group Note (Optional)</label>
+                       <textarea rows={2} value={groupNote} onChange={(e) => setGroupNote(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none" placeholder="Add details about this trip..." />
+                    </div>
+
+                    <div className="pt-2 border-t border-gray-100">
+                        <label className="text-xs font-bold text-gray-600 mb-3 block">Regions Selected ({currentGroupRegions.length})</label>
+                        {currentGroupRegions.length > 0 ? (
+                            <div className="flex flex-col gap-3 max-h-[450px] overflow-y-auto pr-1 scrollbar-thin">
+                                {currentGroupRegions.map(region => (
+                                    <RegionItem 
+                                        key={region.name}
+                                        region={region}
+                                        statuses={tripStatuses}
+                                        onUpdateStatus={(newId) => updateRegionStatus(region.name, newId)}
+                                        onRemove={() => toggleRegion(region.name)}
+                                        statusActions={{ onUpdate: handleUpdateStatus, onDelete: handleDeleteStatus, onAdd: handleAddStatus }}
+                                    />
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center py-8 bg-gray-50 border border-dashed border-gray-200 rounded-xl text-center">
+                                <MapPin className="w-8 h-8 text-gray-300 mb-2"/>
+                                <p className="text-sm text-gray-500">No regions selected.</p>
+                                <p className="text-xs text-gray-400">Click on the map to add regions.</p>
+                            </div>
+                        )}
                     </div>
                  </div>
                )}
             </div>
 
-            {/* Footer Buttons */}
-            {isRegionSelected && (
-              <div className="p-6 border-t border-gray-100 bg-white mt-auto flex-shrink-0 animate-in slide-in-from-bottom-2">
-                 <button onClick={handleApply} className="w-full bg-[#039BE5] hover:bg-blue-600 text-white font-bold py-3 rounded-lg shadow-sm transition mb-4">
-                   Apply Changes ({selectedRegions.length})
-                 </button>
-                 <button onClick={() => { setVisitedList([]); setSelectedRegions([]); }} className="w-full text-[#FF3B30] text-xs font-bold hover:underline text-center">
-                   Reset All Data
-                 </button>
+            {activeGroupId && (
+              <div className="p-6 border-t border-gray-100 bg-white mt-auto flex-shrink-0 animate-in slide-in-from-bottom-2 flex gap-3">
+                 <button onClick={handleApply} disabled={isSaving} className="flex-1 bg-[#039BE5] hover:bg-blue-600 text-white font-bold py-3 rounded-xl shadow-sm transition transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">{isSaving ? <Loader2 className="w-4 h-4 animate-spin"/> : "Save Group"}</button>
+                 <button onClick={handleDeleteGroup} disabled={isSaving} className="px-4 py-3 text-red-500 bg-red-50 hover:bg-red-100 hover:text-red-600 font-bold rounded-xl transition disabled:opacity-50"><Trash2 className="w-5 h-5"/></button>
               </div>
             )}
          </div>
@@ -420,15 +433,48 @@ export default function EditTripPage({ params }: PageProps) {
   );
 }
 
-// UI Component: ปุ่มเลือกสี
-function ColorButton({ color, label, active, onClick, icon }: any) {
-   return (
-      <div className="flex flex-col items-center gap-2 cursor-pointer group" onClick={onClick}>
-         <div className={`w-full aspect-square rounded-xl ${color} flex items-center justify-center shadow-sm transition-all duration-200 ${active ? 'ring-2 ring-offset-2 ring-black/80 scale-105' : 'hover:scale-105 hover:shadow-md'}`}>
-            {active && icon}
-            {!active && label === "Clear Color" && icon} 
-         </div>
-         <span className={`text-[10px] font-bold text-center leading-tight ${active ? 'text-gray-900' : 'text-gray-500'}`}>{label}</span>
-      </div>
-   )
+// ✅ Sub-Component: RegionItem with explicit type
+function RegionItem({ region, statuses, onUpdateStatus, onRemove, statusActions }: RegionItemProps) {
+    const [isOpen, setIsOpen] = useState(false);
+    const currentStatus = statuses.find((s) => s.id === region.statusId) || statuses[0];
+
+    return (
+        <div className={`bg-white border rounded-xl transition-all duration-300 ${isOpen ? 'border-blue-300 shadow-md ring-1 ring-blue-100' : 'border-gray-200 shadow-sm hover:border-blue-200'}`}>
+            <div className="flex items-center justify-between p-3 cursor-pointer select-none" onClick={() => setIsOpen(!isOpen)}>
+                <div className="flex items-center gap-3"><span className="text-sm font-bold text-gray-700">{region.name}</span></div>
+                <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: currentStatus?.color }}></div>
+                    <button onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }} className="text-gray-400 hover:text-blue-500 transition">{isOpen ? <ChevronUp className="w-4 h-4"/> : <ChevronDown className="w-4 h-4"/>}</button>
+                    <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-1 rounded transition"><X className="w-4 h-4"/></button>
+                </div>
+            </div>
+            {isOpen && (
+                <div className="px-3 pb-3 pt-0 animate-in slide-in-from-top-2">
+                    <div className="h-px bg-gray-100 w-full mb-3"></div>
+                    <div className="grid grid-cols-[30px_1fr_40px_30px] gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 px-1"><div></div><div>Label</div><div>Color</div><div className="text-right">Action</div></div>
+                    <div className="space-y-1.5">
+                        {statuses.map((status) => (
+                            <div key={status.id} className={`grid grid-cols-[30px_1fr_40px_30px] gap-2 items-center p-1.5 rounded-lg border transition-all cursor-pointer ${status.id === region.statusId ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-200' : 'bg-white border-gray-100 hover:border-gray-300'}`} onClick={() => onUpdateStatus(status.id)}>
+                                <div className="flex items-center justify-center"><div className={`w-4 h-4 rounded-full border flex items-center justify-center ${status.id === region.statusId ? 'border-blue-500 bg-white' : 'border-gray-300'}`}>{status.id === region.statusId && <div className="w-2 h-2 rounded-full bg-blue-500"></div>}</div></div>
+                                <div>
+                                    {/* ✅ Auto-width Input */}
+                                    <input 
+                                        type="text" 
+                                        value={status.label} 
+                                        onClick={(e) => e.stopPropagation()} 
+                                        onChange={(e) => statusActions.onUpdate(status.id, 'label', e.target.value)} 
+                                        style={{ width: `${Math.max(status.label.length, 1) + 2}ch` }} 
+                                        className="bg-transparent text-xs font-medium text-gray-700 outline-none border-b border-transparent focus:border-blue-300 focus:bg-white rounded px-1 transition h-6 min-w-[30px] max-w-full"
+                                    />
+                                </div>
+                                <div className="relative w-5 h-5 rounded-full overflow-hidden border border-gray-200 shadow-sm mx-auto" onClick={(e) => e.stopPropagation()}><input type="color" value={status.color} onChange={(e) => statusActions.onUpdate(status.id, 'color', e.target.value)} className="absolute -top-1 -left-1 w-7 h-7 border-none cursor-pointer"/></div>
+                                <div className="text-right"><button onClick={(e) => { e.stopPropagation(); statusActions.onDelete(status.id); }} disabled={statuses.length <= 1} className="text-gray-300 hover:text-red-500 transition disabled:opacity-30 disabled:hover:text-gray-300 p-1"><Trash2 className="w-3.5 h-3.5"/></button></div>
+                            </div>
+                        ))}
+                    </div>
+                    <button onClick={statusActions.onAdd} className="w-full mt-2 flex items-center justify-center gap-2 py-1.5 text-[10px] font-bold text-blue-500 border border-dashed border-blue-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition"><Plus className="w-3 h-3"/> Add New Status</button>
+                </div>
+            )}
+        </div>
+    );
 }
