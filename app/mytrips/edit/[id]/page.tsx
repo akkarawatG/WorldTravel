@@ -21,13 +21,20 @@ interface PageProps { params: Promise<{ id: string }>; }
 interface TripStatus { id: string; label: string; color: string; }
 interface RegionData { name: string; statusId: string; }
 
-// ✅ Interface
+// ✅ Interface หลัก (images เป็น array string)
 interface TripGroup { 
     id: string; 
     name: string; 
     regions: RegionData[]; 
     notes?: string; 
-    photo?: string | null; 
+    images?: string[] | null; 
+}
+
+// ✅ Helper Interface สำหรับจัดการรูปใน State
+interface ImageState {
+    id: string;
+    url: string;
+    file?: File; 
 }
 
 interface RegionItemProps {
@@ -71,25 +78,14 @@ export default function EditTripPage({ params }: PageProps) {
   const [groupName, setGroupName] = useState("");
   const [groupNote, setGroupNote] = useState("");
   
-  // ✅ Image Upload States
-  const [tripPhoto, setTripPhoto] = useState<string | null>(null);
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  // Image States
+  const [currentImages, setCurrentImages] = useState<ImageState[]>([]); 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isRegionDropdownOpen, setIsRegionDropdownOpen] = useState(false);
   const [regionSearchQuery, setRegionSearchQuery] = useState("");
   
   const activeGroup = useMemo(() => tripGroups.find(g => g.id === activeGroupId), [tripGroups, activeGroupId]);
-
-  // ✅ Helper: แปลงไฟล์เป็น Base64
-  const convertToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = (error) => reject(error);
-    });
-  };
 
   // ✅ 1. Initialize Data
   useEffect(() => {
@@ -98,6 +94,7 @@ export default function EditTripPage({ params }: PageProps) {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return; 
 
+            // Find or Create Trip
             let { data: trip, error } = await supabase
                 .from('trips')
                 .select('id')
@@ -118,9 +115,10 @@ export default function EditTripPage({ params }: PageProps) {
             if (!trip) throw new Error("Failed to initialize trip");
             setDbTripId(trip.id);
 
+            // Load Templates
             const { data: templates, error: tempError } = await supabase
                 .from('templates')
-                .select(`id, template_name, notes, photo, template_provinces ( province_code, status, color )`)
+                .select(`id, template_name, notes, images, template_provinces ( province_code, status, color )`) 
                 .eq('trip_id', trip.id)
                 .is('deleted_at', null)
                 .order('created_at', { ascending: true });
@@ -134,11 +132,20 @@ export default function EditTripPage({ params }: PageProps) {
                         if (!matchedStatus) matchedStatus = DEFAULT_STATUSES[0];
                         return { name: p.province_code, statusId: matchedStatus.id };
                     });
+                    
+                    // Safe Parsing for Images JSONB
+                    let imgs: string[] = [];
+                    if (Array.isArray(t.images)) {
+                        imgs = t.images;
+                    } else if (typeof t.images === 'string') {
+                        try { imgs = JSON.parse(t.images); } catch { imgs = [t.images]; }
+                    }
+
                     return { 
                         id: t.id, 
                         name: t.template_name || "Untitled", 
                         notes: t.notes || "", 
-                        photo: t.photo || null, 
+                        images: imgs,
                         regions: mappedRegions 
                     };
                 });
@@ -155,41 +162,47 @@ export default function EditTripPage({ params }: PageProps) {
         setCurrentGroupRegions(activeGroup.regions);
         setGroupName(activeGroup.name);
         setGroupNote(activeGroup.notes || "");
-        setTripPhoto(activeGroup.photo || null);
-        setPhotoFile(null);
+        
+        const loadedImages = (activeGroup.images || []).map((url, idx) => ({
+            id: `existing-${idx}`,
+            url: url
+        }));
+        setCurrentImages(loadedImages);
     } else {
         setCurrentGroupRegions([]);
         setGroupName("");
         setGroupNote("");
-        setTripPhoto(null);
-        setPhotoFile(null);
+        setCurrentImages([]);
     }
   }, [activeGroupId, activeGroup]);
 
   // ✅ Image Handlers
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) {
-          // ตรวจสอบขนาดไฟล์ (เช่น ห้ามเกิน 2MB เพื่อป้องกัน DB พัง)
-          if (file.size > 2 * 1024 * 1024) {
-              alert("File size too large! Please upload image under 2MB.");
+      const files = e.target.files;
+      if (files) {
+          const newFiles = Array.from(files);
+          if (currentImages.length + newFiles.length > 10) {
+              alert("Maximum 10 images allowed.");
               return;
           }
-          setPhotoFile(file);
-          setTripPhoto(URL.createObjectURL(file)); // Preview Only
+          const newImageStates: ImageState[] = newFiles.map(file => ({
+              id: `new-${Date.now()}-${Math.random()}`,
+              url: URL.createObjectURL(file), 
+              file: file
+          }));
+          setCurrentImages(prev => [...prev, ...newImageStates]);
       }
-  };
-
-  const handleRemoveImage = () => {
-      setPhotoFile(null);
-      setTripPhoto(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  // ✅ 3. Actions
+  const handleRemoveImage = (idToRemove: string) => {
+      setCurrentImages(prev => prev.filter(img => img.id !== idToRemove));
+  };
+
+  // Actions
   const handleAddGroup = () => {
     const newId = `temp-${Date.now()}`;
-    const newGroup: TripGroup = { id: newId, name: `Trip ${tripGroups.length + 1}`, regions: [], notes: "", photo: null };
+    const newGroup: TripGroup = { id: newId, name: `Trip ${tripGroups.length + 1}`, regions: [], notes: "", images: [] };
     setTripGroups([...tripGroups, newGroup]);
     setActiveGroupId(newId);
   };
@@ -207,39 +220,53 @@ export default function EditTripPage({ params }: PageProps) {
       setCurrentGroupRegions(prev => prev.map(r => r.name === regionName ? { ...r, statusId: newStatusId } : r));
   };
 
-  // ✅ 4. Save Logic (Modified to Base64)
+  // ✅ 4. SAVE DATA (ใช้ User ID เป็นชื่อ Folder)
   const handleApply = async () => {
     if (!activeGroupId || !dbTripId) return;
     setIsSaving(true);
 
     try {
+        // 4.1 ดึง User ID เพื่อใช้สร้าง path
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("User not authenticated");
+
         const isNew = activeGroupId.startsWith('temp-');
-        let finalPhotoData = tripPhoto;
+        const finalImageUrls: string[] = [];
 
-        // 4.1 Convert Image to Base64 if new file exists
-        if (photoFile) {
-            try {
-                // แปลงไฟล์เป็น Base64 string เพื่อเก็บลง DB โดยตรง
-                finalPhotoData = await convertToBase64(photoFile); 
-            } catch (conversionError) {
-                console.error("Image conversion failed:", conversionError);
-                alert("Failed to process image.");
-                setIsSaving(false);
-                return;
+        // 4.2 Loop Upload Images
+        for (const img of currentImages) {
+            if (img.file) {
+                // Sanitize filename
+                const cleanName = img.file.name.replace(/[^a-zA-Z0-9.]/g, "_");
+                
+                // ✅ ใช้ User ID เป็นชื่อ Folder หลัก (เพื่อให้ตรงกับ Policy)
+                const fileName = `${user.id}/${Date.now()}_${cleanName}`;
+                
+                const { error: uploadError } = await supabase.storage
+                    .from('templates') 
+                    .upload(fileName, img.file);
+
+                if (uploadError) {
+                    console.error("Storage Error:", uploadError);
+                    throw new Error(`Upload failed: ${uploadError.message}`);
+                }
+
+                const { data: publicUrlData } = supabase.storage
+                    .from('templates')
+                    .getPublicUrl(fileName);
+                
+                finalImageUrls.push(publicUrlData.publicUrl);
+            } else {
+                finalImageUrls.push(img.url);
             }
-        } 
-        // ถ้าไม่มี photoFile แต่ tripPhoto เป็น null แสดงว่าลบรูปออก
-        else if (tripPhoto === null) {
-            finalPhotoData = null;
         }
-        // ถ้าไม่มี photoFile แต่มี tripPhoto แสดงว่าเป็น URL/Base64 เดิม ไม่ต้องทำอะไร
 
-        // 4.2 Upsert Template
+        // 4.3 Upsert Template
         const templatePayload = {
             trip_id: dbTripId,
             template_name: groupName,
             notes: groupNote,
-            photo: finalPhotoData, // ✅ Save Base64 String directly to DB
+            images: finalImageUrls, 
             ...(isNew ? {} : { id: activeGroupId })
         };
 
@@ -247,7 +274,7 @@ export default function EditTripPage({ params }: PageProps) {
         if (tmplError) throw tmplError;
         const realTemplateId = savedTemplate.id;
 
-        // 4.3 Sync Regions
+        // 4.4 Sync Regions
         await supabase.from('template_provinces').delete().eq('template_id', realTemplateId);
 
         if (currentGroupRegions.length > 0) {
@@ -264,7 +291,7 @@ export default function EditTripPage({ params }: PageProps) {
             if (provError) throw provError;
         }
 
-        // 4.4 Update Local State
+        // 4.5 Update Local State
         setTripGroups(prev => prev.map(g => 
             g.id === activeGroupId 
                 ? { 
@@ -273,17 +300,18 @@ export default function EditTripPage({ params }: PageProps) {
                     regions: currentGroupRegions, 
                     name: groupName, 
                     notes: groupNote,
-                    photo: finalPhotoData // Update Local Photo
+                    images: finalImageUrls
                   } 
                 : g
         ));
         
         if (isNew) setActiveGroupId(realTemplateId);
-        setPhotoFile(null); 
+        const updatedImagesState = finalImageUrls.map((url, idx) => ({ id: `saved-${idx}`, url: url }));
+        setCurrentImages(updatedImagesState);
 
     } catch (err: any) { 
         console.error("Save failed:", err); 
-        alert(`Failed to save: ${err.message || "Unknown error"}`); 
+        alert(`Failed to save: ${err.message}`); 
     } finally { 
         setIsSaving(false); 
     }
@@ -305,15 +333,10 @@ export default function EditTripPage({ params }: PageProps) {
       } catch (err) { console.error("Delete failed:", err); } finally { setIsSaving(false); }
   };
 
-  // Status Helpers
+  // Helpers & Effects
   const handleAddStatus = () => { setTripStatuses([...tripStatuses, { id: Date.now().toString(), label: 'New', color: '#000000' }]); };
   const handleUpdateStatus = (id: string, key: keyof TripStatus, value: string) => { setTripStatuses(prev => prev.map(s => s.id === id ? { ...s, [key]: value } : s)); };
-  const handleDeleteStatus = (id: string) => {
-      if (tripStatuses.length <= 1) return;
-      setTripStatuses(prev => prev.filter(s => s.id !== id));
-      const firstAvailable = tripStatuses.find(s => s.id !== id)?.id || "";
-      setCurrentGroupRegions(prev => prev.map(r => r.statusId === id ? { ...r, statusId: firstAvailable } : r));
-  };
+  const handleDeleteStatus = (id: string) => { if (tripStatuses.length <= 1) return; setTripStatuses(prev => prev.filter(s => s.id !== id)); const firstAvailable = tripStatuses.find(s => s.id !== id)?.id || ""; setCurrentGroupRegions(prev => prev.map(r => r.statusId === id ? { ...r, statusId: firstAvailable } : r)); };
 
   useEffect(() => {
     async function fetchHighchartsMapData() {
@@ -324,20 +347,14 @@ export default function EditTripPage({ params }: PageProps) {
         const response = await fetch(mapUrl);
         if (!response.ok) throw new Error("Map data not found");
         const data = await response.json();
-        if (data && data.features) {
-            const regions = data.features.map((feature: any) => feature.properties.name).filter((name: any) => name).sort(); 
-            setRegionList(regions);
-        }
+        if (data && data.features) { const regions = data.features.map((feature: any) => feature.properties.name).filter((name: any) => name).sort(); setRegionList(regions); }
       } catch (error) { setRegionList([]); } finally { setIsLoadingRegions(false); }
     }
     fetchHighchartsMapData();
   }, [countryCode]);
 
   const filteredRegions = useMemo(() => regionList.filter(region => region.toLowerCase().includes(regionSearchQuery.toLowerCase())), [regionList, regionSearchQuery]);
-  const handleRegionClick = (provinceName: string) => {
-     if (activeGroupId) toggleRegion(provinceName);
-     else alert("Please create or select a trip group first!");
-  };
+  const handleRegionClick = (provinceName: string) => { if (activeGroupId) toggleRegion(provinceName); else alert("Please create or select a trip group first!"); };
   
   const regionColors = useMemo(() => {
       const mapColors: Record<string, string> = {};
@@ -360,7 +377,7 @@ export default function EditTripPage({ params }: PageProps) {
   const selectedRegionNames = useMemo(() => currentGroupRegions.map(r => r.name), [currentGroupRegions]);
 
   return (
-    <div className="min-h-screen bg-[#F5F7FA] font-sans text-gray-800 flex flex-col h-screen overflow-hidden">
+    <div className="min-h-screen bg-[#F5F7FA] font-sans text-gray-800 flex flex-col h-screen overflow-hidden relative">
       
       {/* HEADER */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 shadow-sm z-20 flex-shrink-0">
@@ -430,7 +447,10 @@ export default function EditTripPage({ params }: PageProps) {
                   {activeGroupId ? (
                     <>
                       <MapPin className="w-5 h-5 text-red-500 fill-current flex-shrink-0"/>
-                      <div className="flex flex-col"><span className="truncate max-w-[200px] leading-tight text-base">{groupName || "Untitled Group"}</span>{currentGroupRegions.length > 0 && <span className="text-[10px] text-gray-500 font-normal truncate max-w-[200px]">{currentGroupRegions.length} Regions Selected</span>}</div>
+                      <div className="flex flex-col">{/* 🟢 ของใหม่: ใช้ activeGroup?.name (เปลี่ยนเฉพาะตอนกด Save) */}
+        <span className="truncate max-w-[200px] leading-tight text-base">
+            {activeGroup?.name || "Untitled Group"}
+        </span>{currentGroupRegions.length > 0 && <span className="text-[10px] text-gray-500 font-normal truncate max-w-[200px]">{currentGroupRegions.length} Regions Selected</span>}</div>
                     </>
                   ) : <span className="text-gray-500 flex items-center gap-2 text-base font-medium"><Layers className="w-5 h-5"/> Trip Groups</span>}
                </div>
@@ -452,12 +472,16 @@ export default function EditTripPage({ params }: PageProps) {
                                {tripGroups.map(group => (
                                    <div key={group.id} onClick={() => setActiveGroupId(group.id)} className="p-4 bg-white border border-gray-200 rounded-xl hover:border-blue-300 hover:shadow-md transition cursor-pointer flex justify-between items-center group">
                                        <div className="flex items-center gap-3">
-                                           {/* ✅ Show Image Thumbnail */}
-                                           {group.photo ? (
-                                              <img src={group.photo} alt="cover" className="w-10 h-10 rounded-lg object-cover border border-gray-200"/>
-                                           ) : (
-                                              <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center font-bold text-xs border border-gray-200 text-gray-400"><ImageIcon className="w-4 h-4"/></div>
-                                           )}
+                                           {/* ✅ Show Thumbnail Grid (max 3 items) */}
+                                           <div className="flex -space-x-2 overflow-hidden">
+                                               {group.images && group.images.length > 0 ? (
+                                                   group.images.slice(0, 3).map((img, i) => (
+                                                       <img key={i} src={img} alt="cover" className="w-8 h-8 rounded-full object-cover border-2 border-white"/>
+                                                   ))
+                                               ) : (
+                                                  <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center border-2 border-white text-gray-400"><ImageIcon className="w-3 h-3"/></div>
+                                               )}
+                                           </div>
                                            <div><h4 className="font-bold text-gray-800 text-sm">{group.name}</h4><p className="text-xs text-gray-500">{group.regions.length} Regions</p></div>
                                        </div>
                                        <div className="text-gray-400"><Settings className="w-4 h-4"/></div>
@@ -471,29 +495,36 @@ export default function EditTripPage({ params }: PageProps) {
                  <div className="animate-in fade-in slide-in-from-right-4 duration-300 space-y-6">
                     <button onClick={() => setActiveGroupId(null)} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 mb-2 transition"><ArrowLeft className="w-4 h-4"/> Back to Groups</button>
 
-                    {/* ✅ Image Upload Input */}
-                    <div className="relative group">
-                        <div className="w-full h-32 bg-gray-100 rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center overflow-hidden hover:border-blue-400 transition cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                            {tripPhoto ? (
-                                <>
-                                    <img src={tripPhoto} alt="Preview" className="w-full h-full object-cover" />
-                                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
-                                        <p className="text-white text-xs font-medium flex items-center gap-1"><Upload className="w-3 h-3"/> Change Image</p>
-                                    </div>
-                                    <button onClick={(e) => { e.stopPropagation(); handleRemoveImage(); }} className="absolute top-2 right-2 p-1 bg-white rounded-full text-red-500 shadow-sm hover:bg-red-50"><X className="w-3 h-3"/></button>
-                                </>
-                            ) : (
-                                <>
-                                    <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center mb-2"><ImageIcon className="w-5 h-5 text-gray-400" /></div>
-                                    <p className="text-xs text-gray-500 font-medium">Click to upload cover (Max 2MB)</p>
-                                </>
+                    {/* ✅ Image Upload (Grid Layout) */}
+                    <div>
+                        <div className="flex justify-between items-center mb-2">
+                            <label className="text-xs font-bold text-gray-600 flex items-center gap-1"><ImageIcon className="w-3 h-3"/> Images ({currentImages.length}/10)</label>
+                            {currentImages.length > 0 && <span className="text-[10px] text-gray-400">Supported: jpg, png</span>}
+                        </div>
+                        
+                        <div className="grid grid-cols-4 gap-2 mb-2">
+                            {currentImages.map((img) => (
+                                <div key={img.id} className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 group bg-gray-50">
+                                    <img src={img.url} alt="img" className="w-full h-full object-cover transition group-hover:scale-105" />
+                                    <button onClick={() => handleRemoveImage(img.id)} className="absolute top-1 right-1 bg-white/90 p-1 rounded-full text-red-500 opacity-0 group-hover:opacity-100 transition shadow-sm hover:bg-red-50 hover:text-red-600">
+                                        <X className="w-3 h-3"/>
+                                    </button>
+                                </div>
+                            ))}
+                            
+                            {/* Upload Button */}
+                            {currentImages.length < 10 && (
+                                <div className="aspect-square bg-white border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition group" onClick={() => fileInputRef.current?.click()}>
+                                    <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center mb-1 group-hover:bg-blue-100 transition"><Plus className="w-4 h-4 text-blue-500"/></div>
+                                    <span className="text-[10px] font-bold text-gray-500 group-hover:text-blue-500">Add</span>
+                                </div>
                             )}
                         </div>
-                        <input type="file" ref={fileInputRef} onChange={handleImageChange} accept="image/*" className="hidden" />
+                        <input type="file" ref={fileInputRef} onChange={handleImageChange} accept="image/*" multiple className="hidden" />
                     </div>
 
                     <div>
-                       <label className="text-xs font-bold text-gray-600 flex items-center gap-1 mb-2"><LayoutTemplate className="w-3 h-3"/> Trips Name</label>
+                       <label className="text-xs font-bold text-gray-600 flex items-center gap-1 mb-2"><LayoutTemplate className="w-3 h-3"/> Template Name</label>
                        <input type="text" value={groupName} onChange={(e) => setGroupName(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"/>
                     </div>
 
@@ -502,6 +533,7 @@ export default function EditTripPage({ params }: PageProps) {
                        <textarea rows={2} value={groupNote} onChange={(e) => setGroupNote(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none" placeholder="Add details about this trip..." />
                     </div>
 
+                    {/* Region List */}
                     <div className="pt-2 border-t border-gray-100">
                         <label className="text-xs font-bold text-gray-600 mb-3 block">Regions Selected ({currentGroupRegions.length})</label>
                         {currentGroupRegions.length > 0 ? (
@@ -531,7 +563,8 @@ export default function EditTripPage({ params }: PageProps) {
 
             {activeGroupId && (
               <div className="p-6 border-t border-gray-100 bg-white mt-auto flex-shrink-0 animate-in slide-in-from-bottom-2 flex gap-3">
-                 <button onClick={handleApply} disabled={isSaving} className="flex-1 bg-[#039BE5] hover:bg-blue-600 text-white font-bold py-3 rounded-xl shadow-sm transition transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">{isSaving ? <Loader2 className="w-4 h-4 animate-spin"/> : "Save Group"}</button>
+                 <button  disabled={isSaving} className="flex-1 bg-[#039BE5] hover:bg-blue-600 text-white font-bold py-3 rounded-xl shadow-sm transition transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">{isSaving ? <Loader2 className="w-4 h-4 animate-spin"/> : "Save Template"}</button>
+                 {/* <button onClick={handleApply} disabled={isSaving} className="flex-1 bg-[#039BE5] hover:bg-blue-600 text-white font-bold py-3 rounded-xl shadow-sm transition transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">{isSaving ? <Loader2 className="w-4 h-4 animate-spin"/> : "Save Template"}</button> */}
                  <button onClick={handleDeleteGroup} disabled={isSaving} className="px-4 py-3 text-red-500 bg-red-50 hover:bg-red-100 hover:text-red-600 font-bold rounded-xl transition disabled:opacity-50"><Trash2 className="w-5 h-5"/></button>
               </div>
             )}
@@ -541,6 +574,7 @@ export default function EditTripPage({ params }: PageProps) {
   );
 }
 
+// RegionItem Component
 function RegionItem({ region, statuses, onUpdateStatus, onRemove, statusActions }: RegionItemProps) {
     const [isOpen, setIsOpen] = useState(false);
     const currentStatus = statuses.find((s) => s.id === region.statusId) || statuses[0];
@@ -564,14 +598,7 @@ function RegionItem({ region, statuses, onUpdateStatus, onRemove, statusActions 
                             <div key={status.id} className={`grid grid-cols-[30px_1fr_40px_30px] gap-2 items-center p-1.5 rounded-lg border transition-all cursor-pointer ${status.id === region.statusId ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-200' : 'bg-white border-gray-100 hover:border-gray-300'}`} onClick={() => onUpdateStatus(status.id)}>
                                 <div className="flex items-center justify-center"><div className={`w-4 h-4 rounded-full border flex items-center justify-center ${status.id === region.statusId ? 'border-blue-500 bg-white' : 'border-gray-300'}`}>{status.id === region.statusId && <div className="w-2 h-2 rounded-full bg-blue-500"></div>}</div></div>
                                 <div>
-                                    <input 
-                                        type="text" 
-                                        value={status.label} 
-                                        onClick={(e) => e.stopPropagation()} 
-                                        onChange={(e) => statusActions.onUpdate(status.id, 'label', e.target.value)} 
-                                        style={{ width: `${Math.max(status.label.length, 1) + 2}ch` }} 
-                                        className="bg-transparent text-xs font-medium text-gray-700 outline-none border-b border-transparent focus:border-blue-300 focus:bg-white rounded px-1 transition h-6 min-w-[30px] max-w-full"
-                                    />
+                                    <input type="text" value={status.label} onClick={(e) => e.stopPropagation()} onChange={(e) => statusActions.onUpdate(status.id, 'label', e.target.value)} style={{ width: `${Math.max(status.label.length, 1) + 2}ch` }} className="bg-transparent text-xs font-medium text-gray-700 outline-none border-b border-transparent focus:border-blue-300 focus:bg-white rounded px-1 transition h-6 min-w-[30px] max-w-full"/>
                                 </div>
                                 <div className="relative w-5 h-5 rounded-full overflow-hidden border border-gray-200 shadow-sm mx-auto" onClick={(e) => e.stopPropagation()}><input type="color" value={status.color} onChange={(e) => statusActions.onUpdate(status.id, 'color', e.target.value)} className="absolute -top-1 -left-1 w-7 h-7 border-none cursor-pointer"/></div>
                                 <div className="text-right"><button onClick={(e) => { e.stopPropagation(); statusActions.onDelete(status.id); }} disabled={statuses.length <= 1} className="text-gray-300 hover:text-red-500 transition disabled:opacity-30 disabled:hover:text-gray-300 p-1"><Trash2 className="w-3.5 h-3.5"/></button></div>
