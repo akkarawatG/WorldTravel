@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, use, useEffect, useMemo } from "react";
+import { useState, use, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client"; 
-import { ArrowLeft, Save, LayoutTemplate, X, MapPin, ChevronDown, ChevronUp, Search, Trash2, Plus, Layers, Settings, StickyNote, Loader2, Check } from "lucide-react";
+import { ArrowLeft, Save, LayoutTemplate, X, MapPin, ChevronDown, ChevronUp, Search, Trash2, Plus, Layers, Settings, StickyNote, Loader2, Check, Image as ImageIcon, Upload } from "lucide-react";
 import dynamic from 'next/dynamic';
 
 const COUNTRY_NAMES: Record<string, string> = { 
@@ -20,14 +20,16 @@ const DynamicMap = dynamic(
 interface PageProps { params: Promise<{ id: string }>; }
 interface TripStatus { id: string; label: string; color: string; }
 interface RegionData { name: string; statusId: string; }
+
+// ✅ Interface
 interface TripGroup { 
     id: string; 
     name: string; 
     regions: RegionData[]; 
     notes?: string; 
+    photo?: string | null; 
 }
 
-// ✅ Interface สำหรับ Props ของ RegionItem (แก้ปัญหา 'newId' implicit any)
 interface RegionItemProps {
   region: RegionData;
   statuses: TripStatus[];
@@ -68,20 +70,34 @@ export default function EditTripPage({ params }: PageProps) {
   const [currentGroupRegions, setCurrentGroupRegions] = useState<RegionData[]>([]); 
   const [groupName, setGroupName] = useState("");
   const [groupNote, setGroupNote] = useState("");
+  
+  // ✅ Image Upload States
+  const [tripPhoto, setTripPhoto] = useState<string | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isRegionDropdownOpen, setIsRegionDropdownOpen] = useState(false);
   const [regionSearchQuery, setRegionSearchQuery] = useState("");
   
   const activeGroup = useMemo(() => tripGroups.find(g => g.id === activeGroupId), [tripGroups, activeGroupId]);
 
-  // ✅ 1. Initialize Data (Supabase)
+  // ✅ Helper: แปลงไฟล์เป็น Base64
+  const convertToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
+  // ✅ 1. Initialize Data
   useEffect(() => {
     const initData = async () => {
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return; 
 
-            // 1.1 Find or Create Trip
             let { data: trip, error } = await supabase
                 .from('trips')
                 .select('id')
@@ -99,22 +115,18 @@ export default function EditTripPage({ params }: PageProps) {
                 trip = newTrip;
             }
 
-            // ✅ Check null (แก้ error 'trip' possibly null)
             if (!trip) throw new Error("Failed to initialize trip");
-
             setDbTripId(trip.id);
 
-            // 1.2 Load Templates (Groups)
             const { data: templates, error: tempError } = await supabase
                 .from('templates')
-                .select(`id, template_name, notes, template_provinces ( province_code, status, color )`)
+                .select(`id, template_name, notes, photo, template_provinces ( province_code, status, color )`)
                 .eq('trip_id', trip.id)
                 .is('deleted_at', null)
                 .order('created_at', { ascending: true });
 
             if (tempError) throw tempError;
 
-            // 1.3 Map DB Data to UI
             if (templates) {
                 const mappedGroups: TripGroup[] = templates.map((t: any) => {
                     const mappedRegions = t.template_provinces.map((p: any) => {
@@ -122,7 +134,13 @@ export default function EditTripPage({ params }: PageProps) {
                         if (!matchedStatus) matchedStatus = DEFAULT_STATUSES[0];
                         return { name: p.province_code, statusId: matchedStatus.id };
                     });
-                    return { id: t.id, name: t.template_name || "Untitled", notes: t.notes || "", regions: mappedRegions };
+                    return { 
+                        id: t.id, 
+                        name: t.template_name || "Untitled", 
+                        notes: t.notes || "", 
+                        photo: t.photo || null, 
+                        regions: mappedRegions 
+                    };
                 });
                 setTripGroups(mappedGroups);
             }
@@ -131,23 +149,47 @@ export default function EditTripPage({ params }: PageProps) {
     initData();
   }, [countryCode, supabase]);
 
-  // ✅ 2. Sync Active Group to Form
+  // ✅ 2. Sync Active Group
   useEffect(() => {
     if (activeGroup) {
         setCurrentGroupRegions(activeGroup.regions);
         setGroupName(activeGroup.name);
         setGroupNote(activeGroup.notes || "");
+        setTripPhoto(activeGroup.photo || null);
+        setPhotoFile(null);
     } else {
         setCurrentGroupRegions([]);
         setGroupName("");
         setGroupNote("");
+        setTripPhoto(null);
+        setPhotoFile(null);
     }
   }, [activeGroupId, activeGroup]);
+
+  // ✅ Image Handlers
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          // ตรวจสอบขนาดไฟล์ (เช่น ห้ามเกิน 2MB เพื่อป้องกัน DB พัง)
+          if (file.size > 2 * 1024 * 1024) {
+              alert("File size too large! Please upload image under 2MB.");
+              return;
+          }
+          setPhotoFile(file);
+          setTripPhoto(URL.createObjectURL(file)); // Preview Only
+      }
+  };
+
+  const handleRemoveImage = () => {
+      setPhotoFile(null);
+      setTripPhoto(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+  };
 
   // ✅ 3. Actions
   const handleAddGroup = () => {
     const newId = `temp-${Date.now()}`;
-    const newGroup: TripGroup = { id: newId, name: `Trip ${tripGroups.length + 1}`, regions: [], notes: "" };
+    const newGroup: TripGroup = { id: newId, name: `Trip ${tripGroups.length + 1}`, regions: [], notes: "", photo: null };
     setTripGroups([...tripGroups, newGroup]);
     setActiveGroupId(newId);
   };
@@ -165,16 +207,39 @@ export default function EditTripPage({ params }: PageProps) {
       setCurrentGroupRegions(prev => prev.map(r => r.name === regionName ? { ...r, statusId: newStatusId } : r));
   };
 
-  // ✅ 4. Save to Database
+  // ✅ 4. Save Logic (Modified to Base64)
   const handleApply = async () => {
     if (!activeGroupId || !dbTripId) return;
     setIsSaving(true);
+
     try {
         const isNew = activeGroupId.startsWith('temp-');
+        let finalPhotoData = tripPhoto;
+
+        // 4.1 Convert Image to Base64 if new file exists
+        if (photoFile) {
+            try {
+                // แปลงไฟล์เป็น Base64 string เพื่อเก็บลง DB โดยตรง
+                finalPhotoData = await convertToBase64(photoFile); 
+            } catch (conversionError) {
+                console.error("Image conversion failed:", conversionError);
+                alert("Failed to process image.");
+                setIsSaving(false);
+                return;
+            }
+        } 
+        // ถ้าไม่มี photoFile แต่ tripPhoto เป็น null แสดงว่าลบรูปออก
+        else if (tripPhoto === null) {
+            finalPhotoData = null;
+        }
+        // ถ้าไม่มี photoFile แต่มี tripPhoto แสดงว่าเป็น URL/Base64 เดิม ไม่ต้องทำอะไร
+
+        // 4.2 Upsert Template
         const templatePayload = {
             trip_id: dbTripId,
             template_name: groupName,
             notes: groupNote,
+            photo: finalPhotoData, // ✅ Save Base64 String directly to DB
             ...(isNew ? {} : { id: activeGroupId })
         };
 
@@ -182,7 +247,7 @@ export default function EditTripPage({ params }: PageProps) {
         if (tmplError) throw tmplError;
         const realTemplateId = savedTemplate.id;
 
-        // Sync Regions (Delete old -> Insert new)
+        // 4.3 Sync Regions
         await supabase.from('template_provinces').delete().eq('template_id', realTemplateId);
 
         if (currentGroupRegions.length > 0) {
@@ -199,10 +264,29 @@ export default function EditTripPage({ params }: PageProps) {
             if (provError) throw provError;
         }
 
-        setTripGroups(prev => prev.map(g => g.id === activeGroupId ? { ...g, id: realTemplateId, regions: currentGroupRegions, name: groupName, notes: groupNote } : g));
+        // 4.4 Update Local State
+        setTripGroups(prev => prev.map(g => 
+            g.id === activeGroupId 
+                ? { 
+                    ...g, 
+                    id: realTemplateId, 
+                    regions: currentGroupRegions, 
+                    name: groupName, 
+                    notes: groupNote,
+                    photo: finalPhotoData // Update Local Photo
+                  } 
+                : g
+        ));
+        
         if (isNew) setActiveGroupId(realTemplateId);
+        setPhotoFile(null); 
 
-    } catch (err) { console.error("Save failed:", err); alert("Failed to save changes"); } finally { setIsSaving(false); }
+    } catch (err: any) { 
+        console.error("Save failed:", err); 
+        alert(`Failed to save: ${err.message || "Unknown error"}`); 
+    } finally { 
+        setIsSaving(false); 
+    }
   };
 
   const handleDeleteGroup = async () => {
@@ -221,7 +305,7 @@ export default function EditTripPage({ params }: PageProps) {
       } catch (err) { console.error("Delete failed:", err); } finally { setIsSaving(false); }
   };
 
-  // Status Management Helpers
+  // Status Helpers
   const handleAddStatus = () => { setTripStatuses([...tripStatuses, { id: Date.now().toString(), label: 'New', color: '#000000' }]); };
   const handleUpdateStatus = (id: string, key: keyof TripStatus, value: string) => { setTripStatuses(prev => prev.map(s => s.id === id ? { ...s, [key]: value } : s)); };
   const handleDeleteStatus = (id: string) => {
@@ -231,7 +315,6 @@ export default function EditTripPage({ params }: PageProps) {
       setCurrentGroupRegions(prev => prev.map(r => r.statusId === id ? { ...r, statusId: firstAvailable } : r));
   };
 
-  // Map Data Fetching
   useEffect(() => {
     async function fetchHighchartsMapData() {
       if (!countryCode) return;
@@ -256,11 +339,10 @@ export default function EditTripPage({ params }: PageProps) {
      else alert("Please create or select a trip group first!");
   };
   
-  // Color Calculation
   const regionColors = useMemo(() => {
       const mapColors: Record<string, string> = {};
       tripGroups.forEach(group => {
-          if (group.id === activeGroupId) return; // Skip active group (use real-time data instead)
+          if (group.id === activeGroupId) return;
           group.regions.forEach(r => {
               const status = tripStatuses.find(s => s.id === r.statusId);
               if (status) mapColors[r.name] = status.color;
@@ -370,8 +452,13 @@ export default function EditTripPage({ params }: PageProps) {
                                {tripGroups.map(group => (
                                    <div key={group.id} onClick={() => setActiveGroupId(group.id)} className="p-4 bg-white border border-gray-200 rounded-xl hover:border-blue-300 hover:shadow-md transition cursor-pointer flex justify-between items-center group">
                                        <div className="flex items-center gap-3">
-                                           <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-bold text-xs border border-gray-200">{group.regions.length}</div>
-                                           <div><h4 className="font-bold text-gray-800">{group.name}</h4><p className="text-xs text-gray-500">{group.regions.length} Regions</p></div>
+                                           {/* ✅ Show Image Thumbnail */}
+                                           {group.photo ? (
+                                              <img src={group.photo} alt="cover" className="w-10 h-10 rounded-lg object-cover border border-gray-200"/>
+                                           ) : (
+                                              <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center font-bold text-xs border border-gray-200 text-gray-400"><ImageIcon className="w-4 h-4"/></div>
+                                           )}
+                                           <div><h4 className="font-bold text-gray-800 text-sm">{group.name}</h4><p className="text-xs text-gray-500">{group.regions.length} Regions</p></div>
                                        </div>
                                        <div className="text-gray-400"><Settings className="w-4 h-4"/></div>
                                    </div>
@@ -384,20 +471,41 @@ export default function EditTripPage({ params }: PageProps) {
                  <div className="animate-in fade-in slide-in-from-right-4 duration-300 space-y-6">
                     <button onClick={() => setActiveGroupId(null)} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 mb-2 transition"><ArrowLeft className="w-4 h-4"/> Back to Groups</button>
 
+                    {/* ✅ Image Upload Input */}
+                    <div className="relative group">
+                        <div className="w-full h-32 bg-gray-100 rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center overflow-hidden hover:border-blue-400 transition cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                            {tripPhoto ? (
+                                <>
+                                    <img src={tripPhoto} alt="Preview" className="w-full h-full object-cover" />
+                                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                                        <p className="text-white text-xs font-medium flex items-center gap-1"><Upload className="w-3 h-3"/> Change Image</p>
+                                    </div>
+                                    <button onClick={(e) => { e.stopPropagation(); handleRemoveImage(); }} className="absolute top-2 right-2 p-1 bg-white rounded-full text-red-500 shadow-sm hover:bg-red-50"><X className="w-3 h-3"/></button>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center mb-2"><ImageIcon className="w-5 h-5 text-gray-400" /></div>
+                                    <p className="text-xs text-gray-500 font-medium">Click to upload cover (Max 2MB)</p>
+                                </>
+                            )}
+                        </div>
+                        <input type="file" ref={fileInputRef} onChange={handleImageChange} accept="image/*" className="hidden" />
+                    </div>
+
                     <div>
-                       <label className="text-xs font-bold text-gray-600 flex items-center gap-1 mb-2"><LayoutTemplate className="w-3 h-3"/> Group Name</label>
+                       <label className="text-xs font-bold text-gray-600 flex items-center gap-1 mb-2"><LayoutTemplate className="w-3 h-3"/> Trips Name</label>
                        <input type="text" value={groupName} onChange={(e) => setGroupName(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"/>
                     </div>
 
                     <div>
-                       <label className="text-xs font-bold text-gray-600 flex items-center gap-1 mb-2"><StickyNote className="w-3 h-3"/> Group Note (Optional)</label>
+                       <label className="text-xs font-bold text-gray-600 flex items-center gap-1 mb-2"><StickyNote className="w-3 h-3"/> Note (Optional)</label>
                        <textarea rows={2} value={groupNote} onChange={(e) => setGroupNote(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none" placeholder="Add details about this trip..." />
                     </div>
 
                     <div className="pt-2 border-t border-gray-100">
                         <label className="text-xs font-bold text-gray-600 mb-3 block">Regions Selected ({currentGroupRegions.length})</label>
                         {currentGroupRegions.length > 0 ? (
-                            <div className="flex flex-col gap-3 max-h-[450px] overflow-y-auto pr-1 scrollbar-thin">
+                            <div className="flex flex-col gap-3 max-h-[300px] overflow-y-auto pr-1 scrollbar-thin">
                                 {currentGroupRegions.map(region => (
                                     <RegionItem 
                                         key={region.name}
@@ -433,7 +541,6 @@ export default function EditTripPage({ params }: PageProps) {
   );
 }
 
-// ✅ Sub-Component: RegionItem with explicit type
 function RegionItem({ region, statuses, onUpdateStatus, onRemove, statusActions }: RegionItemProps) {
     const [isOpen, setIsOpen] = useState(false);
     const currentStatus = statuses.find((s) => s.id === region.statusId) || statuses[0];
@@ -457,7 +564,6 @@ function RegionItem({ region, statuses, onUpdateStatus, onRemove, statusActions 
                             <div key={status.id} className={`grid grid-cols-[30px_1fr_40px_30px] gap-2 items-center p-1.5 rounded-lg border transition-all cursor-pointer ${status.id === region.statusId ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-200' : 'bg-white border-gray-100 hover:border-gray-300'}`} onClick={() => onUpdateStatus(status.id)}>
                                 <div className="flex items-center justify-center"><div className={`w-4 h-4 rounded-full border flex items-center justify-center ${status.id === region.statusId ? 'border-blue-500 bg-white' : 'border-gray-300'}`}>{status.id === region.statusId && <div className="w-2 h-2 rounded-full bg-blue-500"></div>}</div></div>
                                 <div>
-                                    {/* ✅ Auto-width Input */}
                                     <input 
                                         type="text" 
                                         value={status.label} 
