@@ -381,7 +381,7 @@ export default function EditTripPage({ params }: PageProps) {
       
       {/* HEADER */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 shadow-sm z-20 flex-shrink-0">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+        <div className="max-w-[1128px] mx-auto flex items-center justify-between">
            <div className="flex items-center gap-4">
               <button onClick={() => router.back()} className="p-2 hover:bg-gray-100 rounded-full transition"><ArrowLeft className="w-5 h-5 text-gray-600" /></button>
               <div className="flex items-center gap-3">
@@ -416,7 +416,7 @@ export default function EditTripPage({ params }: PageProps) {
            </div>
            <div className="flex gap-3">
               <button onClick={() => router.push('/mytrips')} className="flex items-center gap-2 px-4 py-2 border-2 border-blue-400 text-blue-500 font-bold rounded-lg hover:bg-blue-50 transition text-sm"><LayoutTemplate className="w-4 h-4" /> My Templates</button>
-              <button onClick={handleApply} disabled={isSaving || !activeGroupId} className="flex items-center gap-2 px-6 py-2 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 transition text-sm shadow-sm disabled:opacity-50">{isSaving ? <Loader2 className="w-4 h-4 animate-spin"/> : <Save className="w-4 h-4" />} Save</button>
+              {/* <button onClick={handleApply} disabled={isSaving || !activeGroupId} className="flex items-center gap-2 px-6 py-2 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 transition text-sm shadow-sm disabled:opacity-50">{isSaving ? <Loader2 className="w-4 h-4 animate-spin"/> : <Save className="w-4 h-4" />} Save</button> */}
            </div>
         </div>
       </div>
