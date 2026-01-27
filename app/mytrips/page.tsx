@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/utils/supabase/client"; // ✅ Use your utility
+import { createClient } from "@/utils/supabase/client"; 
 import { Plus, Trash2, MapPin, Globe, Loader2 } from "lucide-react";
 import TripViewModal from "../../components/TripViewModal";
+import { COUNTRIES_DATA } from "@/data/mockData"; // ✅ ต้องแน่ใจว่าไฟล์นี้มีข้อมูลครบ
 
 // Interface ให้ตรงกับ Supabase Data Structure
 interface TripData {
@@ -12,14 +13,30 @@ interface TripData {
   country: string;
   created_at: string;
   stats: {
-    regions: number; // จำนวน Group (Templates)
-    provinces: number; // จำนวนจังหวัดที่ไม่ซ้ำกัน
+    regions: number; 
+    provinces: number; 
   };
 }
 
+// ✅ อัปเดต Mapping ให้ครบตามข้อมูลที่มีรูปภาพ
 const COUNTRY_NAMES: Record<string, string> = {
-    cn: "China", th: "Thailand", my: "Malaysia", jp: "Japan", ae: "United Arab Emirates", sa: "Saudi Arabia", sg: "Singapore", vn: "Vietnam", in: "India", kr: "South Korea", id: "Indonesia", tw: "Taiwan", us: "United States", gb: "United Kingdom", fr: "France",
-    // ... เพิ่มประเทศอื่นๆ ตามต้องการ
+    // Asia
+    cn: "China", th: "Thailand", my: "Malaysia", jp: "Japan", ae: "United Arab Emirates", sa: "Saudi Arabia", sg: "Singapore", vn: "Vietnam", in: "India", kr: "South Korea", id: "Indonesia", tw: "Taiwan", bh: "Bahrain", kw: "Kuwait", kz: "Kazakhstan", ph: "Philippines", uz: "Uzbekistan", kh: "Cambodia", jo: "Jordan", la: "Laos", bn: "Brunei", om: "Oman", qa: "Qatar", lk: "Sri Lanka", ir: "Iran",
+    
+    // Europe
+    fr: "France", es: "Spain", it: "Italy", pl: "Poland", hu: "Hungary", hr: "Croatia", tr: "Turkey", gb: "United Kingdom", de: "Germany", gr: "Greece", dk: "Denmark", at: "Austria", nl: "Netherlands", pt: "Portugal", ro: "Romania", ch: "Switzerland", be: "Belgium", lv: "Latvia", ge: "Georgia", se: "Sweden", lt: "Lithuania", ee: "Estonia", no: "Norway", fi: "Finland", is: "Iceland",
+
+    // North America
+    us: "United States", mx: "Mexico", ca: "Canada", do: "Dominican Republic", bs: "Bahamas", cu: "Cuba", jm: "Jamaica", cr: "Costa Rica", gt: "Guatemala", pa: "Panama",
+
+    // South America
+    ar: "Argentina", br: "Brazil", cl: "Chile", pe: "Peru", py: "Paraguay", co: "Colombia", uy: "Uruguay", ec: "Ecuador",
+
+    // Africa
+    za: "South Africa", ma: "Morocco", eg: "Egypt", ke: "Kenya", na: "Namibia", tz: "Tanzania",
+
+    // Oceania
+    au: "Australia", nz: "New Zealand"
 };
 
 export default function MyTripsPage() {
@@ -30,6 +47,22 @@ export default function MyTripsPage() {
   const [trips, setTrips] = useState<TripData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [viewTrip, setViewTrip] = useState<any | null>(null);
+
+  // ✅ 2. สร้าง Map สำหรับดึงรูปภาพจาก mockData มาเตรียมไว้ (Flatten Data)
+  // Logic: แปลงข้อมูลจาก Array ซ้อน Array ให้เป็น Object แบบ { "thailand": "url", "japan": "url" }
+  const countryImageMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (COUNTRIES_DATA) {
+        Object.values(COUNTRIES_DATA).forEach((countries: any[]) => {
+        countries.forEach((country) => {
+            if (country.name && country.image) {
+                map[country.name.toLowerCase()] = country.image;
+            }
+        });
+        });
+    }
+    return map;
+  }, []);
 
   // ✅ Fetch Trips
   const fetchTrips = async () => {
@@ -130,9 +163,11 @@ export default function MyTripsPage() {
                     {/* Trip Cards */}
                     {trips.map((trip) => {
                         const countryCode = trip.country.toLowerCase();
-                        const countryName = COUNTRY_NAMES[countryCode] || trip.country.toUpperCase();
-                        const flagUrl = `https://flagcdn.com/w320/${countryCode}.png`;
-                        const coverImage = `https://source.unsplash.com/800x600/?${countryName},landscape`; 
+                        // ชื่อประเทศ (เช่น Thailand)
+                        const countryName = COUNTRY_NAMES[countryCode] || trip.country; 
+                        
+                        // ✅ 3. ดึงรูปจาก mockData โดยใช้ชื่อประเทศ (ถ้าไม่มีใช้ Placeholder)
+                        const coverImage = countryImageMap[countryName.toLowerCase()] || "https://placehold.co/800x600?text=No+Image";
 
                         return (
                             <div key={trip.id} className="w-full h-[380px] bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-gray-200 flex flex-col relative group">
@@ -140,9 +175,6 @@ export default function MyTripsPage() {
 
                                 <div className="relative h-[180px] w-full bg-gray-100">
                                     <img src={coverImage} alt={countryName} className="w-full h-full object-cover" />
-                                    <div className="absolute top-4 left-4 w-10 h-7 rounded shadow-sm overflow-hidden border border-white">
-                                        <img src={flagUrl} alt="flag" className="w-full h-full object-cover" />
-                                    </div>
                                 </div>
 
                                 <div className="flex-1 p-5 flex flex-col justify-between">
