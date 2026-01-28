@@ -192,7 +192,8 @@ export default function MyTripsPage() {
                                     </div>
 
                                     <div className="grid grid-cols-3 gap-3 mt-4">
-                                        <button onClick={() => setViewTrip(trip)} className="bg-[#3B82F6] hover:bg-blue-600 text-white font-medium py-2 rounded-md text-sm transition">View</button>
+                                        {/* <button onClick={() => setViewTrip(trip)} className="bg-[#3B82F6] hover:bg-blue-600 text-white font-medium py-2 rounded-md text-sm transition">View</button> */}
+                                        <button className="bg-[#3B82F6] hover:bg-blue-600 text-white font-medium py-2 rounded-md text-sm transition">View</button>
                                         <button onClick={() => router.push(`/mytrips/edit/${trip.country}`)} className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-2 rounded-md text-sm transition">Edit</button>
                                         <button className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-2 rounded-md text-sm transition">Share</button>
                                     </div>
