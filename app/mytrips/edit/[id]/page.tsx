@@ -388,7 +388,7 @@ export default function EditTripPage({ params }: PageProps) {
 
             {/* HEADER */}
             <div className="bg-white border-b border-gray-200 px-6 py-4 shadow-sm z-20 flex-shrink-0">
-                <div className="max-w-[1128px] mx-auto flex items-center justify-between">
+                <div className="max-w-full mx-auto flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         <button onClick={() => router.back()} className="p-2 hover:bg-gray-100 rounded-full transition"><ArrowLeft className="w-5 h-5 text-gray-600" /></button>
                         <div className="flex items-center gap-3">

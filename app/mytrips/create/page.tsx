@@ -69,14 +69,12 @@ export default function CreateTripPage() {
   return (
     <div className="min-h-screen bg-white pb-20">
       
-      {/* Back Button (Optional: ถ้าต้องการปุ่มย้อนกลับแบบหน้าเดิม) */}
-      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-[156px] pt-6">
-        <button
-          onClick={() => router.back()}
-          className="flex items-center gap-2 text-gray-500 hover:text-black transition"
-        >
-          <ChevronLeft className="w-5 h-5" /> Back
-        </button>
+      <div className="max-w-[1440px] mx-auto px-[156px] pt-6 mb-4">
+        <div className="flex items-center gap-2 flex-wrap mb-2 font-Inter font-[600] text-[14px] leading-[100%] text-[#9E9E9E]">
+          <span className="hover:underline cursor-pointer" onClick={() => router.push('/')}>Home</span> /
+          <span className="hover:underline cursor-pointer " onClick={() => router.push('/mytrips')}>Mytrips</span> /
+                    <span className="text-[#101828] hover:underline cursor-pointer " onClick={() => router.push('/mytrips/create')}>Create</span>
+        </div>
       </div>
 
       <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-[156px] pt-4">
