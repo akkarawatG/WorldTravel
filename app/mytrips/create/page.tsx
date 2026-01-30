@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { createClient } from "@/utils/supabase/client"; // ✅ Import Supabase
 import { COUNTRIES_DATA, CONTINENTS } from "@/data/mockData";
 
 // รวมข้อมูลประเทศทั้งหมดให้อยู่ใน Array เดียว และเพิ่ม field 'continent' เข้าไปใน object
@@ -18,12 +19,14 @@ const ALPHABET = ["All", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("")];
 
 export default function CreateTripPage() {
   const router = useRouter();
+  const supabase = createClient(); // ✅ เรียกใช้ Supabase Client
 
   // State สำหรับ Filter ต่างๆ
   const [activeContinent, setActiveContinent] = useState("All");
   const [activeLetter, setActiveLetter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [isCreating, setIsCreating] = useState(false); // ✅ เพิ่ม State Loading
 
   // Logic: Available Letters (ตัวอักษรที่มีในทวีปที่เลือก)
   const availableLetters = useMemo(() => {
@@ -56,13 +59,42 @@ export default function CreateTripPage() {
     setCurrentPage(1);
   };
 
-  // ✅ ฟังก์ชันสำหรับสร้างทริป (นำทางไปหน้า Edit)
-  const handleSelectCountry = (countryName: string) => {
+  // ✅ ฟังก์ชันสำหรับสร้างทริป (Create Trip & Redirect by ID)
+  const handleSelectCountry = async (countryName: string) => {
+    if (isCreating) return; // ป้องกันการกดซ้ำ
     const code = getCountryCode(countryName);
-    if (code) {
-      router.push(`/mytrips/edit/${code.toLowerCase()}`);
-    } else {
+    
+    if (!code) {
       alert("Sorry, configuration for this country is missing.");
+      return;
+    }
+
+    setIsCreating(true);
+
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+            alert("Please login first to create a trip.");
+            setIsCreating(false);
+            return;
+        }
+
+        // 1. สร้างทริปใหม่ลง Database ทันที
+        const { data: newTrip, error } = await supabase
+            .from('trips')
+            .insert([{ profile_id: user.id, country: code.toLowerCase() }])
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        // 2. Redirect ไปหน้า Edit โดยใช้ Trip ID (UUID)
+        router.push(`/mytrips/edit/${newTrip.id}`);
+
+    } catch (err: any) {
+        console.error("Create failed:", err);
+        alert("Failed to create trip: " + err.message);
+        setIsCreating(false);
     }
   };
 
@@ -88,13 +120,10 @@ export default function CreateTripPage() {
             Choose a country to start planning your trip
           </p>
 
-          {/* ✅ Search Bar (Style ตามต้นแบบ) */}
+          {/* Search Bar */}
           <div className="relative max-w-[744px] mx-auto mt-6">
             <div className="flex items-center w-full max-w-[744px] h-[48px] gap-[8px] p-[8px] bg-[#194473] border border-[#E0E0E0] rounded-[16px] shadow-sm transition mx-auto">
-              {/* Search Icon */}
               <Search className="w-[20px] h-[20px] text-white ml-2 flex-shrink-0" />
-              
-              {/* Input Field Container */}
               <div className="flex items-center flex-1 h-[32px] bg-[#FFFFFF] rounded-[8px] px-[8px] py-[4px]">
                 <input
                   type="text"
@@ -110,7 +139,6 @@ export default function CreateTripPage() {
 
         {/* --- Filters Section --- */}
         <div className="space-y-6 mb-10">
-          {/* Continent Tabs */}
           <div className="flex flex-wrap justify-center gap-[16px]">
             <button
               onClick={() => handleFilterChange(setActiveContinent, "All")}
@@ -137,7 +165,6 @@ export default function CreateTripPage() {
             ))}
           </div>
 
-          {/* Alphabet Filters */}
           <div className="flex items-center justify-center w-full max-w-[1128px] h-[40px] gap-[16px] mx-auto mb-10">
             <div className="flex items-center h-[24px]">
               <span className="text-[20px] font-inter font-[400] leading-none text-[#000000] whitespace-nowrap hidden md:block">
@@ -174,10 +201,9 @@ export default function CreateTripPage() {
             {currentData.map((country, index) => (
               <div
                 key={`${country.name}-${index}`}
-                onClick={() => handleSelectCountry(country.name)} // ✅ เปลี่ยนเป็นฟังก์ชันสร้างทริป
-                className="relative w-full max-w-[264px] h-[331px] rounded-[16px] overflow-hidden cursor-pointer group shadow-sm hover:shadow-md transition-all duration-300 border border-[#1E518C] flex flex-col bg-white mx-auto"
+                onClick={() => handleSelectCountry(country.name)}
+                className={`relative w-full max-w-[264px] h-[331px] rounded-[16px] overflow-hidden cursor-pointer group shadow-sm hover:shadow-md transition-all duration-300 border border-[#1E518C] flex flex-col bg-white mx-auto ${isCreating ? 'opacity-50 pointer-events-none' : ''}`}
               >
-                {/* Image Section */}
                 <div className="relative w-full h-[256px] overflow-hidden">
                   <img
                     src={country.image}
@@ -185,7 +211,6 @@ export default function CreateTripPage() {
                     className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
                   />
                 </div>
-                {/* Content Section */}
                 <div className="w-full h-[75px] bg-white px-[16px] flex flex-col justify-center border-t border-[#C2DCF3]">
                   <h4 className="text-[20px] font-inter font-bold text-[#194473] leading-none truncate group-hover:underline">
                     {country.name}
@@ -198,7 +223,6 @@ export default function CreateTripPage() {
             ))}
           </div>
         ) : (
-          /* Empty State */
           <div className="text-center py-20">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
               <Search className="w-8 h-8 text-gray-400" />
@@ -257,7 +281,6 @@ export default function CreateTripPage() {
   );
 }
 
-// Helper: แปลงชื่อประเทศเป็นรหัส ISO Code
 const getCountryCode = (countryName: string): string => {
   const mapping: { [key: string]: string } = {
     "China": "CN", "Thailand": "TH", "Malaysia": "MY", "Japan": "JP", "United Arab Emirates": "AE", "Saudi Arabia": "SA", "Singapore": "SG", "Vietnam": "VN", "India": "IN", "South Korea": "KR", "Indonesia": "ID", "Taiwan": "TW", "Bahrain": "BH", "Kuwait": "KW", "Kazakhstan": "KZ", "Philippines": "PH", "Uzbekistan": "UZ", "Cambodia": "KH", "Jordan": "JO", "Laos": "LA", "Brunei": "BN", "Oman": "OM", "Qatar": "QA", "Sri Lanka": "LK", "Iran": "IR",

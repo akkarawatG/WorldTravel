@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client"; 
-import { Plus, Trash2, MapPin, Globe, Loader2, Layers } from "lucide-react"; 
+import { Plus, Trash2, MapPin, Globe, Loader2,Backpack } from "lucide-react"; 
 import TripViewModal from "../../components/TripViewModal";
 import { COUNTRIES_DATA } from "@/data/mockData"; 
 
@@ -126,7 +126,7 @@ export default function MyTripsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F7FA] font-sans text-gray-800 pb-20">
+    <div className="min-h-screen bg-[#FFFFFF] font-sans text-gray-800 pb-20">
       <div className="max-w-[1440px] mx-auto px-[156px] pt-6 mb-4">
         <div className="flex items-center gap-2 flex-wrap mb-2 font-Inter font-[600] text-[14px] leading-[100%] text-[#9E9E9E]">
           <span className="hover:underline cursor-pointer" onClick={() => router.push('/')}>Home</span> /
@@ -185,7 +185,7 @@ export default function MyTripsPage() {
                                             </div>
                                             <div className="w-px h-8 bg-gray-200"></div>
                                             <div className="flex flex-col items-center justify-center gap-1"> 
-                                                <Layers className="w-4 h-4 text-[#3B82F6]" />
+                                                <Backpack className="w-4 h-4 text-[#3B82F6]" />
                                                 <span className="text-[11px] font-medium text-gray-600">{trip.stats.regions} Templates</span>
                                             </div>
                                         </div>

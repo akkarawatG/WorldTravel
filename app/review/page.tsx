@@ -207,7 +207,7 @@ function ReviewContent() {
                                                 className={`px-6 py-2 rounded-full border text-[14px] font-medium transition-all
                                                         ${visitType === type
                                                         ? "bg-[#194473] text-white border-[#C2DCF3]"
-                                                        : "bg-white text-[#1E518C] border-[#1E518C] hover:bg-[#EEEEEE]"
+                                                        : "bg-white text-[#1E518C] border-[#1E518C] hover:bg-[#EEEEEE] cursor-pointer"
                                                     }`}
                                             >
                                                 {type}

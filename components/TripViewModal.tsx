@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, MapPin, ChevronDown, ChevronUp, Layers, StickyNote } from "lucide-react";
+import { X, MapPin, ChevronDown, ChevronUp, StickyNote,Backpack } from "lucide-react";
 
 // Mapping (เพื่อให้มั่นใจว่าชื่อตรงกัน)
 const COUNTRY_NAMES: Record<string, string> = {
@@ -51,7 +51,7 @@ export default function TripViewModal({ trip, coverImage, onClose }: TripViewMod
             
             <button 
                 onClick={onClose}
-                className="absolute top-4 right-4 bg-white/20 hover:bg-white/40 text-white p-2 rounded-full transition backdrop-blur-md"
+                className="absolute top-4 right-4 bg-white/20 hover:bg-white/40 text-white p-2 rounded-full transition backdrop-blur-md cursor-pointer"
             >
                 <X size={20} />
             </button>
@@ -74,7 +74,7 @@ export default function TripViewModal({ trip, coverImage, onClose }: TripViewMod
             <div className="flex gap-4 mb-6">
                 <div className="flex-1 bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-3 shadow-sm">
                     <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600">
-                        <Layers size={20} />
+                        <Backpack size={20} />
                     </div>
                     <div>
                         <p className="text-xl font-bold text-gray-800 leading-none">{trip.templates?.length || 0}</p>
@@ -111,7 +111,7 @@ export default function TripViewModal({ trip, coverImage, onClose }: TripViewMod
                                 >
                                     <div className="flex items-center gap-3">
                                         <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${isOpen ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
-                                            <Layers size={18} />
+                                            <Backpack size={18} />
                                         </div>
                                         <div className="text-left">
                                             <h4 className="text-sm font-bold text-gray-800">{template.template_name || "Untitled Template"}</h4>
@@ -153,7 +153,7 @@ export default function TripViewModal({ trip, coverImage, onClose }: TripViewMod
                     })
                 ) : (
                     <div className="text-center py-10 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
-                        <Layers size={24} className="mx-auto text-gray-300 mb-2" />
+                        <Backpack size={24} className="mx-auto text-gray-300 mb-2" />
                         <p className="text-sm text-gray-500">No templates created yet.</p>
                     </div>
                 )}
@@ -164,7 +164,7 @@ export default function TripViewModal({ trip, coverImage, onClose }: TripViewMod
         <div className="p-4 border-t border-gray-200 bg-white">
             <button 
                 onClick={onClose}
-                className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-lg transition text-sm"
+                className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-lg transition text-sm cursor-pointer"
             >
                 Close
             </button>

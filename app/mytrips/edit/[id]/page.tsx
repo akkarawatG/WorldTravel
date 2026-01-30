@@ -3,12 +3,12 @@
 import { useState, use, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
-import { ArrowLeft, Save, LayoutTemplate, X, MapPin, ChevronDown, ChevronUp, Search, Trash2, Plus, Layers, Settings, StickyNote, Loader2, Check, Image as ImageIcon, Upload } from "lucide-react";
+import { ArrowLeft, LayoutTemplate, X, MapPin, ChevronDown, ChevronUp, Search, Trash2, Plus, Layers, Settings, StickyNote, Loader2, Check, Image as ImageIcon, MoreVertical, Edit3 } from "lucide-react";
 import dynamic from 'next/dynamic';
 
 const COUNTRY_NAMES: Record<string, string> = {
     cn: "China", th: "Thailand", my: "Malaysia", jp: "Japan", us: "United States", gb: "United Kingdom", fr: "France",
-    // ... เพิ่มประเทศอื่นๆ
+    // ... เพิ่มประเทศอื่นๆ ตามต้องการ
 };
 
 const DynamicMap = dynamic(
@@ -16,12 +16,10 @@ const DynamicMap = dynamic(
     { ssr: false, loading: () => <div className="p-10 text-gray-400 flex items-center justify-center h-full">Loading Map...</div> }
 );
 
-// --- Interfaces ---
 interface PageProps { params: Promise<{ id: string }>; }
 interface TripStatus { id: string; label: string; color: string; }
 interface RegionData { name: string; statusId: string; }
 
-// Interface หลัก (images เป็น array string)
 interface TripGroup {
     id: string;
     name: string;
@@ -30,7 +28,6 @@ interface TripGroup {
     images?: string[] | null;
 }
 
-// Helper Interface สำหรับจัดการรูปใน State
 interface ImageState {
     id: string;
     url: string;
@@ -59,11 +56,12 @@ const DEFAULT_STATUSES: TripStatus[] = [
 export default function EditTripPage({ params }: PageProps) {
     const router = useRouter();
     const supabase = createClient();
-    const { id } = use(params);
-    const countryCode = id.toLowerCase();
-    const countryName = COUNTRY_NAMES[countryCode] || countryCode.toUpperCase();
+    const { id: tripId } = use(params); // ✅ tripId คือ UUID ของทริป
 
     // Data States
+    const [countryCode, setCountryCode] = useState<string>(""); 
+    const countryName = COUNTRY_NAMES[countryCode] || countryCode.toUpperCase();
+    
     const [regionList, setRegionList] = useState<string[]>([]);
     const [isLoadingRegions, setIsLoadingRegions] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -71,62 +69,53 @@ export default function EditTripPage({ params }: PageProps) {
 
     const [tripGroups, setTripGroups] = useState<TripGroup[]>([]);
     const [tripStatuses, setTripStatuses] = useState<TripStatus[]>(DEFAULT_STATUSES);
+    
+    // UI States
     const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+    const [previewGroupId, setPreviewGroupId] = useState<string | null>(null);
+    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
-    // Active Edit Form States
+    // Form States
     const [currentGroupRegions, setCurrentGroupRegions] = useState<RegionData[]>([]);
     const [groupName, setGroupName] = useState("");
     const [groupNote, setGroupNote] = useState("");
-
-    // Image States
     const [currentImages, setCurrentImages] = useState<ImageState[]>([]);
+    
     const fileInputRef = useRef<HTMLInputElement>(null);
-
     const [isRegionDropdownOpen, setIsRegionDropdownOpen] = useState(false);
     const [regionSearchQuery, setRegionSearchQuery] = useState("");
 
     const activeGroup = useMemo(() => tripGroups.find(g => g.id === activeGroupId), [tripGroups, activeGroupId]);
 
-    // ✅ FIX 1: เพิ่มตัวแปร Lock เพื่อป้องกันการรันซ้ำใน Strict Mode
-    const isInitializing = useRef(false);
-
-    // ✅ 1. Initialize Data
+    // ✅ 1. Initialize Data by Trip ID
     useEffect(() => {
         const initData = async () => {
-            // ถ้ากำลังทำงานอยู่ หรือทำไปแล้ว ให้หยุดทันที (แก้ปัญหา Create เบิ้ล)
-            if (isInitializing.current) return;
-            isInitializing.current = true;
-
             try {
                 const { data: { user } } = await supabase.auth.getUser();
                 if (!user) return;
 
-                // Find or Create Trip
-                let { data: trip, error } = await supabase
-                    .from('trips')
-                    .select('id')
-                    .eq('profile_id', user.id)
-                    .eq('country', countryCode)
-                    .maybeSingle();
+                setDbTripId(tripId);
 
-                if (!trip) {
-                    const { data: newTrip, error: createError } = await supabase
-                        .from('trips')
-                        .insert([{ profile_id: user.id, country: countryCode }])
-                        .select()
-                        .single();
-                    if (createError) throw createError;
-                    trip = newTrip;
+                // 1. ดึงข้อมูล Trip เพื่อเอา Country Code
+                const { data: trip, error: tripError } = await supabase
+                    .from('trips')
+                    .select('country')
+                    .eq('id', tripId)
+                    .single();
+
+                if (tripError || !trip) {
+                    console.error("Trip not found");
+                    router.push('/mytrips'); // ถ้าไม่เจอดีดกลับ
+                    return;
                 }
 
-                if (!trip) throw new Error("Failed to initialize trip");
-                setDbTripId(trip.id);
+                setCountryCode(trip.country);
 
-                // Load Templates
+                // 2. ดึง Templates
                 const { data: templates, error: tempError } = await supabase
                     .from('templates')
                     .select(`id, template_name, notes, images, template_provinces ( province_code, status, color )`)
-                    .eq('trip_id', trip.id)
+                    .eq('trip_id', tripId)
                     .is('deleted_at', null)
                     .order('created_at', { ascending: true });
 
@@ -140,7 +129,6 @@ export default function EditTripPage({ params }: PageProps) {
                             return { name: p.province_code, statusId: matchedStatus.id };
                         });
 
-                        // Safe Parsing for Images JSONB
                         let imgs: string[] = [];
                         if (Array.isArray(t.images)) {
                             imgs = t.images;
@@ -161,20 +149,20 @@ export default function EditTripPage({ params }: PageProps) {
             } catch (err) { console.error("Error init:", err); }
         };
         initData();
-    }, [countryCode]); // เอา supabase ออกจาก dependency array เพื่อลดการ re-render
+    }, [tripId]);
 
-    // ✅ 2. Sync Active Group
+    // ✅ Sync Active Group Form
     useEffect(() => {
         if (activeGroup) {
             setCurrentGroupRegions(activeGroup.regions);
             setGroupName(activeGroup.name);
             setGroupNote(activeGroup.notes || "");
-
             const loadedImages = (activeGroup.images || []).map((url, idx) => ({
                 id: `existing-${idx}`,
                 url: url
             }));
             setCurrentImages(loadedImages);
+            setPreviewGroupId(null);
         } else {
             setCurrentGroupRegions([]);
             setGroupName("");
@@ -182,6 +170,12 @@ export default function EditTripPage({ params }: PageProps) {
             setCurrentImages([]);
         }
     }, [activeGroupId, activeGroup]);
+
+    useEffect(() => {
+        const handleClickOutside = () => setOpenMenuId(null);
+        window.addEventListener('click', handleClickOutside);
+        return () => window.removeEventListener('click', handleClickOutside);
+    }, []);
 
     // ✅ Image Handlers
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -206,7 +200,6 @@ export default function EditTripPage({ params }: PageProps) {
         setCurrentImages(prev => prev.filter(img => img.id !== idToRemove));
     };
 
-    // Actions
     const handleAddGroup = () => {
         const newId = `temp-${Date.now()}`;
         const newGroup: TripGroup = { id: newId, name: `Trip ${tripGroups.length + 1}`, regions: [], notes: "", images: [] };
@@ -227,48 +220,31 @@ export default function EditTripPage({ params }: PageProps) {
         setCurrentGroupRegions(prev => prev.map(r => r.name === regionName ? { ...r, statusId: newStatusId } : r));
     };
 
-    // ✅ 4. SAVE DATA (ใช้ User ID เป็นชื่อ Folder)
+    // ✅ SAVE DATA
     const handleApply = async () => {
         if (!activeGroupId || !dbTripId) return;
         setIsSaving(true);
 
         try {
-            // 4.1 ดึง User ID เพื่อใช้สร้าง path
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error("User not authenticated");
 
             const isNew = activeGroupId.startsWith('temp-');
             const finalImageUrls: string[] = [];
 
-            // 4.2 Loop Upload Images
             for (const img of currentImages) {
                 if (img.file) {
-                    // Sanitize filename
                     const cleanName = img.file.name.replace(/[^a-zA-Z0-9.]/g, "_");
-
-                    // ✅ ใช้ User ID เป็นชื่อ Folder หลัก (เพื่อให้ตรงกับ Policy ความปลอดภัย)
                     const fileName = `${user.id}/${Date.now()}_${cleanName}`;
-
-                    const { error: uploadError } = await supabase.storage
-                        .from('templates')
-                        .upload(fileName, img.file);
-
-                    if (uploadError) {
-                        console.error("Storage Error:", uploadError);
-                        throw new Error(`Upload failed: ${uploadError.message}`);
-                    }
-
-                    const { data: publicUrlData } = supabase.storage
-                        .from('templates')
-                        .getPublicUrl(fileName);
-
+                    const { error: uploadError } = await supabase.storage.from('templates').upload(fileName, img.file);
+                    if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+                    const { data: publicUrlData } = supabase.storage.from('templates').getPublicUrl(fileName);
                     finalImageUrls.push(publicUrlData.publicUrl);
                 } else {
                     finalImageUrls.push(img.url);
                 }
             }
 
-            // 4.3 Upsert Template
             const templatePayload = {
                 trip_id: dbTripId,
                 template_name: groupName,
@@ -281,7 +257,6 @@ export default function EditTripPage({ params }: PageProps) {
             if (tmplError) throw tmplError;
             const realTemplateId = savedTemplate.id;
 
-            // 4.4 Sync Regions
             await supabase.from('template_provinces').delete().eq('template_id', realTemplateId);
 
             if (currentGroupRegions.length > 0) {
@@ -298,7 +273,6 @@ export default function EditTripPage({ params }: PageProps) {
                 if (provError) throw provError;
             }
 
-            // 4.5 Update Local State
             setTripGroups(prev => prev.map(g =>
                 g.id === activeGroupId
                     ? {
@@ -324,23 +298,22 @@ export default function EditTripPage({ params }: PageProps) {
         }
     };
 
-    const handleDeleteGroup = async () => {
-        if (!confirm("Delete this group?")) return;
-        if (activeGroupId?.startsWith('temp-')) {
-            setTripGroups(prev => prev.filter(g => g.id !== activeGroupId));
-            setActiveGroupId(null);
+    const handleDeleteGroupById = async (groupId: string) => {
+        if (!confirm("Delete this template?")) return;
+        if (groupId.startsWith('temp-')) {
+            setTripGroups(prev => prev.filter(g => g.id !== groupId));
+            if (activeGroupId === groupId) setActiveGroupId(null);
             return;
         }
         setIsSaving(true);
         try {
-            const { error } = await supabase.from('templates').delete().eq('id', activeGroupId);
+            const { error } = await supabase.from('templates').delete().eq('id', groupId);
             if (error) throw error;
-            setTripGroups(prev => prev.filter(g => g.id !== activeGroupId));
-            setActiveGroupId(null);
+            setTripGroups(prev => prev.filter(g => g.id !== groupId));
+            if (activeGroupId === groupId) setActiveGroupId(null);
         } catch (err) { console.error("Delete failed:", err); } finally { setIsSaving(false); }
     };
 
-    // Helpers & Effects
     const handleAddStatus = () => { setTripStatuses([...tripStatuses, { id: Date.now().toString(), label: 'New', color: '#000000' }]); };
     const handleUpdateStatus = (id: string, key: keyof TripStatus, value: string) => { setTripStatuses(prev => prev.map(s => s.id === id ? { ...s, [key]: value } : s)); };
     const handleDeleteStatus = (id: string) => { if (tripStatuses.length <= 1) return; setTripStatuses(prev => prev.filter(s => s.id !== id)); const firstAvailable = tripStatuses.find(s => s.id !== id)?.id || ""; setCurrentGroupRegions(prev => prev.map(r => r.statusId === id ? { ...r, statusId: firstAvailable } : r)); };
@@ -354,32 +327,46 @@ export default function EditTripPage({ params }: PageProps) {
                 const response = await fetch(mapUrl);
                 if (!response.ok) throw new Error("Map data not found");
                 const data = await response.json();
-                if (data && data.features) { const regions = data.features.map((feature: any) => feature.properties.name).filter((name: any) => name).sort(); setRegionList(regions); }
+                if (data && data.features) { setRegionList(data.features.map((feature: any) => feature.properties.name).filter((name: any) => name).sort()); }
             } catch (error) { setRegionList([]); } finally { setIsLoadingRegions(false); }
         }
         fetchHighchartsMapData();
     }, [countryCode]);
 
     const filteredRegions = useMemo(() => regionList.filter(region => region.toLowerCase().includes(regionSearchQuery.toLowerCase())), [regionList, regionSearchQuery]);
-    const handleRegionClick = (provinceName: string) => { if (activeGroupId) toggleRegion(provinceName); else alert("Please create or select a trip group first!"); };
+    const handleRegionClick = (provinceName: string) => { if (activeGroupId) toggleRegion(provinceName); else alert("Please select a template to edit!"); };
 
+    // ✅ Logic การแสดงสีบนแผนที่
     const regionColors = useMemo(() => {
         const mapColors: Record<string, string> = {};
-        tripGroups.forEach(group => {
-            if (group.id === activeGroupId) return;
-            group.regions.forEach(r => {
-                const status = tripStatuses.find(s => s.id === r.statusId);
-                if (status) mapColors[r.name] = status.color;
-            });
-        });
+        
+        // 1. ถ้ากำลังแก้ (Edit Mode): แสดงสีเฉพาะกลุ่มที่แก้
         if (activeGroupId) {
             currentGroupRegions.forEach(r => {
                 const status = tripStatuses.find(s => s.id === r.statusId);
                 if (status) mapColors[r.name] = status.color;
             });
+        } 
+        // 2. ถ้ากดดู Preview ใน List: แสดงสีเฉพาะกลุ่มที่เลือก
+        else if (previewGroupId) {
+            const previewGroup = tripGroups.find(g => g.id === previewGroupId);
+            previewGroup?.regions.forEach(r => {
+                const status = tripStatuses.find(s => s.id === r.statusId);
+                if (status) mapColors[r.name] = status.color;
+            });
         }
+        // 3. ถ้าไม่ได้ทำอะไรเลย: แสดงรวมทุกกลุ่ม (Overview)
+        else {
+            tripGroups.forEach(group => {
+                group.regions.forEach(r => {
+                    const status = tripStatuses.find(s => s.id === r.statusId);
+                    if (status) mapColors[r.name] = status.color;
+                });
+            });
+        }
+        
         return mapColors;
-    }, [tripGroups, tripStatuses, activeGroupId, currentGroupRegions]);
+    }, [tripGroups, tripStatuses, activeGroupId, previewGroupId, currentGroupRegions]);
 
     const selectedRegionNames = useMemo(() => currentGroupRegions.map(r => r.name), [currentGroupRegions]);
 
@@ -399,7 +386,7 @@ export default function EditTripPage({ params }: PageProps) {
                                 <button onClick={() => { if (!activeGroupId) return; setIsRegionDropdownOpen(!isRegionDropdownOpen); setRegionSearchQuery(""); }} disabled={isLoadingRegions || !activeGroupId} className={`flex items-center gap-2 px-3 py-1.5 border rounded-md transition min-w-[200px] justify-between disabled:opacity-50 disabled:cursor-not-allowed ${activeGroupId ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-gray-50 border-gray-300 hover:bg-gray-100"}`}>
                                     <div className="flex items-center gap-2">
                                         <MapPin className={`w-4 h-4 ${activeGroupId ? "text-blue-600" : "text-gray-400"}`} />
-                                        <span className="text-sm font-medium truncate max-w-[150px]">{isLoadingRegions ? "Loading..." : activeGroupId ? (currentGroupRegions.length > 0 ? `${currentGroupRegions.length} Regions` : "Select Regions") : "Select a Group First"}</span>
+                                        <span className="text-sm font-medium truncate max-w-[150px]">{isLoadingRegions ? "Loading..." : activeGroupId ? (currentGroupRegions.length > 0 ? `${currentGroupRegions.length} Regions` : "Select Regions") : "Select a Template First"}</span>
                                     </div>
                                     {isRegionDropdownOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                                 </button>
@@ -421,9 +408,7 @@ export default function EditTripPage({ params }: PageProps) {
                             </div>
                         </div>
                     </div>
-                    <div className="flex gap-3">
-                        <button onClick={() => router.push('/mytrips')} className="flex items-center gap-2 px-4 py-2 border-2 border-blue-400 text-blue-500 font-bold rounded-lg hover:bg-blue-50 transition text-sm"><LayoutTemplate className="w-4 h-4" /> My Templates</button>
-                    </div>
+                    <button onClick={() => router.push('/mytrips')} className="flex items-center gap-2 px-4 py-2 border-2 border-blue-400 text-blue-500 font-bold rounded-lg hover:bg-blue-50 transition text-sm"><LayoutTemplate className="w-4 h-4" /> My Templates</button>
                 </div>
             </div>
 
@@ -437,11 +422,18 @@ export default function EditTripPage({ params }: PageProps) {
                             selectedRegions={activeGroupId ? selectedRegionNames : []}
                             onRegionClick={handleRegionClick}
                         />
-                        {!activeGroupId && (
+                        {(!activeGroupId && !previewGroupId) && (
                             <div className="absolute top-4 left-4 bg-white/90 backdrop-blur border border-gray-200 p-3 rounded-lg shadow-lg flex items-center gap-3 z-10 animate-in fade-in">
                                 <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center"><Layers className="w-4 h-4" /></div>
-                                <div><p className="text-sm font-bold text-gray-800">Map Locked</p><p className="text-xs text-gray-500">Create or select a group to edit.</p></div>
+                                <div><p className="text-sm font-bold text-gray-800">Global View</p><p className="text-xs text-gray-500">Showing all templates.</p></div>
                             </div>
+                        )}
+                        {previewGroupId && (
+                             <div className="absolute top-4 left-4 bg-blue-50 border border-blue-200 p-3 rounded-lg shadow-lg flex items-center gap-3 z-10 animate-in slide-in-from-left-2">
+                                <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-sm"><Search className="w-4 h-4" /></div>
+                                <div><p className="text-sm font-bold text-blue-800">Previewing Map</p><p className="text-xs text-blue-600">{tripGroups.find(g => g.id === previewGroupId)?.name}</p></div>
+                                <button onClick={() => setPreviewGroupId(null)} className="ml-2 text-blue-400 hover:text-blue-700 transition"><X className="w-4 h-4" /></button>
+                             </div>
                         )}
                     </div>
                 </div>
@@ -454,34 +446,33 @@ export default function EditTripPage({ params }: PageProps) {
                                 <>
                                     <MapPin className="w-5 h-5 text-red-500 fill-current flex-shrink-0" />
                                     <div className="flex flex-col">
-                                        {/* ✅ Fix: Header Name from saved state */}
-                                        <span className="truncate max-w-[200px] leading-tight text-base">
-                                            {activeGroup?.name || "Untitled Group"}
-                                        </span>
+                                        <span className="truncate max-w-[200px] leading-tight text-base">{activeGroup?.name || "Untitled Group"}</span>
                                         {currentGroupRegions.length > 0 && <span className="text-[10px] text-gray-500 font-normal truncate max-w-[200px]">{currentGroupRegions.length} Regions Selected</span>}
                                     </div>
                                 </>
-                            ) : <span className="text-gray-500 flex items-center gap-2 text-base font-medium"><Layers className="w-5 h-5" /> Trip Template</span>}
+                            ) : <span className="text-gray-500 flex items-center gap-2 text-base font-medium"><Layers className="w-5 h-5" /> Trip Templates</span>}
                         </div>
                         <button onClick={handleAddGroup} className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full shadow-sm transition tooltip" title="Add New Group"><Plus className="w-5 h-5" /></button>
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin">
                         {!activeGroupId ? (
-                            // GROUP LIST
                             <div className="space-y-4">
                                 {tripGroups.length === 0 ? (
                                     <div className="flex flex-col items-center justify-center h-[300px] text-center text-gray-400 gap-4">
                                         <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center"><Layers className="w-10 h-10 text-gray-300" /></div>
-                                        <div><p className="text-lg font-bold text-gray-600">No Trip Template Yet</p><p className="text-sm mb-4">Create a Template to start selecting regions.</p><button onClick={handleAddGroup} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 transition">Create First Template</button></div>
+                                        <div><p className="text-lg font-bold text-gray-600">No Trip Templates Yet</p><p className="text-sm mb-4">Create a template to start selecting regions.</p><button onClick={handleAddGroup} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 transition">Create First Template</button></div>
                                     </div>
                                 ) : (
                                     <div className="flex flex-col gap-3">
-                                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Your Template</p>
+                                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Your Templates</p>
                                         {tripGroups.map(group => (
-                                            <div key={group.id} onClick={() => setActiveGroupId(group.id)} className="p-4 bg-white border border-gray-200 rounded-xl hover:border-blue-300 hover:shadow-md transition cursor-pointer flex justify-between items-center group">
-                                                <div className="flex items-center gap-3">
-                                                    {/* ✅ Show Thumbnail Grid (max 3 items) */}
+                                            <div 
+                                                key={group.id} 
+                                                onClick={() => setPreviewGroupId(previewGroupId === group.id ? null : group.id)} // ✅ คลิกเพื่อโชว์แผนที่
+                                                className={`p-4 bg-white border rounded-xl transition flex justify-between items-center group relative cursor-pointer ${previewGroupId === group.id ? "border-blue-500 ring-1 ring-blue-500 shadow-md" : "border-gray-200 hover:border-blue-300 hover:shadow-md"}`}
+                                            >
+                                                <div className="flex items-center gap-3 flex-1">
                                                     <div className="flex -space-x-2 overflow-hidden">
                                                         {group.images && group.images.length > 0 ? (
                                                             group.images.slice(0, 3).map((img, i) => (
@@ -493,7 +484,37 @@ export default function EditTripPage({ params }: PageProps) {
                                                     </div>
                                                     <div><h4 className="font-bold text-gray-800 text-sm">{group.name}</h4><p className="text-xs text-gray-500">{group.regions.length} Regions</p></div>
                                                 </div>
-                                                <div className="text-gray-400"><Settings className="w-4 h-4" /></div>
+                                                
+                                                {/* ✅ 3-Dot Menu */}
+                                                <div className="relative">
+                                                    <button 
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setOpenMenuId(openMenuId === group.id ? null : group.id);
+                                                        }}
+                                                        className="p-1 hover:bg-gray-100 rounded-full transition text-gray-400"
+                                                    >
+                                                        <MoreVertical className="w-5 h-5" />
+                                                    </button>
+                                                    
+                                                    {/* Dropdown Menu */}
+                                                    {openMenuId === group.id && (
+                                                        <div className="absolute right-0 mt-2 w-32 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); setActiveGroupId(group.id); setOpenMenuId(null); }}
+                                                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 flex items-center gap-2 border-b border-gray-50"
+                                                            >
+                                                                <Edit3 className="w-4 h-4" /> Edit
+                                                            </button>
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); handleDeleteGroupById(group.id); setOpenMenuId(null); }}
+                                                                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                                            >
+                                                                <Trash2 className="w-4 h-4" /> Delete
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
@@ -502,15 +523,14 @@ export default function EditTripPage({ params }: PageProps) {
                         ) : (
                             /* EDIT FORM */
                             <div className="animate-in fade-in slide-in-from-right-4 duration-300 space-y-6">
-                                <button onClick={() => setActiveGroupId(null)} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 mb-2 transition"><ArrowLeft className="w-4 h-4" /> Back to Groups</button>
+                                <button onClick={() => setActiveGroupId(null)} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 mb-2 transition"><ArrowLeft className="w-4 h-4" /> Back to Templates</button>
 
-                                {/* ✅ Image Upload (Grid Layout) */}
+                                {/* Image Upload */}
                                 <div>
                                     <div className="flex justify-between items-center mb-2">
                                         <label className="text-xs font-bold text-gray-600 flex items-center gap-1"><ImageIcon className="w-3 h-3" /> Images ({currentImages.length}/10)</label>
                                         {currentImages.length > 0 && <span className="text-[10px] text-gray-400">Supported: jpg, png</span>}
                                     </div>
-
                                     <div className="grid grid-cols-4 gap-2 mb-2">
                                         {currentImages.map((img) => (
                                             <div key={img.id} className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 group bg-gray-50">
@@ -520,8 +540,6 @@ export default function EditTripPage({ params }: PageProps) {
                                                 </button>
                                             </div>
                                         ))}
-
-                                        {/* Upload Button */}
                                         {currentImages.length < 10 && (
                                             <div className="aspect-square bg-white border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition group" onClick={() => fileInputRef.current?.click()}>
                                                 <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center mb-1 group-hover:bg-blue-100 transition"><Plus className="w-4 h-4 text-blue-500" /></div>
@@ -538,13 +556,12 @@ export default function EditTripPage({ params }: PageProps) {
                                 </div>
 
                                 <div>
-                                    <label className="text-xs font-bold text-gray-600 flex items-center gap-1 mb-2"><StickyNote className="w-3 h-3" />Note (Optional)</label>
+                                    <label className="text-xs font-bold text-gray-600 flex items-center gap-1 mb-2"><StickyNote className="w-3 h-3" /> Note (Optional)</label>
                                     <textarea rows={2} value={groupNote} onChange={(e) => setGroupNote(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none" placeholder="Add details about this trip..." />
                                 </div>
 
-                                {/* Region List */}
                                 <div className="pt-2 border-t border-gray-100">
-                                    <label className="text-xs font-bold text-gray-600 mb-3 block">Province Selected ({currentGroupRegions.length})</label>
+                                    <label className="text-xs font-bold text-gray-600 mb-3 block">Regions Selected ({currentGroupRegions.length})</label>
                                     {currentGroupRegions.length > 0 ? (
                                         <div className="flex flex-col gap-3 max-h-[300px] overflow-y-auto pr-1 scrollbar-thin">
                                             {currentGroupRegions.map(region => (
@@ -573,7 +590,7 @@ export default function EditTripPage({ params }: PageProps) {
                     {activeGroupId && (
                         <div className="p-6 border-t border-gray-100 bg-white mt-auto flex-shrink-0 animate-in slide-in-from-bottom-2 flex gap-3">
                             <button onClick={handleApply} disabled={isSaving} className="flex-1 bg-[#039BE5] hover:bg-blue-600 text-white font-bold py-3 rounded-xl shadow-sm transition transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">{isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save Template"}</button>
-                            <button onClick={handleDeleteGroup} disabled={isSaving} className="px-4 py-3 text-red-500 bg-red-50 hover:bg-red-100 hover:text-red-600 font-bold rounded-xl transition disabled:opacity-50"><Trash2 className="w-5 h-5" /></button>
+                            <button onClick={() => handleDeleteGroupById(activeGroupId)} disabled={isSaving} className="px-4 py-3 text-red-500 bg-red-50 hover:bg-red-100 hover:text-red-600 font-bold rounded-xl transition disabled:opacity-50"><Trash2 className="w-5 h-5" /></button>
                         </div>
                     )}
                 </div>
@@ -582,7 +599,6 @@ export default function EditTripPage({ params }: PageProps) {
     );
 }
 
-// RegionItem Component
 function RegionItem({ region, statuses, onUpdateStatus, onRemove, statusActions }: RegionItemProps) {
     const [isOpen, setIsOpen] = useState(false);
     const currentStatus = statuses.find((s) => s.id === region.statusId) || statuses[0];
