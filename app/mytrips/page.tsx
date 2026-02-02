@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client"; 
-import { Plus, Trash2, MapPin, Globe, Loader2,Backpack } from "lucide-react"; 
+import { Plus, Trash2, MapPin, Globe, Loader2, Backpack, Layers } from "lucide-react"; 
 import TripViewModal from "../../components/TripViewModal";
 import { COUNTRIES_DATA } from "@/data/mockData"; 
 
@@ -11,7 +11,7 @@ interface TripData {
   id: string;
   country: string;
   created_at: string;
-  templates: any[]; // ✅ เก็บข้อมูล templates เพื่อส่งให้ Modal
+  templates: any[]; 
   stats: {
     regions: number; 
     provinces: number; 
@@ -41,13 +41,9 @@ export default function MyTripsPage() {
   const [trips, setTrips] = useState<TripData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // State for Trip View Modal
   const [viewTrip, setViewTrip] = useState<TripData | null>(null);
-
-  // State for Delete Confirmation Modal
   const [tripToDelete, setTripToDelete] = useState<TripData | null>(null);
 
-  // ✅ เตรียม Map รูปภาพ
   const countryImageMap = useMemo(() => {
     const map: Record<string, string> = {};
     if (COUNTRIES_DATA) {
@@ -92,7 +88,7 @@ export default function MyTripsPage() {
           id: trip.id,
           country: trip.country,
           created_at: new Date(trip.created_at).toLocaleDateString(),
-          templates: trip.templates, // ✅ ส่ง templates ไปด้วย
+          templates: trip.templates,
           stats: {
             regions: trip.templates.length,
             provinces: uniqueProvinces
@@ -160,7 +156,6 @@ export default function MyTripsPage() {
                     {trips.map((trip) => {
                         const countryCode = trip.country.toLowerCase();
                         const countryName = COUNTRY_NAMES[countryCode] || trip.country; 
-                        // ✅ ดึงรูปภาพจาก mockData
                         const coverImage = countryImageMap[countryName.toLowerCase()] || "https://placehold.co/800x600?text=No+Image";
 
                         return (
@@ -177,7 +172,6 @@ export default function MyTripsPage() {
                                         <p className="text-[10px] text-gray-500 mb-3 ">Created: {trip.created_at}</p>
                                         <div className="h-px bg-gray-200 w-full mb-3"></div>
                                         
-                                        {/* Stats Vertical */}
                                         <div className="flex items-center justify-center gap-8"> 
                                             <div className="flex flex-col items-center justify-center gap-1"> 
                                                 <MapPin className="w-4 h-4 text-[#3B82F6]" />
@@ -185,16 +179,23 @@ export default function MyTripsPage() {
                                             </div>
                                             <div className="w-px h-8 bg-gray-200"></div>
                                             <div className="flex flex-col items-center justify-center gap-1"> 
-                                                <Backpack className="w-4 h-4 text-[#3B82F6]" />
+                                                <Layers className="w-4 h-4 text-[#3B82F6]" />
                                                 <span className="text-[11px] font-medium text-gray-600">{trip.stats.regions} Templates</span>
                                             </div>
                                         </div>
                                     </div>
 
-                                    {/* Buttons Centered */}
                                     <div className="flex items-center justify-center gap-[10px] mt-auto w-full">
                                         <button onClick={() => setViewTrip(trip)} className="w-[60px] h-[29px] bg-[#3B82F6] hover:bg-blue-600 text-white font-medium rounded-[5px] text-[12px] flex items-center justify-center transition cursor-pointer">View</button>
-                                        <button onClick={() => router.push(`/mytrips/edit/${trip.country}`)} className="w-[60px] h-[29px] bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-[5px] text-[12px] flex items-center justify-center transition cursor-pointer">Edit</button>
+                                        
+                                        {/* ✅ แก้ไขจุดนี้: ใช้ trip.id ในการลิงก์ไปหน้า Edit */}
+                                        <button 
+                                            onClick={() => router.push(`/mytrips/edit/${trip.id}`)} 
+                                            className="w-[60px] h-[29px] bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-[5px] text-[12px] flex items-center justify-center transition cursor-pointer"
+                                        >
+                                            Edit
+                                        </button>
+                                        
                                         <button className="w-[60px] h-[29px] bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-[5px] text-[12px] flex items-center justify-center transition cursor-pointer">Share</button>
                                     </div>
                                 </div>
@@ -209,17 +210,14 @@ export default function MyTripsPage() {
         {activeTab === "itinerary" && <div>Itinerary Content...</div>}
       </div>
 
-      {/* ✅ View Modal with Image Prop */}
       {viewTrip && (
         <TripViewModal 
             trip={viewTrip} 
-            // ✅ ส่งรูปภาพที่ถูกต้องไปที่ Modal
             coverImage={countryImageMap[COUNTRY_NAMES[viewTrip.country.toLowerCase()]?.toLowerCase()] || countryImageMap[viewTrip.country.toLowerCase()] || "https://placehold.co/800x600?text=No+Image"}
             onClose={() => setViewTrip(null)} 
         />
       )}
 
-      {/* Delete Modal */}
       {tripToDelete && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="w-[382px] bg-white rounded-[16px] p-6 shadow-2xl transform scale-100 animate-in zoom-in-95 duration-200">

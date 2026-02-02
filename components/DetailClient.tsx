@@ -9,7 +9,7 @@ import { Place } from "@/types/place";
 import { createClient } from "@/utils/supabase/client";
 import AuthModal from "@/components/AuthModal";
 
-// ... (KEEP CONSTANTS & MAPPINGS AS IS) ...
+// ... (CONSTANTS & MAPPINGS KEEP AS IS) ...
 const CATEGORY_MATCHING_KEYWORDS: Record<string, string[]> = {
     "Mountains": ["mountain", "mountains", "peak", "volcano", "hill", "doi"],
     "National parks": ["national_park", "national_parks", "nature_reserve", "forest"],
@@ -114,7 +114,7 @@ interface DetailClientProps {
 }
 
 const REVIEWS_PER_PAGE = 3;
-const VISIT_TYPES = ["Solo Travel", "Couple", "Family", "Friend", "Business"]; // Options for travel party
+const VISIT_TYPES = ["Solo Travel", "Couple", "Family", "Friend", "Business"];
 
 export default function DetailClient({ place, nearbyPlaces, morePictures }: DetailClientProps) {
     const router = useRouter();
@@ -129,7 +129,7 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
     const [showModal, setShowModal] = useState(false);
     const [galleryQueue, setGalleryQueue] = useState<{ url: string }[]>([]);
 
-    // Review Image Popup State (NEW)
+    // Review Image Popup State
     const [showReviewModal, setShowReviewModal] = useState(false);
     const [selectedReviewImage, setSelectedReviewImage] = useState<string | null>(null);
     const [selectedReviewData, setSelectedReviewData] = useState<any | null>(null);
@@ -137,7 +137,7 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
 
     // Review States
     const [activeStarFilter, setActiveStarFilter] = useState("All");
-    const [activePartyFilter, setActivePartyFilter] = useState("All"); // ✅ NEW STATE
+    const [activePartyFilter, setActivePartyFilter] = useState("All");
     const [reviewPage, setReviewPage] = useState(1);
     const [searchQuery, setSearchQuery] = useState("");
 
@@ -156,16 +156,13 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
 
     const currentReviews = (place as any)?.reviews || [];
 
-    // ✅ ปรับ Logic การ Filter: รวม Star Filter + Search Query + Party Filter
     const filteredReviews = currentReviews.filter((review: any) => {
-        // 1. Filter by Star
         let starMatch = true;
         if (activeStarFilter !== "All") {
             const starValue = parseInt(activeStarFilter.split(" ")[0]);
             starMatch = review.rating === starValue;
         }
 
-        // 2. Filter by Search Query
         let searchMatch = true;
         if (searchQuery.trim() !== "") {
             const query = searchQuery.toLowerCase();
@@ -173,10 +170,8 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
             searchMatch = content.includes(query);
         }
 
-        // 3. Filter by Travel Party (NEW)
         let partyMatch = true;
         if (activePartyFilter !== "All") {
-            // Note: Ensure your DB column name matches here. Assuming 'travel_party' or similar field exists in review object
             const party = review.travel_party || review.visit_type || "";
             partyMatch = party === activePartyFilter;
         }
@@ -294,8 +289,7 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
         });
     };
 
-    // --- HANDLERS (REVIEW IMAGE MODAL WITH NAVIGATION) ---
-
+    // --- HANDLERS (REVIEW IMAGE MODAL) ---
     const findReviewByImage = (imageUrl: string) => {
         return currentReviews.find((review: any) => {
             if (Array.isArray(review.images)) {
@@ -331,11 +325,9 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
 
     const navigateReviewImage = (direction: 'next' | 'prev', e: MouseEvent) => {
         e.stopPropagation();
-
         if (morePictures.length <= 1) return;
 
         let newIndex = direction === 'next' ? selectedImageIndex + 1 : selectedImageIndex - 1;
-
         if (newIndex >= morePictures.length) newIndex = 0;
         if (newIndex < 0) newIndex = morePictures.length - 1;
 
@@ -376,7 +368,6 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
 
     const handleReviewClick = async () => {
         const { data: { session } } = await supabase.auth.getSession();
-
         if (session) {
             router.push(`/review?placeId=${place.id}`);
         } else {
@@ -403,22 +394,10 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
             {showReviewModal && selectedReviewData && selectedReviewImage && (
                 <div className="fixed inset-0 z-[10000] flex items-center justify-center">
                     <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={closeReviewModal} />
-
-                    <div
-                        /* ✅ แก้ไข: ปรับ height เป็น 625px (103+522) */
-                        className="relative bg-white rounded-[16px] overflow-hidden shadow-2xl flex flex-col animate-in fade-in zoom-in-95 duration-200 border-[2px] border-[#1E518C]"
-                        style={{ width: '1133px', height: '625px' }}
-                    >
-                        {/* Header (Title Bar) - Height 103px */}
-                        <div className="flex-shrink-0 w-full h-[103px] flex justify-between items-center bg-white z-20 
-                                      pt-[32px] pb-[32px] pl-[65px] pr-[64px]
-                                      border-b-[2px] border-[#1E518C] 
-                                      rounded-tl-[16px] rounded-tr-[16px]">
-                            {/* ... (Header Content เหมือนเดิม) ... */}
+                    <div className="relative bg-white rounded-[16px] overflow-hidden shadow-2xl flex flex-col animate-in fade-in zoom-in-95 duration-200 border-[2px] border-[#1E518C]" style={{ width: '1133px', height: '625px' }}>
+                        <div className="flex-shrink-0 w-full h-[103px] flex justify-between items-center bg-white z-20 pt-[32px] pb-[32px] pl-[65px] pr-[64px] border-b-[2px] border-[#1E518C] rounded-tl-[16px] rounded-tr-[16px]">
                             <div className="w-[623px] h-[39px] flex items-center gap-[16px]">
-                                <h3 className="font-Inter font-semibold text-[32px] text-[#194473] leading-none truncate">
-                                    {place.name}
-                                </h3>
+                                <h3 className="font-Inter font-semibold text-[32px] text-[#194473] leading-none truncate">{place.name}</h3>
                                 {(place.rating ?? 0) > 0 && (
                                     <div className="w-[172px] h-[24px] flex items-center gap-[8px] flex-shrink-0">
                                         <div className="flex items-center gap-[4px] w-[136px] h-[24px]">
@@ -426,9 +405,7 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
                                                 <Star key={star} size={24} className={`${star <= Math.round(place.rating || 0) ? "fill-[#FFCC00] text-[#FFCC00]" : "fill-gray-300 text-gray-300"}`} />
                                             ))}
                                         </div>
-                                        <span className="font-Inter font-normal text-[20px] leading-none text-[#212121]">
-                                            ({place.rating})
-                                        </span>
+                                        <span className="font-Inter font-normal text-[20px] leading-none text-[#212121]">({place.rating})</span>
                                     </div>
                                 )}
                             </div>
@@ -437,18 +414,8 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
                             </button>
                         </div>
 
-                        {/* ✅ Content Area (Wrapper) */}
-                        <div
-                            className="flex w-[1133px] h-[522px] bg-white gap-[16px] 
-                                       /* ✅ แก้ไข: ปรับ Padding ตามสเปก (บน-ล่าง 60px, ซ้าย-ขวา 32px) */
-                                       py-[60px] px-[32px]
-                                         border-t-0 border-[#1E518C] 
-                                       rounded-bl-[16px] rounded-br-[16px]
-                                       overflow-hidden"
-                        >
-                            {/* Left Side: Review Details */}
-                            <div className="w-[400px] flex-shrink-0  pr-6 flex flex-col gap-4 overflow-y-auto bg-white h-full">
-                                {/* ... (เนื้อหาด้านซ้าย เหมือนเดิม) ... */}
+                        <div className="flex w-[1133px] h-[522px] bg-white gap-[16px] py-[60px] px-[32px] border-t-0 border-[#1E518C] rounded-bl-[16px] rounded-br-[16px] overflow-hidden">
+                            <div className="w-[400px] flex-shrink-0 pr-6 flex flex-col gap-4 overflow-y-auto bg-white h-full">
                                 <div className="flex flex-col gap-1">
                                     <div className="flex items-center gap-3">
                                         <div className="relative w-[32px] h-[32px] rounded-full overflow-hidden flex-shrink-0">
@@ -484,29 +451,18 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
                                 </div>
                             </div>
 
-                            {/* Right Side: Image */}
-                            {/* ✅ แก้ไข: ลบ w-[704px] ออก เพื่อให้ flex-1 ทำงานเต็มที่ ขยายเต็มพื้นที่ที่เหลือ */}
                             <div className="flex-1 h-[402px] bg-gray-100 flex items-center justify-center relative group overflow-hidden rounded-[8px]">
-
                                 <div className="relative w-full h-full">
-                                    {/* ปุ่มกดเลื่อนรูป (ยังอยู่เหมือนเดิม) */}
                                     {morePictures.length > 1 && (
                                         <>
-                                            <button
-                                                onClick={(e) => navigateReviewImage('prev', e)}
-                                                className="absolute left-4 top-1/2 -translate-y-1/2 z-30 w-[32px] h-[32px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-[30px] p-[9px] flex items-center justify-center gap-[10px] text-[#ffffff] transition-all active:scale-95 hidden md:flex shadow-sm cursor-pointer"
-                                            >
+                                            <button onClick={(e) => navigateReviewImage('prev', e)} className="absolute left-4 top-1/2 -translate-y-1/2 z-30 w-[32px] h-[32px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-[30px] p-[9px] flex items-center justify-center gap-[10px] text-[#ffffff] transition-all active:scale-95 hidden md:flex shadow-sm cursor-pointer">
                                                 <ArrowLeft className="w-[20px] h-[20px]" />
                                             </button>
-                                            <button
-                                                onClick={(e) => navigateReviewImage('next', e)}
-                                                className="absolute right-4 top-1/2 -translate-y-1/2 z-50 w-[32px] h-[32px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-[30px] p-[9px] flex items-center justify-center gap-[10px] text-[#ffffff] transition-all active:scale-95 hidden md:flex shadow-sm cursor-pointer"
-                                            >
+                                            <button onClick={(e) => navigateReviewImage('next', e)} className="absolute right-4 top-1/2 -translate-y-1/2 z-50 w-[32px] h-[32px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-[30px] p-[9px] flex items-center justify-center gap-[10px] text-[#ffffff] transition-all active:scale-95 hidden md:flex shadow-sm cursor-pointer">
                                                 <ArrowRight className="w-[20px] h-[20px]" />
                                             </button>
                                         </>
                                     )}
-
                                     <Image
                                         src={selectedReviewImage}
                                         alt="Review Detail"
@@ -520,12 +476,12 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
                     </div>
                 </div>
             )}
-            {/* ... EXISTING MAIN GALLERY MODAL ... */}
+
+            {/* ... MAIN GALLERY MODAL ... */}
             {showModal && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center">
                     <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowModal(false)} />
                     <div className="relative bg-white flex flex-col z-10 overflow-hidden shadow-2xl rounded-[16px]" style={{ width: '835px', height: '624px' }}>
-                        {/* ... (Keep existing gallery modal content) ... */}
                         <div className="w-[835px] h-[103px] flex justify-between items-center bg-white border-[2px] border-[#EEEEEE] rounded-tl-[8px] rounded-tr-[8px] pt-[32px] pr-[64px] pb-[32px] pl-[65px] shrink-0">
                             <div className="w-[623px] h-[39px] flex items-center gap-[16px]">
                                 <h3 className="font-Inter font-semibold text-[32px] text-[#194473] leading-[100%] truncate">{place.name}</h3>
@@ -665,13 +621,7 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
                                             </button>
                                         ))}
 
-                                        {/* ✅ NEW: Dropdown Travel Party Filter */}
-                                        {/* เพิ่ม ml-auto เพื่อดันไปชิดขวาสุด */}
-                                        {/* ✅ NEW: Custom Dropdown Travel Party Filter */}
                                         <div className="relative ml-auto">
-
-                                            {/* 1. Trigger Button (ปุ่มกดเปิด) - ขนาด 55x27 เท่าเดิม */}
-                                            {/* 1. Trigger Button */}
                                             <button
                                                 onClick={() => setIsPartyOpen(!isPartyOpen)}
                                                 className="w-auto h-[27px] bg-white border border-[#1E518C] rounded-[8px] flex items-center justify-center gap-[4px] px-[8px] py-[4px] cursor-pointer"
@@ -679,8 +629,6 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
                                                 <span className="font-inter font-normal text-[12px] text-[#1E518C] leading-none truncate">
                                                     {activePartyFilter === "All" ? "All" : activePartyFilter}
                                                 </span>
-
-                                                {/* ✅ Logic: ถ้าเปิดอยู่ให้โชว์ลูกศรชี้ขึ้น ถ้าปิดอยู่โชว์ลูกศรชี้ลง */}
                                                 {isPartyOpen ? (
                                                     <ChevronUp size={14} className="text-[#1E518C] flex-shrink-0" />
                                                 ) : (
@@ -688,15 +636,10 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
                                                 )}
                                             </button>
 
-                                            {/* 2. Dropdown Menu (รายการตัวเลือก) */}
                                             {isPartyOpen && (
                                                 <>
-                                                    {/* Backdrop: คลิกข้างนอกเพื่อปิด */}
                                                     <div className="fixed inset-0 z-10" onClick={() => setIsPartyOpen(false)}></div>
-
-                                                    {/* Menu Container: 120x135px */}
                                                     <div className="absolute right-0 top-[32px] z-20 w-[120px] h-auto overflow-y-auto bg-white border border-[#1E518C] rounded-[8px]  shadow-sm flex flex-col animate-in fade-in zoom-in-95 duration-0">
-
                                                         {["All", ...VISIT_TYPES].map((type) => (
                                                             <button
                                                                 key={type}
@@ -760,12 +703,9 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
                                                             </div>
                                                         )}
 
-                                                        {/* ✅ NEW: Travel Party Tag (Updated Specs) */}
                                                         {(review.travel_party || review.visit_type) && (
                                                             <div className="flex items-center gap-2 mb-3">
                                                                 <div className="flex items-center h-[25px] px-[8px] py-[4px] gap-[10px] bg-[#757575] rounded-[8px]">
-                                                                    {/* Icon: ปรับเป็นสีขาว */}
-                                                                    {/* Text: 14px SemiBold White */}
                                                                     <span className="font-inter font-semibold text-[14px] text-white leading-none">
                                                                         {review.travel_party || review.visit_type}
                                                                     </span>
@@ -773,19 +713,12 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
                                                             </div>
                                                         )}
                                                         <div className="flex items-center gap-6 ">
-
                                                             <button className="flex items-center gap-2 text-[14px] text-[#194473] font-medium hover:opacity-80 transition-opacity">
-
                                                                 <ThumbsUp size={16} /> Like
-
                                                             </button>
-
                                                             <button className="flex items-center gap-2 text-[14px] text-[#194473] font-medium hover:opacity-80 transition-opacity">
-
                                                                 <Share2 size={16} /> Share
-
                                                             </button>
-
                                                         </div>
                                                     </div>
                                                 </div>
@@ -798,9 +731,7 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
                                     )}
                                 </div>
 
-                                {/* Pagination and Review Button Section */}
                                 <div className="w-[631px] h-[30px] flex items-center justify-between gap-[8px] rounded-[8px] flex-shrink-0">
-                                    {/* Pagination */}
                                     {totalPages > 1 ? (
                                         <div className="flex items-center gap-2">
                                             <button onClick={() => setReviewPage((p) => Math.max(1, p - 1))} disabled={reviewPage === 1} className="flex items-center justify-center w-[32px] h-[24px] gap-[8px] px-[8px] py-[4px] rounded-[4px] bg-[#9E9E9E] border border-[#EEEEEE] disabled:opacity-50 transition hover:bg-[#757575]"><ChevronLeft size={16} className="text-white" /></button>
@@ -905,7 +836,7 @@ export default function DetailClient({ place, nearbyPlaces, morePictures }: Deta
                                 </div>
                             )}
 
-                            {nearbyPlaces.length > 0 && (
+                            {nearbyPlaces && nearbyPlaces.length > 0 && (
                                 <div className="w-[456px] flex flex-col gap-4 mt-2 ">
                                     <h3 className="font-inter font-bold text-[20px] text-[#194473] leading-none">Best near by</h3>
                                     <div className="flex flex-col gap-3">
