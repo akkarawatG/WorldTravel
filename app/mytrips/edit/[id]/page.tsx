@@ -144,7 +144,86 @@ export default function EditTripPage({ params }: PageProps) {
     const toggleRegion = (regionName: string) => { if (!activeGroupId) return; setCurrentGroupRegions(prev => { const exists = prev.find(r => r.name === regionName); if (exists) return prev.filter(r => r.name !== regionName); return [...prev, { name: regionName, statusId: tripStatuses[0].id }]; }); };
     const updateRegionStatus = (regionName: string, newStatusId: string) => { setCurrentGroupRegions(prev => prev.map(r => r.name === regionName ? { ...r, statusId: newStatusId } : r)); };
     
-    const handleApply = async () => { if (!activeGroupId || !dbTripId) return; setIsSaving(true); try { const { data: { user } } = await supabase.auth.getUser(); if (!user) throw new Error("User not authenticated"); const isNew = activeGroupId.startsWith('temp-'); const finalImageUrls: string[] = []; for (const img of currentImages) { if (img.file) { const cleanName = img.file.name.replace(/[^a-zA-Z0-9.]/g, "_"); const fileName = `${user.id}/${Date.now()}_${cleanName}`; const { error: uploadError } = await supabase.storage.from('templates').upload(fileName, img.file); if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`); const { data: publicUrlData } = supabase.storage.from('templates').getPublicUrl(fileName); finalImageUrls.push(publicUrlData.publicUrl); } else { finalImageUrls.push(img.url); } } const templatePayload = { trip_id: dbTripId, template_name: groupName, notes: groupNote, images: finalImageUrls, ...(isNew ? {} : { id: activeGroupId }) }; const { data: savedTemplate, error: tmplError } = await supabase.from('templates').upsert(templatePayload).select().single(); if (tmplError) throw tmplError; const realTemplateId = savedTemplate.id; await supabase.from('template_provinces').delete().eq('template_id', realTemplateId); if (currentGroupRegions.length > 0) { const provincesPayload = currentGroupRegions.map(r => { const statusObj = tripStatuses.find(s => s.id === r.statusId) || DEFAULT_STATUSES[0]; return { template_id: realTemplateId, province_code: r.name, status: statusObj.label, color: statusObj.color }; }); const { error: provError } = await supabase.from('template_provinces').insert(provincesPayload); if (provError) throw provError; } setTripGroups(prev => prev.map(g => g.id === activeGroupId ? { ...g, id: realTemplateId, regions: currentGroupRegions, name: groupName, notes: groupNote, images: finalImageUrls } : g )); if (isNew) setActiveGroupId(realTemplateId); const updatedImagesState = finalImageUrls.map((url, idx) => ({ id: `saved-${idx}`, url: url })); setCurrentImages(updatedImagesState); } catch (err: any) { console.error("Save failed:", err); alert(`Failed to save: ${err.message}`); } finally { setIsSaving(false); } };
+    // ✅ SAVE DATA
+    const handleApply = async () => {
+        if (!activeGroupId || !dbTripId) return;
+        setIsSaving(true);
+
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error("User not authenticated");
+
+            const isNew = activeGroupId.startsWith('temp-');
+            const finalImageUrls: string[] = [];
+
+            // 1. Upload Images
+            for (const img of currentImages) {
+                if (img.file) {
+                    const cleanName = img.file.name.replace(/[^a-zA-Z0-9.]/g, "_");
+                    const fileName = `${user.id}/${Date.now()}_${cleanName}`;
+                    const { error: uploadError } = await supabase.storage.from('templates').upload(fileName, img.file);
+                    if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+                    const { data: publicUrlData } = supabase.storage.from('templates').getPublicUrl(fileName);
+                    finalImageUrls.push(publicUrlData.publicUrl);
+                } else {
+                    finalImageUrls.push(img.url);
+                }
+            }
+
+            // 2. Save/Update Template Header
+            const templatePayload = {
+                trip_id: dbTripId,
+                template_name: groupName,
+                notes: groupNote,
+                images: finalImageUrls,
+                ...(isNew ? {} : { id: activeGroupId })
+            };
+
+            const { data: savedTemplate, error: tmplError } = await supabase.from('templates').upsert(templatePayload).select().single();
+            if (tmplError) throw tmplError;
+            const realTemplateId = savedTemplate.id;
+
+            // 3. Save Regions (Delete old -> Insert new)
+            await supabase.from('template_provinces').delete().eq('template_id', realTemplateId);
+
+            if (currentGroupRegions.length > 0) {
+                const provincesPayload = currentGroupRegions.map(r => {
+                    const statusObj = tripStatuses.find(s => s.id === r.statusId) || DEFAULT_STATUSES[0];
+                    return {
+                        template_id: realTemplateId,
+                        province_code: r.name,
+                        status: statusObj.label,
+                        color: statusObj.color
+                    };
+                });
+                const { error: provError } = await supabase.from('template_provinces').insert(provincesPayload);
+                if (provError) throw provError;
+            }
+
+            // 4. Update UI List
+            setTripGroups(prev => prev.map(g =>
+                g.id === activeGroupId
+                    ? {
+                        ...g,
+                        id: realTemplateId, // อัปเดต ID จริงจาก Database (กรณีเป็น New Template)
+                        regions: currentGroupRegions,
+                        name: groupName,
+                        notes: groupNote,
+                        images: finalImageUrls
+                    }
+                    : g
+            ));
+
+            // ✅ 5. EXIT EDIT MODE (กลับไปหน้า Your Templates)
+            setActiveGroupId(null); 
+
+        } catch (err: any) {
+            console.error("Save failed:", err);
+            alert(`Failed to save: ${err.message}`);
+        } finally {
+            setIsSaving(false);
+        }
+    };
     const handleDeleteGroupById = async (groupId: string) => { if (!confirm("Delete this template?")) return; if (groupId.startsWith('temp-')) { setTripGroups(prev => prev.filter(g => g.id !== groupId)); if (activeGroupId === groupId) setActiveGroupId(null); return; } setIsSaving(true); try { const { error } = await supabase.from('templates').delete().eq('id', groupId); if (error) throw error; setTripGroups(prev => prev.filter(g => g.id !== groupId)); if (activeGroupId === groupId) setActiveGroupId(null); } catch (err) { console.error("Delete failed:", err); } finally { setIsSaving(false); } };
     const handleAddStatus = () => { setTripStatuses([...tripStatuses, { id: Date.now().toString(), label: 'New', color: '#000000' }]); };
     const handleUpdateStatus = (id: string, key: keyof TripStatus, value: string) => { setTripStatuses(prev => prev.map(s => s.id === id ? { ...s, [key]: value } : s)); };
