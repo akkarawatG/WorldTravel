@@ -179,7 +179,7 @@ export default function MyTripsPage() {
                                             </div>
                                             <div className="w-px h-8 bg-gray-200"></div>
                                             <div className="flex flex-col items-center justify-center gap-1"> 
-                                                <Layers className="w-4 h-4 text-[#3B82F6]" />
+                                                <Backpack className="w-4 h-4 text-[#3B82F6]" />
                                                 <span className="text-[11px] font-medium text-gray-600">{trip.stats.regions} Templates</span>
                                             </div>
                                         </div>
