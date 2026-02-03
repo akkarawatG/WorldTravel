@@ -285,11 +285,7 @@ export default function EditTripPage({ params }: PageProps) {
                         <img src={`https://flagcdn.com/w40/${countryCode}.png`} alt={countryCode} className="w-[54px] h-[36px] rounded-[5px] object-cover shadow-sm" />
                         <h1 className="text-[28px] font-bold text-black leading-[34px] tracking-[0.02em]">{countryName}</h1>
                     </div>
-                </div>
-
-                {/* Middle Section */}
-                <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 hidden md:block">
-                    <div className="relative">
+                                        <div className="relative">
                         <button onClick={() => { if (!activeGroupId) return; setIsRegionDropdownOpen(!isRegionDropdownOpen); setRegionSearchQuery(""); }} disabled={isLoadingRegions || !activeGroupId} className={`w-[323px] h-[40px] bg-[#F0F6FC] border border-[#60A3DE] rounded-[10px] flex items-center justify-between px-[16px] transition disabled:opacity-50 disabled:cursor-not-allowed ${!activeGroupId ? "opacity-60" : ""}`}>
                             <div className="flex items-center gap-[10px]">
                                 <MapPin className="w-[22px] h-[24px] text-[#60A3DE]" />
@@ -314,6 +310,9 @@ export default function EditTripPage({ params }: PageProps) {
                         )}
                     </div>
                 </div>
+
+
+
 
                 {/* Right Section */}
                 <div className="flex items-center gap-[24px]">
@@ -443,7 +442,7 @@ export default function EditTripPage({ params }: PageProps) {
                             <div className="h-full flex flex-col">
                                 {tripGroups.length === 0 ? (
                                     // Empty State (Frame 1171279447)
-                                    <div className="flex flex-col items-center justify-center gap-[32px] mt-[100px]">
+                                    <div className="flex flex-col items-center justify-center gap-[32px] ">
                                         {/* Icon & Text */}
                                         <div className="flex flex-col items-center gap-[16px] w-full">
                                             <div className="w-[48px] h-[48px] text-[#3A82CE]">
