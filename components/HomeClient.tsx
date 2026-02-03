@@ -3,8 +3,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image"; // ✅ ใช้ next/image
-import { MapPin, ArrowLeft, ArrowRight, Plus, Star } from "lucide-react";
+import Image from "next/image";
+import { MapPin, ArrowLeft, ArrowRight, Star } from "lucide-react";
 import Icon from '@mdi/react';
 import { mdiPlus } from '@mdi/js';
 import Link from "next/link";
@@ -133,10 +133,10 @@ export default function HomeClient({ initialAttractions, initialCountries }: Hom
   const [currentCountries, setCurrentCountries] = useState<CountryData[]>(initialCountries);
   const [isLoading, setIsLoading] = useState(false);
 
-  const heroSlides = topAttractions.slice(0, 8);
-  const displaySlides = heroSlides.length > 0 ? heroSlides : [];
+  const displaySlides = topAttractions.slice(0, 8);
 
   useEffect(() => {
+    // ป้องกันการ fetch ซ้ำในครั้งแรกถ้ามี initialData อยู่แล้วและเป็น Asia
     if (selectedContinent === "Asia" && topAttractions.length > 0 && topAttractions === initialAttractions) {
         return;
     }
@@ -144,14 +144,25 @@ export default function HomeClient({ initialAttractions, initialCountries }: Hom
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const realAttractions = await getTopAttractionsByContinent(selectedContinent);
-        let finalAttractions = realAttractions;
+        // ✅ 1. ถ้าเลือก Oceania ให้รวม Australia ด้วย
+        const targetContinents = selectedContinent === "Oceania" 
+          ? ["Oceania", "Australia"] 
+          : [selectedContinent];
 
-        if (realAttractions.length === 0) {
-          const mockAttr = MOCK_ATTRACTIONS
-            .filter(p => p.location.continent === selectedContinent)
-            .sort((a, b) => b.rating - a.rating)
-            .slice(0, 8)
+        // ✅ 2. ยิง API พร้อมกันทุกทวีปที่ระบุ (Parallel Requests)
+        const apiRequests = targetContinents.map(continent => 
+            getTopAttractionsByContinent(continent)
+        );
+        
+        const results = await Promise.all(apiRequests);
+
+        // ✅ 3. รวมผลลัพธ์ (Flatten Arrays)
+        let combinedAttractions = results.flat();
+
+        // กรณีไม่มีข้อมูลจาก API ให้ใช้ Mock Data (Fallback Logic)
+        if (combinedAttractions.length === 0) {
+             const mockAttr = MOCK_ATTRACTIONS
+            .filter(p => targetContinents.includes(p.location.continent))
             .map(m => ({
               ...m,
               id: String(m.id),
@@ -159,42 +170,42 @@ export default function HomeClient({ initialAttractions, initialCountries }: Hom
               country: m.location.country,
               continent: m.location.continent,
             }));
-          finalAttractions = mockAttr as unknown as Place[];
+            combinedAttractions = mockAttr as unknown as Place[];
         }
-        setTopAttractions(finalAttractions);
 
-        const mockCountriesList = (COUNTRIES_DATA[selectedContinent] || []).map(c => ({
+        // ✅ 4. เรียงลำดับตาม Rating (จากมากไปน้อย)
+        // จุดนี้สำคัญมาก: ทำให้สถานที่ Rating 4.9 (จาก Australia) ขึ้นก่อน 4.8
+        combinedAttractions.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+
+        // ✅ 5. ตัดให้เหลือ 8 อันดับแรก
+        setTopAttractions(combinedAttractions.slice(0, 8));
+
+        // --- จัดการข้อมูลประเทศ (Countries) ---
+        let combinedCountries: any[] = [];
+        targetContinents.forEach(continentKey => {
+            if (COUNTRIES_DATA[continentKey]) {
+                combinedCountries = [...combinedCountries, ...COUNTRIES_DATA[continentKey]];
+            }
+        });
+
+        const formattedCountries = combinedCountries.map(c => ({
           name: c.name,
-          continent: selectedContinent,
+          continent: selectedContinent, // UI ยังแสดงเป็นชื่อทวีปหลัก (Oceania)
           image: c.image
         }));
-        setCurrentCountries(mockCountriesList);
+
+        setCurrentCountries(formattedCountries);
 
       } catch (error) {
         console.error("Error fetching data:", error);
-        const mockAttr = MOCK_ATTRACTIONS
-          .filter(p => p.location.continent === selectedContinent)
-          .map(m => ({
-            ...m,
-            id: String(m.id),
-            province_state: m.location.province_state,
-            country: m.location.country,
-            continent: m.location.continent,
-          }));
-        setTopAttractions(mockAttr as unknown as Place[]);
-        const mockCountriesList = (COUNTRIES_DATA[selectedContinent] || []).map(c => ({
-          name: c.name,
-          continent: selectedContinent,
-          image: c.image
-        }));
-        setCurrentCountries(mockCountriesList);
+        setTopAttractions([]);
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchData();
-  }, [selectedContinent]);
+  }, [selectedContinent]); // ลบ initialAttractions ออกจาก dependency เพื่อลดการ re-run ที่ไม่จำเป็น
 
   return (
     <div className="min-h-screen bg-[#FFFFFF] font-inter text-gray-800 pb-20">
@@ -237,14 +248,11 @@ export default function HomeClient({ initialAttractions, initialCountries }: Hom
                   }}
                 >
                   {displaySlides.map((slide, index) => {
-                    const displayString = getDisplayCategories(slide.category_tags);
                     
                     const imgUrl = Array.isArray(slide.images) && typeof slide.images[0] === 'object' && 'url' in slide.images[0]
                       ? (slide.images[0] as any).url
                       : (slide.images?.[0] || "https://placehold.co/800x400?text=No+Image");
                     
-                    // ✅ Updated Logic: อนุญาตเฉพาะ Supabase และ Unsplash ให้ Optimize
-                    // นอกนั้นให้ Unoptimize เพื่อป้องกัน Timeout/429
                     const isRiskySource = !imgUrl.includes('supabase.co') && !imgUrl.includes('unsplash.com');
 
                     return (
@@ -392,7 +400,6 @@ export default function HomeClient({ initialAttractions, initialCountries }: Hom
                       >
                         {(Array.isArray(place.images) && place.images.length > 0 ? place.images : []).map((img, idx) => {
                           const imgUrl = (typeof img === 'object' && 'url' in img) ? (img as any).url : img;
-                          // ✅ ใช้ Logic ใหม่สำหรับ Grid ด้วย
                           const isRiskySource = !imgUrl.includes('supabase.co') && !imgUrl.includes('unsplash.com');
 
                           return (
@@ -485,7 +492,6 @@ export default function HomeClient({ initialAttractions, initialCountries }: Hom
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-[25px]">
             {currentCountries.slice(0, 8).map((country) => {
-              // ✅ ใช้ Logic ใหม่สำหรับ Country ด้วย
               const isRiskySource = !country.image.includes('supabase.co') && !country.image.includes('unsplash.com');
 
               return (
@@ -495,7 +501,6 @@ export default function HomeClient({ initialAttractions, initialCountries }: Hom
                   className="relative w-full max-w-[264px] h-[331px] rounded-[16px] overflow-hidden cursor-pointer group shadow-sm hover:shadow-md transition-all duration-300 border border-[#1E518C] flex flex-col bg-white mx-auto"
                 >
                   <div className="relative w-full h-[256px] overflow-hidden">
-                    {/* ✅ ใช้ Image แทน img */}
                     <Image 
                       src={country.image} 
                       alt={country.name}

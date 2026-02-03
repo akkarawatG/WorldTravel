@@ -25,6 +25,11 @@ export default function DynamicMap({
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [hoveredRegion, setHoveredRegion] = useState<string | null>(null);
+  
+  // กำหนดขนาด Base สำหรับคำนวณ Projection (ไม่เกี่ยวกับขนาดแสดงผลจริง)
+  const MAP_WIDTH = 800;
+  const MAP_HEIGHT = 600;
+
   const [mapConfig, setMapConfig] = useState({ scale: 1, offset: [0, 0] as [number, number] });
 
   useEffect(() => {
@@ -34,15 +39,22 @@ export default function DynamicMap({
         let code = countryCode.toLowerCase().trim();
         const codeMap: Record<string, string> = { 'uk': 'gb', 'usa': 'us', 'uae': 'ae' };
         if (codeMap[code]) code = codeMap[code];
+        
+        // Fetch Highcharts TopoJSON
         const url = `https://code.highcharts.com/mapdata/countries/${code}/${code}-all.topo.json`;
         const response = await fetch(url);
+        
         if (!response.ok) throw new Error(`Map data not found`);
         const topology = await response.json();
+        
         let objectKey = Object.keys(topology.objects)[0];
         for (const key in topology.objects) { if (topology.objects[key].geometries) { objectKey = key; break; } }
+        
         const geojson = feature(topology, topology.objects[objectKey]);
-        const width = 800; const height = 600;
-        const projection = geoIdentity().reflectY(true).fitSize([width, height], geojson as any);
+        
+        // Calculate Projection to fit the SVG box
+        const projection = geoIdentity().reflectY(true).fitSize([MAP_WIDTH, MAP_HEIGHT], geojson as any);
+        
         setMapConfig({ scale: projection.scale(), offset: [projection.translate()[0], projection.translate()[1]] });
         setGeoData(geojson);
       } catch (err: any) { setErrorMsg("Failed to load map"); } finally { setIsLoading(false); }
@@ -56,17 +68,31 @@ export default function DynamicMap({
      return geoPath().projection(projection);
   }, [mapConfig]);
 
-  const handleMouseMove = (event: React.MouseEvent) => { setMousePos({ x: event.clientX, y: event.clientY - 40 }); };
+  const handleMouseMove = (event: React.MouseEvent) => { setMousePos({ x: event.clientX, y: event.clientY - 20 }); };
 
-  if (isLoading || !geoData || !pathGenerator) return <div className="w-full h-full flex items-center justify-center text-gray-400">Loading Map...</div>;
+  if (isLoading) return <div className="w-full h-full flex items-center justify-center text-gray-400 animate-pulse">Loading Map...</div>;
+  if (!geoData || !pathGenerator) return <div className="w-full h-full flex items-center justify-center text-gray-300">Map data unavailable</div>;
 
   const features = geoData.type === 'FeatureCollection' ? geoData.features : [geoData];
 
   return (
-    <div className="w-full h-full bg-gray-100 rounded-xl overflow-hidden relative flex items-center justify-center border border-gray-200" onMouseMove={handleMouseMove}>
-      <ComposableMap width={800} height={600} className="w-full h-full" style={{ maxHeight: "80vh", maxWidth: "100%" }} projectionConfig={{}}>
-        <ZoomableGroup center={[400, 300]} minZoom={0.5} maxZoom={4} translateExtent={[[0, 0], [800, 600]]}> 
-          <g>
+    // ✅ ปรับ Container เป็น w-full h-full เพื่อให้เต็มพื้นที่ Parent
+    // ✅ ตัด bg-gray-100 และ border ออก เพื่อให้เนียนไปกับพื้นหลังขาวของ Frame หลัก
+    <div className="w-full h-full relative flex items-center justify-center outline-none" onMouseMove={handleMouseMove}>
+      
+      <ComposableMap 
+        width={MAP_WIDTH} 
+        height={MAP_HEIGHT} 
+        className="w-full h-full outline-none"
+        projectionConfig={{}}
+      >
+        <ZoomableGroup 
+            center={[MAP_WIDTH / 2, MAP_HEIGHT / 2]} 
+            minZoom={0.8} 
+            maxZoom={6} 
+            translateExtent={[[0, 0], [MAP_WIDTH, MAP_HEIGHT]]}
+        > 
+          <g className="outline-none">
             {features.map((geo: any, index: number) => {
                 const regionName = geo.properties["name"] || geo.properties["NAME_1"] || "Unknown";
                 const isSelected = selectedRegions.includes(regionName); 
@@ -74,28 +100,34 @@ export default function DynamicMap({
                 const pathData = pathGenerator(geo) || undefined;
 
                 // 🎨 Color Logic
-                let fillColor = "#E5E7EB"; // Default Gray
+                let fillColor = "#F3F4F6"; // Default Gray (Color of unselected regions)
                 
-                // 1. Priority: สีจาก Status (สำคัญสุด)
+                // 1. Priority: สีจาก Status
                 if (regionColors[regionName]) {
                     fillColor = regionColors[regionName];
                 } 
-                // 2. Priority: สีฟ้า Default ถ้าเลือกแล้วยังไม่กำหนด Status
+                // 2. Priority: สี Default ถ้าเลือกแล้ว
                 else if (isSelected) {
                     fillColor = "#3B82F6"; 
                 }
 
-                // 3. Hover Effect
+                // 3. Hover Effect (Darken slightly)
                 if (isHovered) {
-                    fillColor = (regionColors[regionName] || isSelected) ? adjustColor(fillColor, -20) : "#D1D5DB";
+                    fillColor = adjustColor(fillColor, -20);
                 }
 
                 return (
                   <path
-                    key={`${regionName}-${index}`} d={pathData} fill={fillColor} 
-                    stroke="#FFFFFF" // ✅ ขอบขาวเสมอ
-                    strokeWidth={isHovered ? 1 : 0.5}
-                    style={{ transition: "fill 0.2s ease, stroke 0.2s ease", cursor: "pointer", outline: "none" }}
+                    key={`${regionName}-${index}`} 
+                    d={pathData} 
+                    fill={fillColor} 
+                    stroke="#FFFFFF" 
+                    strokeWidth={0.5}
+                    style={{ 
+                        transition: "fill 0.2s ease", 
+                        cursor: "pointer", 
+                        outline: "none" 
+                    }}
                     onClick={() => onRegionClick(regionName)}
                     onMouseEnter={() => { setTooltipContent(regionName); setHoveredRegion(regionName); }}
                     onMouseLeave={() => { setTooltipContent(""); setHoveredRegion(null); }}
@@ -105,8 +137,17 @@ export default function DynamicMap({
           </g>
         </ZoomableGroup>
       </ComposableMap>
+
+      {/* Tooltip */}
       {tooltipContent && (
-         <div className="fixed bg-gray-900/95 text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow-xl pointer-events-none z-50 backdrop-blur-md border border-white/10" style={{ left: mousePos.x, top: mousePos.y, transform: 'translateX(-50%) translateY(-120%)' }}>
+         <div 
+            className="fixed z-[9999] pointer-events-none bg-gray-800 text-white text-xs px-2 py-1 rounded shadow-lg backdrop-blur-sm opacity-90 transition-opacity"
+            style={{ 
+                left: mousePos.x, 
+                top: mousePos.y, 
+                transform: 'translate(-50%, -100%)' 
+            }}
+         >
             {tooltipContent}
          </div>
       )}
@@ -114,4 +155,20 @@ export default function DynamicMap({
   );
 }
 
-function adjustColor(color: string, percent: number) { return color; }
+// ✅ Helper Function: ปรับความเข้มสีสำหรับ Hover Effect
+function adjustColor(color: string, amount: number) {
+    if (!color.startsWith("#")) return color; // รองรับเฉพาะ Hex ชั่วคราว
+    
+    const hex = color.replace("#", "");
+    const num = parseInt(hex, 16);
+    
+    let r = (num >> 16) + amount;
+    let g = ((num >> 8) & 0x00FF) + amount;
+    let b = (num & 0x0000FF) + amount;
+
+    r = Math.max(Math.min(255, r), 0);
+    g = Math.max(Math.min(255, g), 0);
+    b = Math.max(Math.min(255, b), 0);
+
+    return "#" + (g | (b << 8) | (r << 16)).toString(16).padStart(6, '0');
+}

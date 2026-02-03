@@ -6,7 +6,8 @@ export const CONTINENTS = [
   "North America",
   "South America",
   "Europe",
-  "Oceania"
+  "Oceania",
+  // "Australia"
 ];
 
 // ข้อมูลประเทศ Top Visited Countries 2025
@@ -140,10 +141,11 @@ export const COUNTRIES_DATA: Record<string, any[]> = {
     { rank: 118, name: "Tanzania", capital: "Dodoma", image: "https://dynamic-media-cdn.tripadvisor.com/media/photo-o/15/33/fb/43/tanzania.jpg?w=2400&h=-1&s=1" }
   ],
   "Oceania": [
-    { rank: 45, name: "Australia", capital: "Canberra", image: "https://images.unsplash.com/photo-1523482580672-f109ba8cb9be?w=600&q=80" },
     { rank: 80, name: "New Zealand", capital: "Wellington", image: "https://s3.amazonaws.com/iexplore_web/images/assets/000/005/358/original/dreamstime_m_50545156.jpg?1442002281" }
   ],
-  "Antarctica": []
+  "Australia": [
+    { rank: 45, name: "Australia", capital: "Canberra", image: "https://images.unsplash.com/photo-1523482580672-f109ba8cb9be?w=600&q=80" }
+  ]
 };
 
 // ... (ส่วน TOP_LOCATIONS, Interfaces, MY_TRIPS, ITINERARIES, SAVED_PLACES คงเดิม) ...
