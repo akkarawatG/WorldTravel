@@ -130,10 +130,6 @@ export default function MyTripsPage() {
         </div>
       </div>
       <div className="max-w-[1128px] mx-auto ">
-        <div className="flex gap-10 border-b border-gray-200 mb-10">
-           <button onClick={() => setActiveTab("map")} className={`pb-4 text-lg font-bold border-b-4 transition-all ${activeTab === "map" ? "border-blue-500 text-blue-600" : "border-transparent text-gray-400 hover:text-gray-600"}`}>My Travel Map</button>
-           <button onClick={() => setActiveTab("itinerary")} className={`pb-4 text-lg font-bold border-b-4 transition-all ${activeTab === "itinerary" ? "border-[#8B5CF6] text-[#8B5CF6]" : "border-transparent text-gray-400 hover:text-gray-600"}`}>Itinerary</button>
-        </div>
 
         {activeTab === "map" && (
           <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">

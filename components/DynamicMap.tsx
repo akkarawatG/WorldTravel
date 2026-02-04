@@ -100,7 +100,7 @@ export default function DynamicMap({
                 const pathData = pathGenerator(geo) || undefined;
 
                 // 🎨 Color Logic
-                let fillColor = "#F3F4F6"; // Default Gray (Color of unselected regions)
+                let fillColor = "#CCCCCC"; // Default Gray (Color of unselected regions)
                 
                 // 1. Priority: สีจาก Status
                 if (regionColors[regionName]) {
