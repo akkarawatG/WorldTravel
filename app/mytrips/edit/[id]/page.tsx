@@ -28,22 +28,19 @@ import {
     Maximize2,
     Minimize2,
     GripVertical,
-    Calendar
+    Calendar,
+    Eye,
+    EyeOff
 } from "lucide-react";
 import dynamic from 'next/dynamic';
 
 const COUNTRY_NAMES: Record<string, string> = {
-    // Asia
+    // ... (รายการประเทศคงเดิม) ...
     cn: "China", th: "Thailand", my: "Malaysia", jp: "Japan", ae: "United Arab Emirates", sa: "Saudi Arabia", sg: "Singapore", vn: "Vietnam", in: "India", kr: "South Korea", id: "Indonesia", tw: "Taiwan", bh: "Bahrain", kw: "Kuwait", kz: "Kazakhstan", ph: "Philippines", uz: "Uzbekistan", kh: "Cambodia", jo: "Jordan", la: "Laos", bn: "Brunei", om: "Oman", qa: "Qatar", lk: "Sri Lanka", ir: "Iran",
-    // Europe
     fr: "France", es: "Spain", it: "Italy", pl: "Poland", hu: "Hungary", hr: "Croatia", tr: "Turkey", gb: "United Kingdom", de: "Germany", gr: "Greece", dk: "Denmark", at: "Austria", nl: "Netherlands", pt: "Portugal", ro: "Romania", ch: "Switzerland", be: "Belgium", lv: "Latvia", ge: "Georgia", se: "Sweden", lt: "Lithuania", ee: "Estonia", no: "Norway", fi: "Finland", is: "Iceland",
-    // North America
     us: "United States", mx: "Mexico", ca: "Canada", do: "Dominican Republic", bs: "Bahamas", cu: "Cuba", jm: "Jamaica", cr: "Costa Rica", gt: "Guatemala", pa: "Panama",
-    // South America
     ar: "Argentina", br: "Brazil", cl: "Chile", pe: "Peru", py: "Paraguay", co: "Colombia", uy: "Uruguay", ec: "Ecuador",
-    // Africa
     za: "South Africa", ma: "Morocco", eg: "Egypt", ke: "Kenya", na: "Namibia", tz: "Tanzania",
-    // Oceania
     au: "Australia", nz: "New Zealand"
 };
 
@@ -84,7 +81,6 @@ interface RegionItemProps {
     };
 }
 
-// ✅ Default Statuses (ใช้เป็นตัวตั้งต้น แต่จะถูก override ด้วยข้อมูลจาก Supabase)
 const DEFAULT_STATUSES: TripStatus[] = [
     { id: 'visited', label: 'Visited', color: '#4CAF50' },
     { id: 'planned', label: 'Plan to go', color: '#2196F3' },
@@ -120,6 +116,11 @@ export default function EditTripPage({ params }: PageProps) {
     const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
     const [previewGroupId, setPreviewGroupId] = useState<string | null>(null);
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+    const [isViewAll, setIsViewAll] = useState(false);
+
+    // ✅✅✅ MAP CONTROL STATE (Added)
+    // 400, 300 คือจุดกึ่งกลางของแผนที่ขนาด 800x600 (ตามที่ตั้งใน DynamicMap)
+    const [mapPosition, setMapPosition] = useState({ coordinates: [400, 300] as [number, number], zoom: 1 });
 
     // Form States
     const [currentGroupRegions, setCurrentGroupRegions] = useState<RegionData[]>([]);
@@ -138,6 +139,7 @@ export default function EditTripPage({ params }: PageProps) {
 
     const activeGroup = useMemo(() => tripGroups.find(g => g.id === activeGroupId), [tripGroups, activeGroupId]);
 
+    // ... (useEffect initData, useEffect activeGroup - คงเดิม) ...
     useEffect(() => {
         const initData = async () => {
             try {
@@ -157,11 +159,7 @@ export default function EditTripPage({ params }: PageProps) {
 
                 if (tempError) throw tempError;
                 if (templates) {
-                    
-                    // ✅✅✅ STEP 1: Sync Status Colors from Supabase
-                    // ดึง status และ color ที่เคยบันทึกไว้ใน DB มา update ใส่ tripStatuses
-                    // เพื่อให้สีตรงกับที่บันทึก ไม่ใช่กลับไปเป็น Default
-                    const dbStatuses = new Map<string, string>(); // Label -> Color
+                    const dbStatuses = new Map<string, string>();
                     templates.forEach((t: any) => {
                         t.template_provinces.forEach((p: any) => {
                             if (p.status && p.color) {
@@ -170,39 +168,29 @@ export default function EditTripPage({ params }: PageProps) {
                         });
                     });
 
-                    // Merge กับ Default Statuses
                     let syncedStatuses = [...DEFAULT_STATUSES];
                     dbStatuses.forEach((color, label) => {
                         const existingIdx = syncedStatuses.findIndex(s => s.label === label);
                         if (existingIdx !== -1) {
-                            // ถ้ามีชื่อ Status นี้อยู่แล้ว ให้ Update สีตาม DB
                             syncedStatuses[existingIdx] = { ...syncedStatuses[existingIdx], color: color };
                         } else {
-                            // ถ้าเป็น Status ใหม่ (User เคยสร้างเอง) ให้เพิ่มเข้าไป
                             syncedStatuses.push({
-                                id: `db-${label}-${Date.now()}`, 
-                                label: label, 
-                                color: color 
+                                id: `db-${label}-${Date.now()}`,
+                                label: label,
+                                color: color
                             });
                         }
                     });
                     setTripStatuses(syncedStatuses);
 
-                    // ✅✅✅ STEP 2: Map Regions using Synced Statuses
                     const mappedGroups: TripGroup[] = templates.map((t: any) => {
                         const mappedRegions = t.template_provinces.map((p: any) => {
-                            // หา Status ที่ตรงกับ Label และ Color ใน DB
                             let matchedStatus = syncedStatuses.find(s => s.label === p.status && s.color === p.color);
-                            
-                            // ถ้าไม่เจอ (เช่น สีเปลี่ยน) ให้หาจาก Label อย่างเดียว
                             if (!matchedStatus) matchedStatus = syncedStatuses.find(s => s.label === p.status);
-                            
-                            // ถ้ายังไม่เจอ ให้ใช้ Default ตัวแรก
                             if (!matchedStatus) matchedStatus = syncedStatuses[0];
-
                             return { name: p.province_code, statusId: matchedStatus.id };
                         });
-                        
+
                         let imgs: string[] = [];
                         if (Array.isArray(t.images)) { imgs = t.images; } else if (typeof t.images === 'string') { try { imgs = JSON.parse(t.images); } catch { imgs = [t.images]; } }
 
@@ -233,6 +221,7 @@ export default function EditTripPage({ params }: PageProps) {
             const loadedImages = (activeGroup.images || []).map((url, idx) => ({ id: `existing-${idx}`, url: url }));
             setCurrentImages(loadedImages);
             setPreviewGroupId(null);
+            setIsViewAll(false);
         } else {
             setCurrentGroupRegions([]); setGroupName(""); setGroupNote(""); setCurrentImages([]); setStartDate(""); setEndDate("");
         }
@@ -244,12 +233,11 @@ export default function EditTripPage({ params }: PageProps) {
         return () => window.removeEventListener('click', handleClickOutside);
     }, []);
 
+    // ... (Handlers คงเดิม) ...
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => { const files = e.target.files; if (files) { const newFiles = Array.from(files); if (currentImages.length + newFiles.length > 10) { alert("Maximum 10 images allowed."); return; } const newImageStates: ImageState[] = newFiles.map(file => ({ id: `new-${Date.now()}-${Math.random()}`, url: URL.createObjectURL(file), file: file })); setCurrentImages(prev => [...prev, ...newImageStates]); } if (fileInputRef.current) fileInputRef.current.value = ""; };
     const handleRemoveImage = (idToRemove: string) => { setCurrentImages(prev => prev.filter(img => img.id !== idToRemove)); };
     const handleAddGroup = () => { const newId = `temp-${Date.now()}`; const newGroup: TripGroup = { id: newId, name: `Trip ${tripGroups.length + 1}`, regions: [], notes: "", images: [], travel_start_date: null, travel_end_date: null }; setTripGroups([...tripGroups, newGroup]); setActiveGroupId(newId); };
     const toggleRegion = (regionName: string) => { if (!activeGroupId) return; setCurrentGroupRegions(prev => { const exists = prev.find(r => r.name === regionName); if (exists) return prev.filter(r => r.name !== regionName); return [...prev, { name: regionName, statusId: tripStatuses[0].id }]; }); };
-    
-    // ✅ Function update status ของจังหวัด
     const updateRegionStatus = (regionName: string, newStatusId: string) => { setCurrentGroupRegions(prev => prev.map(r => r.name === regionName ? { ...r, statusId: newStatusId } : r)); };
 
     const handleApply = async () => {
@@ -285,16 +273,15 @@ export default function EditTripPage({ params }: PageProps) {
             if (tmplError) throw tmplError;
             const realTemplateId = savedTemplate.id;
             await supabase.from('template_provinces').delete().eq('template_id', realTemplateId);
-            
+
             if (currentGroupRegions.length > 0) {
-                // ✅ Save Status & Color to DB
                 const provincesPayload = currentGroupRegions.map(r => {
                     const statusObj = tripStatuses.find(s => s.id === r.statusId) || DEFAULT_STATUSES[0];
-                    return { 
-                        template_id: realTemplateId, 
-                        province_code: r.name, 
-                        status: statusObj.label, 
-                        color: statusObj.color 
+                    return {
+                        template_id: realTemplateId,
+                        province_code: r.name,
+                        status: statusObj.label,
+                        color: statusObj.color
                     };
                 });
                 const { error: provError } = await supabase.from('template_provinces').insert(provincesPayload);
@@ -323,37 +310,56 @@ export default function EditTripPage({ params }: PageProps) {
     const filteredRegions = useMemo(() => regionList.filter(region => region.toLowerCase().includes(regionSearchQuery.toLowerCase())), [regionList, regionSearchQuery]);
     const handleRegionClick = (provinceName: string) => { if (activeGroupId) toggleRegion(provinceName); };
 
-    // ✅ Map Logic: Preview or Edit Mode
+    // ✅✅✅ MAP CONTROL HANDLERS
+    const handleZoomIn = () => {
+        setMapPosition(pos => ({ ...pos, zoom: Math.min(pos.zoom * 1.5, 4) }));
+    };
+    const handleZoomOut = () => {
+        setMapPosition(pos => ({ ...pos, zoom: Math.max(pos.zoom / 1.5, 1) }));
+    };
+    const handleResetZoom = () => {
+        setMapPosition({ coordinates: [400, 300], zoom: 1 });
+    };
+
     const mapSelectedRegions = useMemo(() => {
-        if (activeGroupId) {
-            return currentGroupRegions.map(r => r.name);
-        }
+        if (activeGroupId) return currentGroupRegions.map(r => r.name);
         if (previewGroupId) {
             const group = tripGroups.find(g => g.id === previewGroupId);
             return group ? group.regions.map(r => r.name) : [];
         }
+        if (isViewAll) {
+            const allRegions = new Set<string>();
+            tripGroups.forEach(g => g.regions.forEach(r => allRegions.add(r.name)));
+            return Array.from(allRegions);
+        }
         return [];
-    }, [activeGroupId, previewGroupId, currentGroupRegions, tripGroups]);
+    }, [activeGroupId, previewGroupId, currentGroupRegions, tripGroups, isViewAll]);
 
-    // ✅ Color Logic: Use current statuses
     const regionColors = useMemo(() => {
         const mapColors: Record<string, string> = {};
-        if (activeGroupId) { 
-            currentGroupRegions.forEach(r => { 
-                const status = tripStatuses.find(s => s.id === r.statusId); 
-                if (status) mapColors[r.name] = status.color; 
-            }); 
+        if (activeGroupId) {
+            currentGroupRegions.forEach(r => {
+                const status = tripStatuses.find(s => s.id === r.statusId);
+                if (status) mapColors[r.name] = status.color;
+            });
         }
-        else if (previewGroupId) { 
-            const previewGroup = tripGroups.find(g => g.id === previewGroupId); 
-            previewGroup?.regions.forEach(r => { 
-                // Note: For preview, we match by logic again if needed, but since we updated tripGroups in Init, statusIds should be correct
-                const status = tripStatuses.find(s => s.id === r.statusId); 
-                if (status) mapColors[r.name] = status.color; 
-            }); 
+        else if (previewGroupId) {
+            const previewGroup = tripGroups.find(g => g.id === previewGroupId);
+            previewGroup?.regions.forEach(r => {
+                const status = tripStatuses.find(s => s.id === r.statusId);
+                if (status) mapColors[r.name] = status.color;
+            });
+        }
+        else if (isViewAll) {
+            tripGroups.forEach(group => {
+                group.regions.forEach(r => {
+                    const status = tripStatuses.find(s => s.id === r.statusId);
+                    if (status) mapColors[r.name] = status.color;
+                });
+            });
         }
         return mapColors;
-    }, [tripGroups, tripStatuses, activeGroupId, previewGroupId, currentGroupRegions]);
+    }, [tripGroups, tripStatuses, activeGroupId, previewGroupId, currentGroupRegions, isViewAll]);
 
     const formatDate = (dateStr: string) => {
         if (!dateStr) return "";
@@ -366,15 +372,13 @@ export default function EditTripPage({ params }: PageProps) {
 
             {/* HEADER */}
             <div className="h-[60px] bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] px-10 z-20 flex-shrink-0 flex items-center justify-between relative mb-[32px]">
-                {/* ... Header Content ... */}
                 <div className="flex items-center gap-[48px]">
                     <button onClick={() => router.back()} className="hover:opacity-60 transition"><ArrowLeft className="w-6 h-6 text-black" /></button>
                     <div className="flex items-center gap-[16px]">
                         <img src={`https://flagcdn.com/w40/${countryCode}.png`} alt={countryCode} className="w-[54px] h-[36px] rounded-[5px] object-cover shadow-sm" />
                         <h1 className="text-[28px] font-bold text-black leading-[34px] tracking-[0.02em]">{countryName}</h1>
                     </div>
-
-                                        <div className="relative">
+                    <div className="relative">
                         <button onClick={(e) => { e.stopPropagation(); if (!activeGroupId) return; setIsRegionDropdownOpen(!isRegionDropdownOpen); setRegionSearchQuery(""); }} disabled={isLoadingRegions || !activeGroupId} className={`w-[323px] h-[40px] bg-[#F0F6FC] border border-[#60A3DE] rounded-[10px] flex items-center justify-between px-[16px] transition disabled:opacity-50 disabled:cursor-not-allowed ${!activeGroupId ? "opacity-60" : ""}`}>
                             <div className="flex items-center gap-[10px]">
                                 <MapPin className="w-[22px] h-[24px] text-[#60A3DE]" />
@@ -398,8 +402,6 @@ export default function EditTripPage({ params }: PageProps) {
                         )}
                     </div>
                 </div>
-                {/* ... Middle Dropdown ... */}
-                {/* ... Right Buttons ... */}
                 <div className="flex items-center gap-[24px]">
                     <button onClick={() => router.push('/mytrips')} className="w-[190px] h-[40px] border border-[#3A82CE] rounded-[5px] flex items-center justify-center gap-[10px] hover:bg-[#F0F6FC] transition"><LayoutTemplate className="w-[18px] h-[18px] text-[#3A82CE]" /><span className="font-medium text-[20px] leading-[24px] text-[#3A82CE]">My Templates</span></button>
                     <div className="w-px h-8 bg-gray-300"></div>
@@ -414,20 +416,23 @@ export default function EditTripPage({ params }: PageProps) {
                 <div className="flex-1 relative mr-[32px]">
                     <div className="w-full h-full bg-white shadow-[0px_0px_4px_rgba(0,0,0,0.25)] rounded-[10px] overflow-hidden relative">
                         <div className="w-full h-full">
-                            <DynamicMap 
-                                countryCode={countryCode} 
-                                regionColors={regionColors} 
-                                selectedRegions={mapSelectedRegions} 
-                                onRegionClick={handleRegionClick} 
+                            <DynamicMap
+                                countryCode={countryCode}
+                                regionColors={regionColors}
+                                selectedRegions={mapSelectedRegions}
+                                onRegionClick={handleRegionClick}
+                                // ✅✅✅ Pass Zoom Props
+                                mapPosition={mapPosition}
+                                onMoveEnd={setMapPosition}
                             />
                         </div>
-                        {/* Zoom Controls */}
+                        {/* ✅✅✅ Zoom Controls with Handlers */}
                         <div className="absolute bottom-8 right-8 w-[53px] bg-white border border-[#D9D9D9] rounded-[5px] flex flex-col items-center py-2 shadow-sm z-10">
-                            <button className="w-[37px] h-[42px] flex items-center justify-center hover:bg-gray-50 transition"><Plus className="w-5 h-5 text-[#9E9E9E]" /></button>
+                            <button onClick={handleZoomIn} className="w-[37px] h-[42px] flex items-center justify-center hover:bg-gray-50 transition"><Plus className="w-5 h-5 text-[#9E9E9E]" /></button>
                             <div className="w-full h-px bg-[#D9D9D9]"></div>
-                            <button className="w-[37px] h-[42px] flex items-center justify-center hover:bg-gray-50 transition"><Minus className="w-5 h-5 text-[#9E9E9E]" /></button>
+                            <button onClick={handleZoomOut} className="w-[37px] h-[42px] flex items-center justify-center hover:bg-gray-50 transition"><Minus className="w-5 h-5 text-[#9E9E9E]" /></button>
                             <div className="w-full h-px bg-[#D9D9D9]"></div>
-                            <button className="w-[37px] h-[42px] flex items-center justify-center hover:bg-gray-50 transition"><RefreshCw className="w-4 h-4 text-[#9E9E9E]" /></button>
+                            <button onClick={handleResetZoom} className="w-[37px] h-[42px] flex items-center justify-center hover:bg-gray-50 transition"><RefreshCw className="w-4 h-4 text-[#9E9E9E]" /></button>
                         </div>
                     </div>
                 </div>
@@ -451,16 +456,31 @@ export default function EditTripPage({ params }: PageProps) {
                                     <button onClick={() => setActiveGroupId(null)} className="text-gray-400 hover:text-gray-600 p-1"><X className="w-6 h-6" /></button>
                                 </div>
                             ) : (
-                                <><h2 className="font-bold text-[20px] leading-[24px] text-black font-inter">Trip Templates</h2><p className="font-normal text-[16px] leading-[19px] text-black font-inter">Create & manage your travel plans</p></>
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <h2 className="font-bold text-[20px] leading-[24px] text-black font-inter">Trip Templates</h2>
+                                        <p className="font-normal text-[16px] leading-[19px] text-black font-inter">Create & manage your travel plans</p>
+                                    </div>
+                                    {tripGroups.length > 0 && (
+                                        <button
+                                            onClick={() => setIsViewAll(!isViewAll)}
+                                            className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-medium transition select-none ${isViewAll ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                                        >
+                                            {isViewAll ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                            {isViewAll ? "Hide All" : "View All"}
+                                        </button>
+                                    )}
+                                </div>
                             )}
                         </div>
                     </div>
 
                     <div className="flex-1 overflow-y-auto scrollbar-thin pr-2">
+                        {/* ... (Content Panel Logic คงเดิม) ... */}
                         {!activeGroupId ? (
                             <div className="h-full flex flex-col">
                                 {tripGroups.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center gap-[32px] mt-[100px]">
+                                    <div className="flex flex-col items-center justify-center gap-[32px]">
                                         <div className="flex flex-col items-center gap-[16px] w-full">
                                             <div className="w-[48px] h-[48px] text-[#3A82CE]"><Layers className="w-full h-full" strokeWidth={1.5} /></div>
                                             <div className="flex flex-col items-center gap-[8px] w-full text-center"><h3 className="font-bold text-[20px] leading-[24px] text-black font-inter">No Trip Templates yet</h3><p className="font-normal text-[16px] leading-[19px] text-black font-inter">Start by creating your first travel template.</p></div>
@@ -530,7 +550,7 @@ export default function EditTripPage({ params }: PageProps) {
                                 <div className="space-y-4 bg-white p-4 rounded-[5px] border border-gray-200 shadow-sm">
                                     <div><label className="text-[16px] font-bold text-black flex items-center gap-2 mb-2"><LayoutTemplate className="w-4 h-4 text-[#3A82CE]" /> Template Name</label><input type="text" value={groupName} onChange={(e) => setGroupName(e.target.value)} className="w-full border border-gray-300 rounded-[5px] px-3 py-2.5 text-[16px] focus:ring-1 focus:ring-[#3A82CE] focus:border-[#3A82CE] outline-none transition" placeholder="e.g., Summer Vacation" /></div>
                                     <div><label className="text-[16px] font-bold text-black flex items-center gap-2 mb-2"><StickyNote className="w-4 h-4 text-[#3A82CE]" /> Note (Optional)</label><textarea rows={3} value={groupNote} onChange={(e) => setGroupNote(e.target.value)} className="w-full border border-gray-300 rounded-[5px] px-3 py-2.5 text-[16px] focus:ring-1 focus:ring-[#3A82CE] focus:border-[#3A82CE] outline-none resize-none transition" placeholder="Add details..." /></div>
-                                    
+
                                     <div className="relative">
                                         <label className="text-[16px] font-bold text-black flex items-center gap-2 mb-2"><Calendar className="w-4 h-4 text-[#3A82CE]" /> Travel Dates</label>
                                         <div className="w-full border border-gray-300 rounded-[5px] px-3 py-2.5 flex items-center justify-between cursor-pointer hover:border-[#3A82CE] transition bg-white" onClick={(e) => { e.stopPropagation(); setIsDatePickerOpen(!isDatePickerOpen); }}>
@@ -570,6 +590,7 @@ export default function EditTripPage({ params }: PageProps) {
     );
 }
 
+// ... CustomDateRangePicker และ RegionItem คงเดิม ...
 function CustomDateRangePicker({ startDate, endDate, onChange }: { startDate: string, endDate: string, onChange: (s: string, e: string) => void }) {
     const [viewDate, setViewDate] = useState(startDate ? new Date(startDate) : new Date());
     const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();

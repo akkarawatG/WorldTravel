@@ -2,56 +2,59 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/utils/supabase/client"; 
-import { Plus, Trash2, MapPin, Globe, Loader2, Backpack, Layers } from "lucide-react"; 
+import { createClient } from "@/utils/supabase/client";
+import { Plus, Trash2, MapPin, Globe, Loader2, Backpack, Search } from "lucide-react";
 import TripViewModal from "../../components/TripViewModal";
-import { COUNTRIES_DATA } from "@/data/mockData"; 
+import { COUNTRIES_DATA } from "@/data/mockData";
 
 interface TripData {
   id: string;
   country: string;
   created_at: string;
-  templates: any[]; 
+  templates: any[];
   stats: {
-    regions: number; 
-    provinces: number; 
+    regions: number;
+    provinces: number;
   };
 }
 
 const COUNTRY_NAMES: Record<string, string> = {
-    // Asia
-    cn: "China", th: "Thailand", my: "Malaysia", jp: "Japan", ae: "United Arab Emirates", sa: "Saudi Arabia", sg: "Singapore", vn: "Vietnam", in: "India", kr: "South Korea", id: "Indonesia", tw: "Taiwan", bh: "Bahrain", kw: "Kuwait", kz: "Kazakhstan", ph: "Philippines", uz: "Uzbekistan", kh: "Cambodia", jo: "Jordan", la: "Laos", bn: "Brunei", om: "Oman", qa: "Qatar", lk: "Sri Lanka", ir: "Iran",
-    // Europe
-    fr: "France", es: "Spain", it: "Italy", pl: "Poland", hu: "Hungary", hr: "Croatia", tr: "Turkey", gb: "United Kingdom", de: "Germany", gr: "Greece", dk: "Denmark", at: "Austria", nl: "Netherlands", pt: "Portugal", ro: "Romania", ch: "Switzerland", be: "Belgium", lv: "Latvia", ge: "Georgia", se: "Sweden", lt: "Lithuania", ee: "Estonia", no: "Norway", fi: "Finland", is: "Iceland",
-    // North America
-    us: "United States", mx: "Mexico", ca: "Canada", do: "Dominican Republic", bs: "Bahamas", cu: "Cuba", jm: "Jamaica", cr: "Costa Rica", gt: "Guatemala", pa: "Panama",
-    // South America
-    ar: "Argentina", br: "Brazil", cl: "Chile", pe: "Peru", py: "Paraguay", co: "Colombia", uy: "Uruguay", ec: "Ecuador",
-    // Africa
-    za: "South Africa", ma: "Morocco", eg: "Egypt", ke: "Kenya", na: "Namibia", tz: "Tanzania",
-    // Oceania
-    au: "Australia", nz: "New Zealand"
+  // Asia
+  cn: "China", th: "Thailand", my: "Malaysia", jp: "Japan", ae: "United Arab Emirates", sa: "Saudi Arabia", sg: "Singapore", vn: "Vietnam", in: "India", kr: "South Korea", id: "Indonesia", tw: "Taiwan", bh: "Bahrain", kw: "Kuwait", kz: "Kazakhstan", ph: "Philippines", uz: "Uzbekistan", kh: "Cambodia", jo: "Jordan", la: "Laos", bn: "Brunei", om: "Oman", qa: "Qatar", lk: "Sri Lanka", ir: "Iran",
+  // Europe
+  fr: "France", es: "Spain", it: "Italy", pl: "Poland", hu: "Hungary", hr: "Croatia", tr: "Turkey", gb: "United Kingdom", de: "Germany", gr: "Greece", dk: "Denmark", at: "Austria", nl: "Netherlands", pt: "Portugal", ro: "Romania", ch: "Switzerland", be: "Belgium", lv: "Latvia", ge: "Georgia", se: "Sweden", lt: "Lithuania", ee: "Estonia", no: "Norway", fi: "Finland", is: "Iceland",
+  // North America
+  us: "United States", mx: "Mexico", ca: "Canada", do: "Dominican Republic", bs: "Bahamas", cu: "Cuba", jm: "Jamaica", cr: "Costa Rica", gt: "Guatemala", pa: "Panama",
+  // South America
+  ar: "Argentina", br: "Brazil", cl: "Chile", pe: "Peru", py: "Paraguay", co: "Colombia", uy: "Uruguay", ec: "Ecuador",
+  // Africa
+  za: "South Africa", ma: "Morocco", eg: "Egypt", ke: "Kenya", na: "Namibia", tz: "Tanzania",
+  // Oceania
+  au: "Australia", nz: "New Zealand"
 };
 
 export default function MyTripsPage() {
   const router = useRouter();
   const supabase = createClient();
-  
+
   const [activeTab, setActiveTab] = useState("map");
   const [trips, setTrips] = useState<TripData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
+  // State สำหรับ Search
+  const [searchQuery, setSearchQuery] = useState("");
+
   const [viewTrip, setViewTrip] = useState<TripData | null>(null);
   const [tripToDelete, setTripToDelete] = useState<TripData | null>(null);
 
   const countryImageMap = useMemo(() => {
     const map: Record<string, string> = {};
     if (COUNTRIES_DATA) {
-        Object.values(COUNTRIES_DATA).forEach((countries: any[]) => {
-            countries.forEach((country) => {
-                map[country.name.toLowerCase()] = country.image;
-            });
+      Object.values(COUNTRIES_DATA).forEach((countries: any[]) => {
+        countries.forEach((country) => {
+          map[country.name.toLowerCase()] = country.image;
         });
+      });
     }
     return map;
   }, []);
@@ -61,6 +64,7 @@ export default function MyTripsPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // ✅ แก้ไข Query: เพิ่ม travel_start_date และ travel_end_date
       const { data, error } = await supabase
         .from('trips')
         .select(`
@@ -71,6 +75,8 @@ export default function MyTripsPage() {
             id,
             template_name,
             notes,
+            travel_start_date, 
+            travel_end_date,
             template_provinces ( province_code )
           )
         `)
@@ -108,13 +114,33 @@ export default function MyTripsPage() {
     fetchTrips();
   }, []);
 
+  // Logic การกรองข้อมูล (Filter)
+  const filteredTrips = useMemo(() => {
+    if (!searchQuery) return trips;
+    const lowerQuery = searchQuery.toLowerCase();
+
+    return trips.filter((trip) => {
+      // ค้นหาจากชื่อประเทศ
+      const countryName = COUNTRY_NAMES[trip.country.toLowerCase()] || trip.country;
+      if (countryName.toLowerCase().includes(lowerQuery)) return true;
+
+      // (Optional) ค้นหาจากชื่อ Template ภายใน Trip นั้นๆ ด้วย
+      const hasMatchingTemplate = trip.templates.some((t: any) => 
+        t.template_name?.toLowerCase().includes(lowerQuery)
+      );
+      if (hasMatchingTemplate) return true;
+
+      return false;
+    });
+  }, [trips, searchQuery]);
+
   const confirmDeleteTrip = async () => {
     if (!tripToDelete) return;
     try {
       const { error } = await supabase.from('trips').delete().eq('id', tripToDelete.id);
       if (error) throw error;
       setTrips(prev => prev.filter(t => t.id !== tripToDelete.id));
-      setTripToDelete(null); 
+      setTripToDelete(null);
     } catch (error) {
       console.error("Error deleting trip:", error);
       alert("Failed to delete trip.");
@@ -130,87 +156,111 @@ export default function MyTripsPage() {
         </div>
       </div>
       <div className="max-w-[1128px] mx-auto ">
+        <div className="w-full flex items-end justify-between mb-4">
+          {/* Left: Title */}
+          <h2 className="font-inter font-semibold text-[36px] leading-[44px] text-black whitespace-nowrap">
+            My Travel Templates
+          </h2>
+
+          {/* Right: Search Bar */}
+          <div className="w-[268px] h-[31px] bg-[#194473] border border-[#E0E0E0] rounded-[8px] flex items-center px-[8px] gap-[8px]">
+            {/* Icon Container (24x24) */}
+            <div className="w-[24px] h-[24px] flex items-center justify-center flex-shrink-0">
+              <Search className="w-[18px] h-[18px] text-[#E0E0E0]" strokeWidth={2.5} />
+            </div>
+
+            {/* Input Field Container */}
+            <div className="flex-1 h-[23px] bg-white rounded-[4px] flex items-center px-[8px]">
+              <input
+                type="text"
+                placeholder="Search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-transparent outline-none font-inter font-normal text-[12px] leading-[15px] text-[#9E9E9E] placeholder-[#9E9E9E]"
+              />
+            </div>
+          </div>
+        </div>
 
         {activeTab === "map" && (
           <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-              {isLoading ? (
-                  <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-blue-500"/></div>
-              ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 justify-items-center">
-                    
-                    {/* Create New Trip Card */}
-                    <div className="w-[264px] h-[426px] border-2 border-dashed border-gray-300 rounded-[5px] flex flex-col items-center justify-center bg-white hover:border-blue-400 transition-colors group mx-auto">
-                        <div className="mb-4"><Globe className="w-12 h-12 text-gray-800" strokeWidth={1.5} /></div>
-                        <h3 className="text-xl font-bold text-gray-900 mb-2">Plan new journey</h3>
-                        <p className="text-sm text-gray-500 mb-6">Select a country to start</p>
-                        <button onClick={() => router.push("mytrips/create")} className="bg-[#3B82F6] hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-[5px] flex items-center gap-2 shadow-md transition-transform transform group-hover:scale-105 cursor-pointer">
-                            <Plus className="w-5 h-5" /> Create New Trip
-                        </button>
-                    </div>
+            {isLoading ? (
+              <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 justify-items-center">
 
-                    {/* Trip Cards */}
-                    {trips.map((trip) => {
-                        const countryCode = trip.country.toLowerCase();
-                        const countryName = COUNTRY_NAMES[countryCode] || trip.country; 
-                        const coverImage = countryImageMap[countryName.toLowerCase()] || "https://placehold.co/800x600?text=No+Image";
+                {/* Create New Trip Card */}
+                <div className="w-[264px] h-[426px] border-2 border-dashed border-gray-300 rounded-[5px] flex flex-col items-center justify-center bg-white hover:border-blue-400 transition-colors group mx-auto">
+                  <div className="mb-4"><Globe className="w-12 h-12 text-gray-800" strokeWidth={1.5} /></div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">Plan new journey</h3>
+                  <p className="text-sm text-gray-500 mb-6">Select a country to start</p>
+                  <button onClick={() => router.push("mytrips/create")} className="bg-[#3B82F6] hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-[5px] flex items-center gap-2 shadow-md transition-transform transform group-hover:scale-105 cursor-pointer">
+                    <Plus className="w-5 h-5" /> Create New Trip
+                  </button>
+                </div>
 
-                        return (
-                            <div key={trip.id} className="w-[264px] h-[426px] bg-white rounded-[5px] overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-gray-200 flex flex-col relative group mx-auto">
-                                <button onClick={(e) => { e.stopPropagation(); setTripToDelete(trip); }} className="absolute top-2 right-2 z-10 flex h-[28px] w-[32px] items-center justify-center rounded-[8px] border border-white bg-[#00000066] hover:bg-red-600 text-white shadow-sm transition-all duration-300 ease-in-out overflow-hidden cursor-pointer backdrop-blur-[2px] opacity-0 group-hover:opacity-100 group/btn" title="Delete Trip"><Trash2 size={16} className="flex-shrink-0" /></button>
+                {/* Trip Cards */}
+                {filteredTrips.map((trip) => {
+                  const countryCode = trip.country.toLowerCase();
+                  const countryName = COUNTRY_NAMES[countryCode] || trip.country;
+                  const coverImage = countryImageMap[countryName.toLowerCase()] || "https://placehold.co/800x600?text=No+Image";
 
-                                <div className="relative h-[252px] w-full bg-gray-100">
-                                    <img src={coverImage} alt={countryName} className="w-full h-full object-cover rounded-t-[5px]" />
-                                </div>
+                  return (
+                    <div key={trip.id} className="w-[264px] h-[426px] bg-white rounded-[5px] overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-gray-200 flex flex-col relative group mx-auto">
+                      <button onClick={(e) => { e.stopPropagation(); setTripToDelete(trip); }} className="absolute top-2 right-2 z-10 flex h-[28px] w-[32px] items-center justify-center rounded-[8px] border border-white bg-[#00000066] hover:bg-red-600 text-white shadow-sm transition-all duration-300 ease-in-out overflow-hidden cursor-pointer backdrop-blur-[2px] opacity-0 group-hover:opacity-100 group/btn" title="Delete Trip"><Trash2 size={16} className="flex-shrink-0" /></button>
 
-                                <div className="flex-1 p-3 flex flex-col justify-between">
-                                    <div>
-                                        <h3 className="text-lg font-bold text-gray-900 mb-1 truncate ">{countryName} Trip</h3>
-                                        <p className="text-[10px] text-gray-500 mb-3 ">Created: {trip.created_at}</p>
-                                        <div className="h-px bg-gray-200 w-full mb-3"></div>
-                                        
-                                        <div className="flex items-center justify-center gap-8"> 
-                                            <div className="flex flex-col items-center justify-center gap-1"> 
-                                                <MapPin className="w-4 h-4 text-[#3B82F6]" />
-                                                <span className="text-[11px] font-medium text-gray-600">{trip.stats.provinces} Provinces</span>
-                                            </div>
-                                            <div className="w-px h-8 bg-gray-200"></div>
-                                            <div className="flex flex-col items-center justify-center gap-1"> 
-                                                <Backpack className="w-4 h-4 text-[#3B82F6]" />
-                                                <span className="text-[11px] font-medium text-gray-600">{trip.stats.regions} Templates</span>
-                                            </div>
-                                        </div>
-                                    </div>
+                      <div className="relative h-[252px] w-full bg-gray-100">
+                        <img src={coverImage} alt={countryName} className="w-full h-full object-cover rounded-t-[5px]" />
+                      </div>
 
-                                    <div className="flex items-center justify-center gap-[10px] mt-auto w-full">
-                                        <button onClick={() => setViewTrip(trip)} className="w-[60px] h-[29px] bg-[#3B82F6] hover:bg-blue-600 text-white font-medium rounded-[5px] text-[12px] flex items-center justify-center transition cursor-pointer">View</button>
-                                        
-                                        {/* ✅ แก้ไขจุดนี้: ใช้ trip.id ในการลิงก์ไปหน้า Edit */}
-                                        <button 
-                                            onClick={() => router.push(`/mytrips/edit/${trip.id}`)} 
-                                            className="w-[60px] h-[29px] bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-[5px] text-[12px] flex items-center justify-center transition cursor-pointer"
-                                        >
-                                            Edit
-                                        </button>
-                                        
-                                        <button className="w-[60px] h-[29px] bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-[5px] text-[12px] flex items-center justify-center transition cursor-pointer">Share</button>
-                                    </div>
-                                </div>
+                      <div className="flex-1 p-3 flex flex-col justify-between">
+                        <div>
+                          <h3 className="text-lg font-bold text-gray-900 mb-1 truncate ">{countryName} Trip</h3>
+                          <p className="text-[10px] text-gray-500 mb-3 ">Created: {trip.created_at}</p>
+                          <div className="h-px bg-gray-200 w-full mb-3"></div>
+
+                          <div className="flex items-center justify-center gap-8">
+                            <div className="flex flex-col items-center justify-center gap-1">
+                              <MapPin className="w-4 h-4 text-[#3B82F6]" />
+                              <span className="text-[11px] font-medium text-gray-600">{trip.stats.provinces} Provinces</span>
                             </div>
-                        );
-                    })}
-                  </div>
-              )}
+                            <div className="w-px h-8 bg-gray-200"></div>
+                            <div className="flex flex-col items-center justify-center gap-1">
+                              <Backpack className="w-4 h-4 text-[#3B82F6]" />
+                              <span className="text-[11px] font-medium text-gray-600">{trip.stats.regions} Templates</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-center gap-[10px] mt-auto w-full">
+                          <button onClick={() => setViewTrip(trip)} className="w-[60px] h-[29px] bg-[#3B82F6] hover:bg-blue-600 text-white font-medium rounded-[5px] text-[12px] flex items-center justify-center transition cursor-pointer">View</button>
+
+                          <button
+                            onClick={() => router.push(`/mytrips/edit/${trip.id}`)}
+                            className="w-[60px] h-[29px] bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-[5px] text-[12px] flex items-center justify-center transition cursor-pointer"
+                          >
+                            Edit
+                          </button>
+
+                          <button className="w-[60px] h-[29px] bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-[5px] text-[12px] flex items-center justify-center transition cursor-pointer">Share</button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
-        
+
         {activeTab === "itinerary" && <div>Itinerary Content...</div>}
       </div>
 
       {viewTrip && (
-        <TripViewModal 
-            trip={viewTrip} 
-            coverImage={countryImageMap[COUNTRY_NAMES[viewTrip.country.toLowerCase()]?.toLowerCase()] || countryImageMap[viewTrip.country.toLowerCase()] || "https://placehold.co/800x600?text=No+Image"}
-            onClose={() => setViewTrip(null)} 
+        <TripViewModal
+          trip={viewTrip}
+          coverImage={countryImageMap[COUNTRY_NAMES[viewTrip.country.toLowerCase()]?.toLowerCase()] || countryImageMap[viewTrip.country.toLowerCase()] || "https://placehold.co/800x600?text=No+Image"}
+          onClose={() => setViewTrip(null)}
         />
       )}
 
@@ -219,7 +269,7 @@ export default function MyTripsPage() {
           <div className="w-[382px] bg-white rounded-[16px] p-6 shadow-2xl transform scale-100 animate-in zoom-in-95 duration-200">
             <div className="flex flex-col gap-4">
               <div className="flex items-center gap-4"><div className="text-[#EF4444]"><Trash2 size={32} strokeWidth={2} /></div><h3 className="text-[20px] font-bold text-[#101828]">Delete Trip?</h3></div>
-              <p className="text-[14px] text-[#475467] leading-relaxed">Are you sure you want to delete &lsquo;{COUNTRY_NAMES[tripToDelete.country.toLowerCase()] || tripToDelete.country} Trip&rsquo;? <br/>This action cannot be undone.</p>
+              <p className="text-[14px] text-[#475467] leading-relaxed">Are you sure you want to delete &lsquo;{COUNTRY_NAMES[tripToDelete.country.toLowerCase()] || tripToDelete.country} Trip&rsquo;? <br />This action cannot be undone.</p>
               <div className="flex items-center gap-3 mt-2">
                 <button onClick={() => setTripToDelete(null)} className="flex-1 h-[44px] rounded-[8px] border border-[#1976D2] text-[#1976D2] font-semibold text-[14px] hover:bg-blue-50 transition-colors cursor-pointer">Cancel</button>
                 <button onClick={confirmDeleteTrip} className="flex-1 h-[44px] rounded-[8px] bg-[#EF4444] text-white font-semibold text-[14px] hover:bg-red-600 transition-colors shadow-md cursor-pointer">Delete</button>

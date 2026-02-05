@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { X, MapPin, ChevronDown, ChevronUp, StickyNote,Backpack } from "lucide-react";
+import { X, MapPin, ChevronDown, ChevronUp, Backpack, Users, Calendar } from "lucide-react";
 
-// Mapping (เพื่อให้มั่นใจว่าชื่อตรงกัน)
 const COUNTRY_NAMES: Record<string, string> = {
     cn: "China", th: "Thailand", my: "Malaysia", jp: "Japan", ae: "United Arab Emirates", sa: "Saudi Arabia", sg: "Singapore", vn: "Vietnam", in: "India", kr: "South Korea", id: "Indonesia", tw: "Taiwan", bh: "Bahrain", kw: "Kuwait", kz: "Kazakhstan", ph: "Philippines", uz: "Uzbekistan", kh: "Cambodia", jo: "Jordan", la: "Laos", bn: "Brunei", om: "Oman", qa: "Qatar", lk: "Sri Lanka", ir: "Iran",
     fr: "France", es: "Spain", it: "Italy", pl: "Poland", hu: "Hungary", hr: "Croatia", tr: "Turkey", gb: "United Kingdom", de: "Germany", gr: "Greece", dk: "Denmark", at: "Austria", nl: "Netherlands", pt: "Portugal", ro: "Romania", ch: "Switzerland", be: "Belgium", lv: "Latvia", ge: "Georgia", se: "Sweden", lt: "Lithuania", ee: "Estonia", no: "Norway", fi: "Finland", is: "Iceland",
@@ -13,163 +12,271 @@ const COUNTRY_NAMES: Record<string, string> = {
     au: "Australia", nz: "New Zealand"
 };
 
+// Interface อิงตาม Supabase Schema
+interface TemplateProvince {
+    province_code: string;
+}
+
+interface Template {
+    id: string;
+    template_name: string | null;
+    notes: string | null;
+    travel_start_date: string | null; // format: YYYY-MM-DD
+    travel_end_date: string | null;   // format: YYYY-MM-DD
+    template_provinces: TemplateProvince[];
+}
+
+interface TripData {
+    id: string;
+    country: string;
+    created_at: string;
+    templates: Template[];
+    stats?: {
+        provinces: number;
+    };
+}
+
 interface TripViewModalProps {
-  trip: any;
-  coverImage: string; // ✅ รับ URL รูปภาพเข้ามา
-  onClose: () => void;
+    trip: TripData;
+    coverImage: string;
+    onClose: () => void;
 }
 
 export default function TripViewModal({ trip, coverImage, onClose }: TripViewModalProps) {
-  const [expandedTemplates, setExpandedTemplates] = useState<string[]>([]);
+    const [expandedTemplates, setExpandedTemplates] = useState<string[]>([]);
 
-  const countryCode = trip.country.toLowerCase();
-  const countryName = COUNTRY_NAMES[countryCode] || trip.country.toUpperCase();
+    const countryCode = trip.country.toLowerCase();
+    const countryName = COUNTRY_NAMES[countryCode] || trip.country.toUpperCase();
 
-  const toggleTemplate = (templateId: string) => {
-    setExpandedTemplates(prev => 
-      prev.includes(templateId) 
-        ? prev.filter(id => id !== templateId) 
-        : [...prev, templateId] 
-    );
-  };
+    const toggleTemplate = (templateId: string) => {
+        setExpandedTemplates(prev =>
+            prev.includes(templateId)
+                ? prev.filter(id => id !== templateId)
+                : [...prev, templateId]
+        );
+    };
 
-  return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div 
-        className="bg-white w-full max-w-[500px] max-h-[85vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* --- Header --- */}
-        <div className="relative h-[140px] bg-gray-100 shrink-0">
-            {/* ✅ ใช้รูปภาพจาก Props เพื่อให้ตรงกับหน้า MyTrips */}
-            <img 
-                src={coverImage} 
-                alt={countryName} 
-                className="w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-            
-            <button 
-                onClick={onClose}
-                className="absolute top-4 right-4 bg-white/20 hover:bg-white/40 text-white p-2 rounded-full transition backdrop-blur-md cursor-pointer"
+    // ✅ Format วันที่สร้าง Trip
+    const tripCreatedDate = new Date(trip.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+    // ✅ Format วันที่เดินทางจาก Supabase Columns (travel_start_date, travel_end_date)
+    const formatTravelDate = (start: string | null, end: string | null) => {
+        if (!start) return null;
+        
+        const startDate = new Date(start);
+        const startStr = startDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+
+        if (!end || start === end) return startStr; 
+
+        const endDate = new Date(end);
+        const endStr = endDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+
+        return `${startStr} - ${endStr}`;
+    };
+
+    return (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+            {/* Main Container */}
+            <div
+                className="bg-white w-[677px] max-h-[90vh] rounded-[10px] shadow-[0px_4px_4px_rgba(0,0,0,0.25)] flex flex-col relative overflow-hidden animate-in zoom-in-95 duration-200"
+                onClick={(e) => e.stopPropagation()}
             >
-                <X size={20} />
-            </button>
-
-            <div className="absolute bottom-4 left-6 text-white">
-                <div className="flex items-center gap-2 mb-1">
-                    {/* <img src={`https://flagcdn.com/w40/${countryCode}.png`} alt="flag" className="h-5 rounded shadow-sm" /> */}
-                    <span className="text-xs font-medium bg-white/20 px-2 py-0.5 rounded text-white backdrop-blur-md border border-white/10">
-                        {trip.created_at}
-                    </span>
+                {/* --- Header Image --- */}
+                <div className="relative w-full h-[300px] shrink-0">
+                    <img
+                        src={coverImage}
+                        alt={countryName}
+                        className="w-full h-full object-cover rounded-t-[10px]"
+                    />
+                    
+                    {/* Glassmorphism Close Button */}
+                    <button
+                        onClick={onClose}
+                        className="absolute top-[17px] right-[17px] w-[26px] h-[28px] flex items-center justify-center rounded-[5px] backdrop-blur-[5px] bg-white/5 border border-white/20 shadow-inner hover:bg-white/20 transition cursor-pointer"
+                        style={{
+                            background: 'rgba(255, 255, 255, 0.02)',
+                            boxShadow: 'inset 0px -2px 4px rgba(0, 0, 0, 0.2), inset 0px 2px 4px rgba(255, 255, 255, 0.4)'
+                        }}
+                    >
+                        <X size={14} color="white" strokeWidth={3} />
+                    </button>
                 </div>
-                <h2 className="text-2xl font-bold leading-none tracking-tight">{countryName} Trip</h2>
-            </div>
-        </div>
 
-        {/* --- Body --- */}
-        <div className="flex-1 overflow-y-auto p-6 bg-[#F9FAFB] scrollbar-thin">
-            
-            {/* Stats */}
-            <div className="flex gap-4 mb-6">
-                <div className="flex-1 bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-3 shadow-sm">
-                    <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600">
-                        <Backpack size={20} />
-                    </div>
-                    <div>
-                        <p className="text-xl font-bold text-gray-800 leading-none">{trip.templates?.length || 0}</p>
-                        <p className="text-xs text-gray-500 mt-1">Templates</p>
-                    </div>
-                </div>
-                <div className="flex-1 bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-3 shadow-sm">
-                    <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center text-green-600">
-                        <MapPin size={20} />
-                    </div>
-                    <div>
-                        <p className="text-xl font-bold text-gray-800 leading-none">{trip.stats?.provinces || 0}</p>
-                        <p className="text-xs text-gray-500 mt-1">Provinces</p>
-                    </div>
-                </div>
-            </div>
+                {/* --- Body Content --- */}
+                <div className="flex-1 flex flex-col px-[40px] pt-[20px] pb-[20px] gap-[24px] overflow-y-auto scrollbar-thin">
+                    
+                    {/* Trip Info Header */}
+                    <div className="flex flex-col gap-[18px]">
+                        {/* Title & Date */}
+                        <div>
+                            <h2 className="font-inter font-bold text-[28px] leading-[34px] text-black">
+                                {countryName} Trip
+                            </h2>
+                            <p className="font-inter font-normal text-[12px] leading-[15px] text-[#757575] mt-[4px]">
+                                {tripCreatedDate}
+                            </p>
+                        </div>
 
-            {/* Template List */}
-            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 ml-1">
-                Your Templates
-            </h3>
+                        {/* Stats Row */}
+                        <div className="flex items-center justify-start gap-[24px]">
+                            
+                            {/* Templates Stat */}
+                            <div className="flex items-center gap-[21px]">
+                                <div className="w-[36px] h-[36px] rounded-full bg-[#F0F6FC] flex items-center justify-center">
+                                    <Backpack size={20} color="#60A3DE" strokeWidth={2} />
+                                </div>
+                                <div>
+                                    <p className="font-inter font-normal text-[20px] leading-[24px] text-black">{trip.templates?.length || 0}</p>
+                                    <p className="font-inter font-normal text-[16px] leading-[19px] text-[#757575]">Template</p>
+                                </div>
+                            </div>
 
-            <div className="flex flex-col gap-3">
-                {trip.templates && trip.templates.length > 0 ? (
-                    trip.templates.map((template: any) => {
-                        const isOpen = expandedTemplates.includes(template.id);
-                        const provinceCount = template.template_provinces?.length || 0;
+                            {/* Divider */}
+                            <div className="w-px h-[47px] bg-[#EEEEEE]"></div>
 
-                        return (
-                            <div key={template.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden transition-all duration-300 shadow-sm hover:shadow-md">
-                                <button 
-                                    onClick={() => toggleTemplate(template.id)}
-                                    className={`w-full flex items-center justify-between p-4 transition-colors cursor-pointer ${isOpen ? 'bg-gray-50' : 'bg-white hover:bg-gray-50'}`}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${isOpen ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
-                                            <Backpack size={18} />
+                            {/* Provinces Stat */}
+                            <div className="flex items-center gap-[21px]">
+                                <div className="w-[36px] h-[36px] rounded-full bg-[#E8F5E9] flex items-center justify-center">
+                                    <MapPin size={20} color="#66BB6A" strokeWidth={2} />
+                                </div>
+                                <div>
+                                    <p className="font-inter font-normal text-[20px] leading-[24px] text-black">{trip.stats?.provinces || 0}</p>
+                                    <p className="font-inter font-normal text-[16px] leading-[19px] text-[#757575]">Province</p>
+                                </div>
+                            </div>
+
+                            {/* Divider */}
+                            <div className="w-px h-[47px] bg-[#EEEEEE]"></div>
+
+                            {/* Shared People Stat (Mocked for UI as per spec) */}
+                            <div className="flex items-center gap-[21px]">
+                                <div className="w-[36px] h-[36px] rounded-full bg-[#FFF3E0] flex items-center justify-center">
+                                    <Users size={18} color="#FFA726" strokeWidth={2} />
+                                </div>
+                                <div>
+                                    <p className="font-inter font-normal text-[20px] leading-[24px] text-black">0</p>
+                                    <p className="font-inter font-normal text-[16px] leading-[19px] text-[#757575]">Shared people</p>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    {/* Line 70 */}
+                    <div className="w-full h-px bg-black"></div>
+
+                    {/* Templates Section */}
+                    <div className="flex flex-col gap-[16px]">
+                        <h3 className="font-inter font-bold text-[20px] leading-[24px] text-black">
+                            Your Templates
+                        </h3>
+
+                        {/* Templates Loop */}
+                        {trip.templates && trip.templates.length > 0 ? (
+                            trip.templates.map((template) => {
+                                const isOpen = expandedTemplates.includes(template.id);
+                                const provinceCount = template.template_provinces?.length || 0;
+                                
+                                // ✅ ดึงวันที่จาก DB มา Format
+                                const dateRange = formatTravelDate(template.travel_start_date, template.travel_end_date);
+
+                                return (
+                                    <div 
+                                        key={template.id} 
+                                        className={`w-full bg-white border border-[#EEEEEE] shadow-[0px_4px_4px_rgba(0,0,0,0.25)] rounded-[5px] overflow-hidden transition-all duration-300`}
+                                    >
+                                        {/* Template Header (Clickable) */}
+                                        <div 
+                                            onClick={() => toggleTemplate(template.id)}
+                                            className="w-full h-[53px] flex items-center justify-between px-[15px] cursor-pointer hover:bg-gray-50 transition"
+                                        >
+                                            <div className="flex items-center gap-[21px]">
+                                                {/* Icon */}
+                                                <div className="w-[32px] h-[32px] rounded-full bg-[#F0F6FC] flex items-center justify-center">
+                                                    <Backpack size={16} color="#60A3DE" strokeWidth={2.5} />
+                                                </div>
+                                                {/* Text Info */}
+                                                <div>
+                                                    <p className="font-inter font-normal text-[20px] leading-[24px] text-black">
+                                                        {template.template_name || "Untitled Template"}
+                                                    </p>
+                                                    <div className="flex items-center gap-1 mt-[4px]">
+                                                        <p className="font-inter font-normal text-[12px] leading-[15px] text-[#757575]">
+                                                            {provinceCount} Province
+                                                        </p>
+                                                        
+                                                        {/* ✅ แสดงวันที่ถ้ามีใน DB */}
+                                                        {dateRange && (
+                                                            <>
+                                                                <span className="text-[#757575] text-[12px]">|</span>
+                                                                <div className="flex items-center gap-1">
+                                                                    <Calendar size={12} color="#757575" />
+                                                                    <p className="font-inter font-normal text-[12px] leading-[15px] text-[#757575]">
+                                                                        {dateRange}
+                                                                    </p>
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {/* Chevron */}
+                                            {isOpen ? <ChevronUp size={24} color="#757575" /> : <ChevronDown size={24} color="#757575" />}
                                         </div>
-                                        <div className="text-left">
-                                            <h4 className="text-sm font-bold text-gray-800">{template.template_name || "Untitled Template"}</h4>
-                                            <p className="text-[11px] text-gray-500">{provinceCount} Provinces Selected</p>
-                                        </div>
-                                    </div>
-                                    <div className="text-gray-400">
-                                        {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                                    </div>
-                                </button>
 
-                                {isOpen && (
-                                    <div className="px-4 pb-4 pt-0 bg-gray-50 border-t border-gray-100 animate-in slide-in-from-top-1 duration-200">
-                                        {template.notes && (
-                                            <div className="mt-3 p-3 bg-yellow-50 rounded-lg border border-yellow-100 text-xs text-yellow-800 flex gap-2 items-start">
-                                                <StickyNote size={14} className="mt-0.5 shrink-0" />
-                                                <p className="leading-relaxed">{template.notes}</p>
+                                        {/* Expanded Content */}
+                                        {isOpen && (
+                                            <div className="pb-[20px] animate-in slide-in-from-top-2 duration-200">
+                                                {/* Line 71 */}
+                                                <div className="w-full h-px bg-[#EEEEEE] my-[10px]"></div>
+
+                                                <div className="px-[15px] flex flex-col gap-[8px]">
+                                                    <p className="font-inter font-normal text-[14px] leading-[17px] text-black">
+                                                        Selected Provinces
+                                                    </p>
+                                                    
+                                                    {/* Province Pills */}
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {template.template_provinces && template.template_provinces.length > 0 ? (
+                                                            template.template_provinces.map((prov, idx) => (
+                                                                <div 
+                                                                    key={idx} 
+                                                                    className="h-[30px] flex items-center px-[10px] gap-[12px] bg-white rounded-[5px] shadow-[0px_4px_4px_rgba(0,0,0,0.25)] border border-gray-100"
+                                                                >
+                                                                    <MapPin size={16} color="#42A5F5" />
+                                                                    <span className="font-inter font-normal text-[12px] leading-[15px] text-[#757575]">
+                                                                        {prov.province_code}
+                                                                    </span>
+                                                                </div>
+                                                            ))
+                                                        ) : (
+                                                            <p className="text-[12px] text-gray-400 italic">No provinces selected</p>
+                                                        )}
+                                                    </div>
+                                                </div>
                                             </div>
                                         )}
-
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-4 mb-2 ml-1">Provinces in this template</p>
-                                        
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {template.template_provinces && template.template_provinces.length > 0 ? (
-                                                template.template_provinces.map((prov: any, index: number) => (
-                                                    <div key={index} className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-200 text-xs text-gray-700 shadow-sm">
-                                                        <MapPin size={12} className="text-blue-500" />
-                                                        <span className="truncate font-medium">{prov.province_code}</span>
-                                                    </div>
-                                                ))
-                                            ) : (
-                                                <p className="text-xs text-gray-400 italic col-span-2 text-center py-2">No provinces selected</p>
-                                            )}
-                                        </div>
                                     </div>
-                                )}
-                            </div>
-                        );
-                    })
-                ) : (
-                    <div className="text-center py-10 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
-                        <Backpack size={24} className="mx-auto text-gray-300 mb-2" />
-                        <p className="text-sm text-gray-500">No templates created yet.</p>
+                                );
+                            })
+                        ) : (
+                            <div className="text-center py-4 text-gray-400 font-inter text-sm">No templates available</div>
+                        )}
                     </div>
-                )}
+                </div>
+
+                {/* --- Footer --- */}
+                <div className="px-[40px] pb-[20px] bg-white rounded-b-[10px]">
+                    <button
+                        onClick={onClose}
+                        className="w-full h-[44px] flex items-center justify-center bg-white border-[2px] border-[#D9D9D9] rounded-[5px] hover:bg-gray-50 transition cursor-pointer"
+                    >
+                        <span className="font-inter font-bold text-[20px] leading-[24px] text-black">
+                            Close
+                        </span>
+                    </button>
+                </div>
             </div>
         </div>
-
-        {/* --- Footer --- */}
-        <div className="p-4 border-t border-gray-200 bg-white">
-            <button 
-                onClick={onClose}
-                className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-lg transition text-sm cursor-pointer"
-            >
-                Close
-            </button>
-        </div>
-      </div>
-    </div>
-  );
+    );
 }
