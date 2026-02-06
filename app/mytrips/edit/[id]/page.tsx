@@ -30,12 +30,12 @@ import {
     GripVertical,
     Calendar,
     Eye,
-    EyeOff
+    EyeOff,
+    Star
 } from "lucide-react";
 import dynamic from 'next/dynamic';
 
 const COUNTRY_NAMES: Record<string, string> = {
-    // ... (รายการประเทศคงเดิม) ...
     cn: "China", th: "Thailand", my: "Malaysia", jp: "Japan", ae: "United Arab Emirates", sa: "Saudi Arabia", sg: "Singapore", vn: "Vietnam", in: "India", kr: "South Korea", id: "Indonesia", tw: "Taiwan", bh: "Bahrain", kw: "Kuwait", kz: "Kazakhstan", ph: "Philippines", uz: "Uzbekistan", kh: "Cambodia", jo: "Jordan", la: "Laos", bn: "Brunei", om: "Oman", qa: "Qatar", lk: "Sri Lanka", ir: "Iran",
     fr: "France", es: "Spain", it: "Italy", pl: "Poland", hu: "Hungary", hr: "Croatia", tr: "Turkey", gb: "United Kingdom", de: "Germany", gr: "Greece", dk: "Denmark", at: "Austria", nl: "Netherlands", pt: "Portugal", ro: "Romania", ch: "Switzerland", be: "Belgium", lv: "Latvia", ge: "Georgia", se: "Sweden", lt: "Lithuania", ee: "Estonia", no: "Norway", fi: "Finland", is: "Iceland",
     us: "United States", mx: "Mexico", ca: "Canada", do: "Dominican Republic", bs: "Bahamas", cu: "Cuba", jm: "Jamaica", cr: "Costa Rica", gt: "Guatemala", pa: "Panama",
@@ -61,6 +61,7 @@ interface TripGroup {
     images?: string[] | null;
     travel_start_date?: string | null;
     travel_end_date?: string | null;
+    rating?: number;
 }
 
 interface ImageState {
@@ -118,8 +119,7 @@ export default function EditTripPage({ params }: PageProps) {
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
     const [isViewAll, setIsViewAll] = useState(false);
 
-    // ✅✅✅ MAP CONTROL STATE (Added)
-    // 400, 300 คือจุดกึ่งกลางของแผนที่ขนาด 800x600 (ตามที่ตั้งใน DynamicMap)
+    // Map Control State
     const [mapPosition, setMapPosition] = useState({ coordinates: [400, 300] as [number, number], zoom: 1 });
 
     // Form States
@@ -127,6 +127,7 @@ export default function EditTripPage({ params }: PageProps) {
     const [groupName, setGroupName] = useState("");
     const [groupNote, setGroupNote] = useState("");
     const [currentImages, setCurrentImages] = useState<ImageState[]>([]);
+    const [tripRating, setTripRating] = useState<number>(0);
 
     // Date States
     const [startDate, setStartDate] = useState<string>("");
@@ -139,7 +140,7 @@ export default function EditTripPage({ params }: PageProps) {
 
     const activeGroup = useMemo(() => tripGroups.find(g => g.id === activeGroupId), [tripGroups, activeGroupId]);
 
-    // ... (useEffect initData, useEffect activeGroup - คงเดิม) ...
+    // INIT DATA
     useEffect(() => {
         const initData = async () => {
             try {
@@ -201,7 +202,8 @@ export default function EditTripPage({ params }: PageProps) {
                             images: imgs,
                             regions: mappedRegions,
                             travel_start_date: t.travel_start_date,
-                            travel_end_date: t.travel_end_date
+                            travel_end_date: t.travel_end_date,
+                            rating: t.rating || 0
                         };
                     });
                     setTripGroups(mappedGroups);
@@ -218,12 +220,14 @@ export default function EditTripPage({ params }: PageProps) {
             setGroupNote(activeGroup.notes || "");
             setStartDate(activeGroup.travel_start_date || "");
             setEndDate(activeGroup.travel_end_date || "");
+            setTripRating(activeGroup.rating || 0);
             const loadedImages = (activeGroup.images || []).map((url, idx) => ({ id: `existing-${idx}`, url: url }));
             setCurrentImages(loadedImages);
             setPreviewGroupId(null);
             setIsViewAll(false);
         } else {
             setCurrentGroupRegions([]); setGroupName(""); setGroupNote(""); setCurrentImages([]); setStartDate(""); setEndDate("");
+            setTripRating(0);
         }
     }, [activeGroupId, activeGroup]);
 
@@ -233,10 +237,9 @@ export default function EditTripPage({ params }: PageProps) {
         return () => window.removeEventListener('click', handleClickOutside);
     }, []);
 
-    // ... (Handlers คงเดิม) ...
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => { const files = e.target.files; if (files) { const newFiles = Array.from(files); if (currentImages.length + newFiles.length > 10) { alert("Maximum 10 images allowed."); return; } const newImageStates: ImageState[] = newFiles.map(file => ({ id: `new-${Date.now()}-${Math.random()}`, url: URL.createObjectURL(file), file: file })); setCurrentImages(prev => [...prev, ...newImageStates]); } if (fileInputRef.current) fileInputRef.current.value = ""; };
     const handleRemoveImage = (idToRemove: string) => { setCurrentImages(prev => prev.filter(img => img.id !== idToRemove)); };
-    const handleAddGroup = () => { const newId = `temp-${Date.now()}`; const newGroup: TripGroup = { id: newId, name: `Trip ${tripGroups.length + 1}`, regions: [], notes: "", images: [], travel_start_date: null, travel_end_date: null }; setTripGroups([...tripGroups, newGroup]); setActiveGroupId(newId); };
+    const handleAddGroup = () => { const newId = `temp-${Date.now()}`; const newGroup: TripGroup = { id: newId, name: `Trip ${tripGroups.length + 1}`, regions: [], notes: "", images: [], travel_start_date: null, travel_end_date: null, rating: 0 }; setTripGroups([...tripGroups, newGroup]); setActiveGroupId(newId); };
     const toggleRegion = (regionName: string) => { if (!activeGroupId) return; setCurrentGroupRegions(prev => { const exists = prev.find(r => r.name === regionName); if (exists) return prev.filter(r => r.name !== regionName); return [...prev, { name: regionName, statusId: tripStatuses[0].id }]; }); };
     const updateRegionStatus = (regionName: string, newStatusId: string) => { setCurrentGroupRegions(prev => prev.map(r => r.name === regionName ? { ...r, statusId: newStatusId } : r)); };
 
@@ -266,6 +269,7 @@ export default function EditTripPage({ params }: PageProps) {
                 images: finalImageUrls,
                 travel_start_date: startDate || null,
                 travel_end_date: endDate || null,
+                rating: tripRating,
                 ...(isNew ? {} : { id: activeGroupId })
             };
 
@@ -290,11 +294,13 @@ export default function EditTripPage({ params }: PageProps) {
 
             setTripGroups(prev => prev.map(g => g.id === activeGroupId ? {
                 ...g, id: realTemplateId, regions: currentGroupRegions, name: groupName, notes: groupNote, images: finalImageUrls,
-                travel_start_date: startDate || null, travel_end_date: endDate || null
+                travel_start_date: startDate || null, travel_end_date: endDate || null,
+                rating: tripRating 
             } : g));
             setActiveGroupId(null);
         } catch (err: any) { console.error("Save failed:", err); alert(`Failed to save: ${err.message}`); } finally { setIsSaving(false); }
     };
+
     const handleDeleteGroupById = async (groupId: string) => { if (!confirm("Delete this template?")) return; if (groupId.startsWith('temp-')) { setTripGroups(prev => prev.filter(g => g.id !== groupId)); if (activeGroupId === groupId) setActiveGroupId(null); return; } setIsSaving(true); try { const { error } = await supabase.from('templates').delete().eq('id', groupId); if (error) throw error; setTripGroups(prev => prev.filter(g => g.id !== groupId)); if (activeGroupId === groupId) setActiveGroupId(null); } catch (err) { console.error("Delete failed:", err); } finally { setIsSaving(false); } };
     const handleAddStatus = () => { setTripStatuses([...tripStatuses, { id: Date.now().toString(), label: 'New', color: '#000000' }]); };
     const handleUpdateStatus = (id: string, key: keyof TripStatus, value: string) => { setTripStatuses(prev => prev.map(s => s.id === id ? { ...s, [key]: value } : s)); };
@@ -310,54 +316,23 @@ export default function EditTripPage({ params }: PageProps) {
     const filteredRegions = useMemo(() => regionList.filter(region => region.toLowerCase().includes(regionSearchQuery.toLowerCase())), [regionList, regionSearchQuery]);
     const handleRegionClick = (provinceName: string) => { if (activeGroupId) toggleRegion(provinceName); };
 
-    // ✅✅✅ MAP CONTROL HANDLERS
-    const handleZoomIn = () => {
-        setMapPosition(pos => ({ ...pos, zoom: Math.min(pos.zoom * 1.5, 4) }));
-    };
-    const handleZoomOut = () => {
-        setMapPosition(pos => ({ ...pos, zoom: Math.max(pos.zoom / 1.5, 1) }));
-    };
-    const handleResetZoom = () => {
-        setMapPosition({ coordinates: [400, 300], zoom: 1 });
-    };
+    // MAP CONTROL HANDLERS
+    const handleZoomIn = () => { setMapPosition(pos => ({ ...pos, zoom: Math.min(pos.zoom * 1.5, 4) })); };
+    const handleZoomOut = () => { setMapPosition(pos => ({ ...pos, zoom: Math.max(pos.zoom / 1.5, 1) })); };
+    const handleResetZoom = () => { setMapPosition({ coordinates: [400, 300], zoom: 1 }); };
 
     const mapSelectedRegions = useMemo(() => {
         if (activeGroupId) return currentGroupRegions.map(r => r.name);
-        if (previewGroupId) {
-            const group = tripGroups.find(g => g.id === previewGroupId);
-            return group ? group.regions.map(r => r.name) : [];
-        }
-        if (isViewAll) {
-            const allRegions = new Set<string>();
-            tripGroups.forEach(g => g.regions.forEach(r => allRegions.add(r.name)));
-            return Array.from(allRegions);
-        }
+        if (previewGroupId) { const group = tripGroups.find(g => g.id === previewGroupId); return group ? group.regions.map(r => r.name) : []; }
+        if (isViewAll) { const allRegions = new Set<string>(); tripGroups.forEach(g => g.regions.forEach(r => allRegions.add(r.name))); return Array.from(allRegions); }
         return [];
     }, [activeGroupId, previewGroupId, currentGroupRegions, tripGroups, isViewAll]);
 
     const regionColors = useMemo(() => {
         const mapColors: Record<string, string> = {};
-        if (activeGroupId) {
-            currentGroupRegions.forEach(r => {
-                const status = tripStatuses.find(s => s.id === r.statusId);
-                if (status) mapColors[r.name] = status.color;
-            });
-        }
-        else if (previewGroupId) {
-            const previewGroup = tripGroups.find(g => g.id === previewGroupId);
-            previewGroup?.regions.forEach(r => {
-                const status = tripStatuses.find(s => s.id === r.statusId);
-                if (status) mapColors[r.name] = status.color;
-            });
-        }
-        else if (isViewAll) {
-            tripGroups.forEach(group => {
-                group.regions.forEach(r => {
-                    const status = tripStatuses.find(s => s.id === r.statusId);
-                    if (status) mapColors[r.name] = status.color;
-                });
-            });
-        }
+        if (activeGroupId) { currentGroupRegions.forEach(r => { const status = tripStatuses.find(s => s.id === r.statusId); if (status) mapColors[r.name] = status.color; }); }
+        else if (previewGroupId) { const previewGroup = tripGroups.find(g => g.id === previewGroupId); previewGroup?.regions.forEach(r => { const status = tripStatuses.find(s => s.id === r.statusId); if (status) mapColors[r.name] = status.color; }); }
+        else if (isViewAll) { tripGroups.forEach(group => { group.regions.forEach(r => { const status = tripStatuses.find(s => s.id === r.statusId); if (status) mapColors[r.name] = status.color; }); }); }
         return mapColors;
     }, [tripGroups, tripStatuses, activeGroupId, previewGroupId, currentGroupRegions, isViewAll]);
 
@@ -369,15 +344,16 @@ export default function EditTripPage({ params }: PageProps) {
 
     return (
         <div className={`flex flex-col bg-[#FFFFFF] font-sans text-gray-800 h-screen overflow-hidden ${isFullscreen ? "fixed inset-0 z-[9999]" : "relative z-0"} ${isResizing ? "cursor-col-resize select-none" : ""}`}>
-
             {/* HEADER */}
             <div className="h-[60px] bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] px-10 z-20 flex-shrink-0 flex items-center justify-between relative mb-[32px]">
                 <div className="flex items-center gap-[48px]">
                     <button onClick={() => router.back()} className="hover:opacity-60 transition"><ArrowLeft className="w-6 h-6 text-black" /></button>
                     <div className="flex items-center gap-[16px]">
-                        <img src={`https://flagcdn.com/w40/${countryCode}.png`} alt={countryCode} className="w-[54px] h-[36px] rounded-[5px] object-cover shadow-sm" />
+                        {countryCode && <img src={`https://flagcdn.com/w40/${countryCode}.png`} alt={countryCode} className="w-[54px] h-[36px] rounded-[5px] object-cover shadow-sm" />}
                         <h1 className="text-[28px] font-bold text-black leading-[34px] tracking-[0.02em]">{countryName}</h1>
                     </div>
+                </div>
+                <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 hidden md:block">
                     <div className="relative">
                         <button onClick={(e) => { e.stopPropagation(); if (!activeGroupId) return; setIsRegionDropdownOpen(!isRegionDropdownOpen); setRegionSearchQuery(""); }} disabled={isLoadingRegions || !activeGroupId} className={`w-[323px] h-[40px] bg-[#F0F6FC] border border-[#60A3DE] rounded-[10px] flex items-center justify-between px-[16px] transition disabled:opacity-50 disabled:cursor-not-allowed ${!activeGroupId ? "opacity-60" : ""}`}>
                             <div className="flex items-center gap-[10px]">
@@ -411,22 +387,19 @@ export default function EditTripPage({ params }: PageProps) {
 
             {/* BODY */}
             <div className="flex-1 flex overflow-hidden relative px-[60px] pb-[40px] pt-[20px]">
-
                 {/* MAP AREA */}
                 <div className="flex-1 relative mr-[32px]">
-                    <div className="w-full h-full bg-white shadow-[0px_0px_4px_rgba(0,0,0,0.25)] rounded-[10px] overflow-hidden relative">
+                    <div className="w-full h-full bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] rounded-[10px] overflow-hidden relative">
                         <div className="w-full h-full">
-                            <DynamicMap
-                                countryCode={countryCode}
-                                regionColors={regionColors}
-                                selectedRegions={mapSelectedRegions}
+                            <DynamicMap 
+                                countryCode={countryCode} 
+                                regionColors={regionColors} 
+                                selectedRegions={mapSelectedRegions} 
                                 onRegionClick={handleRegionClick}
-                                // ✅✅✅ Pass Zoom Props
                                 mapPosition={mapPosition}
                                 onMoveEnd={setMapPosition}
                             />
                         </div>
-                        {/* ✅✅✅ Zoom Controls with Handlers */}
                         <div className="absolute bottom-8 right-8 w-[53px] bg-white border border-[#D9D9D9] rounded-[5px] flex flex-col items-center py-2 shadow-sm z-10">
                             <button onClick={handleZoomIn} className="w-[37px] h-[42px] flex items-center justify-center hover:bg-gray-50 transition"><Plus className="w-5 h-5 text-[#9E9E9E]" /></button>
                             <div className="w-full h-px bg-[#D9D9D9]"></div>
@@ -443,144 +416,186 @@ export default function EditTripPage({ params }: PageProps) {
                 </div>
 
                 {/* RIGHT PANEL */}
-                <div
-                    ref={sidebarRef}
-                    className="bg-white shadow-[0px_0px_4px_rgba(0,0,0,0.25)] rounded-[5px] flex flex-col z-30 md:static flex-shrink-0"
-                    style={{ width: sidebarWidth, minWidth: 483, paddingTop: '10px', paddingRight: '10px', paddingBottom: '10px', paddingLeft: '20px' }}
-                >
-                    <div className="flex-shrink-0 mb-[32px]">
-                        <div className="flex flex-col gap-[8px] pb-[8px] border-b border-[#EEEEEE]">
-                            {activeGroupId ? (
-                                <div className="flex justify-between items-center w-full">
-                                    <div className="flex items-center gap-2 overflow-hidden"><MapPin className="w-5 h-5 text-[#3A82CE] shrink-0" /><div className="flex flex-col"><span className="font-bold text-[20px] leading-[24px] text-black truncate max-w-[300px]">{activeGroup?.name || "Untitled Group"}</span>{currentGroupRegions.length > 0 && (<span className="font-normal text-[14px] text-gray-500">{currentGroupRegions.length} Regions Selected</span>)}</div></div>
-                                    <button onClick={() => setActiveGroupId(null)} className="text-gray-400 hover:text-gray-600 p-1"><X className="w-6 h-6" /></button>
+                <div ref={sidebarRef} className="bg-white shadow-[0px_0px_4px_rgba(0,0,0,0.25)] rounded-[5px] flex flex-col z-30 md:static flex-shrink-0 relative" style={{ width: sidebarWidth, minWidth: 483 }}>
+                    
+                    {activeGroupId ? (
+                        /* ✅✅✅ EDIT MODE LAYOUT ✅✅✅ */
+                        <div className="flex flex-col h-full bg-white border border-[#E0E0E0] shadow-[0px_4px_4px_rgba(0,0,0,0.25)] rounded-[10px] p-[10px] pt-[20px] gap-2 overflow-hidden relative">
+                            {/* --- HEADER --- */}
+                            <div className="flex justify-between items-center w-full pb-[8px] border-b border-[#9E9E9E] mb-4 flex-shrink-0">
+                                <div className="flex items-center gap-[10px] overflow-hidden">
+                                    <MapPin className="w-[24px] h-[24px] text-[#F44336] shrink-0" />
+                                    <span className="font-bold text-[20px] leading-[24px] text-black truncate max-w-[350px] font-inter">
+                                        {activeGroup?.name || "Untitled Group"}
+                                    </span>
                                 </div>
-                            ) : (
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <h2 className="font-bold text-[20px] leading-[24px] text-black font-inter">Trip Templates</h2>
-                                        <p className="font-normal text-[16px] leading-[19px] text-black font-inter">Create & manage your travel plans</p>
+                                <button onClick={() => setActiveGroupId(null)} className="w-[24px] h-[24px] flex items-center justify-center hover:bg-gray-100 rounded transition">
+                                    <X className="w-[14px] h-[14px] text-black" />
+                                </button>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto scrollbar-thin px-2 flex flex-col gap-4">
+                                {/* --- IMAGES --- */}
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-[14px] font-normal text-[#616161] font-inter">Images ({currentImages.length}/10)</label>
+                                    <div className={`w-full flex ${currentImages.length === 0 ? 'justify-center' : 'justify-start'}`}>
+                                        {currentImages.length === 0 ? (
+                                            <div onClick={() => fileInputRef.current?.click()} className="w-[403px] h-[155px] bg-[#F0F6FC] border border-dashed border-[#9E9E9E] rounded-[5px] flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-[#e1effc] transition">
+                                                <div className="w-[21px] h-[21px] bg-[#3A82CE] rounded-full flex items-center justify-center"><Plus className="w-[14px] h-[14px] text-white" /></div>
+                                                <span className="text-[12px] text-[#9E9E9E] font-inter text-center">Click to upload photos or drag and drop</span>
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-wrap gap-[21px] items-start">
+                                                {currentImages.map((img) => (
+                                                    <div key={img.id} className="relative w-[88px] h-[88px] rounded-[5px] overflow-hidden bg-gray-100 border border-[#E0E0E0]">
+                                                        <img src={img.url} alt="preview" className="w-full h-full object-cover" />
+                                                        <button onClick={() => handleRemoveImage(img.id)} className="absolute top-1 right-1 bg-white/90 p-0.5 rounded-full hover:bg-red-100 text-red-500 transition shadow-sm"><X className="w-3 h-3" /></button>
+                                                    </div>
+                                                ))}
+                                                {currentImages.length < 10 && (
+                                                    <div onClick={() => fileInputRef.current?.click()} className="w-[88px] h-[88px] bg-[#F0F6FC] border border-dashed border-[#9E9E9E] rounded-[5px] flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-[#e1effc] transition">
+                                                        <div className="w-[21px] h-[21px] bg-[#3A82CE] rounded-full flex items-center justify-center"><Plus className="w-[14px] h-[14px] text-white" /></div>
+                                                        <span className="text-[12px] text-[#9E9E9E] font-inter">Add more</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                        <input type="file" ref={fileInputRef} onChange={handleImageChange} accept="image/*" multiple className="hidden" />
                                     </div>
-                                    {tripGroups.length > 0 && (
-                                        <button
-                                            onClick={() => setIsViewAll(!isViewAll)}
-                                            className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-medium transition select-none ${isViewAll ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                                        >
-                                            {isViewAll ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                            {isViewAll ? "Hide All" : "View All"}
-                                        </button>
-                                    )}
+                                </div>
+
+                                {/* --- TEMPLATE NAME --- */}
+                                <div className="flex flex-col gap-[4px]">
+                                    <label className="text-[14px] font-normal text-[#616161] font-inter">Template Name</label>
+                                    <div className="box-border w-full h-[26px] bg-white border border-[#9E9E9E] rounded-[5px] flex items-center justify-between px-[10px] gap-[10px]">
+                                        <input type="text" value={groupName} onChange={(e) => setGroupName(e.target.value)} className="w-full h-full text-[12px] font-normal text-black placeholder-[#9E9E9E] bg-transparent outline-none font-inter leading-[15px]" placeholder="e.g., Summer Vacation" />
+                                        <Edit3 className="w-[16px] h-[16px] text-[#3A82CE] flex-shrink-0" />
+                                    </div>
+                                </div>
+
+                                {/* --- DATE (Input Trigger) --- */}
+                                <div className="flex flex-col gap-[4px] relative">
+                                    <label className="text-[14px] font-normal text-[#616161] font-inter">Date (From - To)</label>
+                                    <div 
+                                        className="box-border w-full h-[26px] bg-white border border-[#9E9E9E] rounded-[5px] flex justify-between items-center px-[10px] cursor-pointer hover:border-[#3A82CE] transition"
+                                        onClick={(e) => { e.stopPropagation(); setIsDatePickerOpen(true); }}
+                                    >
+                                        <span className={`text-[12px] font-normal font-inter leading-[15px] ${startDate ? 'text-black' : 'text-[#9E9E9E]'}`}>
+                                            {startDate ? `${formatDate(startDate)}${endDate ? ` - ${formatDate(endDate)}` : ''}` : "MM/DD/YYYY - MM/DD/YYYY"}
+                                        </span>
+                                        <Calendar className="w-[16px] h-[16px] text-[#3A82CE]" />
+                                    </div>
+                                </div>
+
+                                {/* --- NOTE --- */}
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-[14px] font-normal text-[#616161] font-inter">Note (Optional)</label>
+                                    <textarea value={groupNote} onChange={(e) => setGroupNote(e.target.value)} className="w-full min-h-[50px] border border-[#9E9E9E] rounded-[5px] px-[10px] py-[5px] text-[12px] text-black placeholder-[#9E9E9E] outline-none resize-none font-inter leading-[15px]" placeholder="Add details..." />
+                                </div>
+
+                                {/* --- RATING --- */}
+                                <div className="flex flex-col">
+                                    <label className="text-[14px] font-normal text-[#616161] font-inter">Trip Rating</label>
+                                    <div className="h-[40px] w-full flex items-center justify-center gap-[8px] px-[80px] py-[10px]">
+                                        {[1, 2, 3, 4, 5].map((star) => (
+                                            <button 
+                                                key={star} 
+                                                onClick={() => setTripRating(star)} 
+                                                className="focus:outline-none transition-transform hover:scale-110 active:scale-95 flex-shrink-0" 
+                                                type="button"
+                                            >
+                                                <Star className={`w-[20px] h-[20px] ${star <= tripRating ? "fill-[#FFCC00] text-[#FFCC00]" : "fill-[#9E9E9E] text-[#9E9E9E]"}`} strokeWidth={0} />
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* --- VISITED PROVINCES --- */}
+                                <div className="flex flex-col gap-[4px] mt-[10px]">
+                                    <label className="text-[14px] font-normal text-[#616161] font-inter">Visited Provinces ({currentGroupRegions.length})</label>
+                                    <div className="w-full min-h-[100px] border border-[#9E9E9E] rounded-[5px] flex flex-col bg-white overflow-hidden">
+                                        {currentGroupRegions.length === 0 ? (
+                                            <div className="flex-1 flex flex-col items-center justify-center gap-2 p-4 bg-[#F0F6FC] h-full">
+                                                <div className="w-[21px] h-[21px] bg-[#3A82CE] rounded-full flex items-center justify-center"><MapPin className="w-[12px] h-[12px] text-white" /></div>
+                                                <span className="text-[12px] text-[#9E9E9E] text-center font-inter leading-[15px]">No provinces selected.<br/>Click on the map to add.</span>
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-col w-full">
+                                                {currentGroupRegions.map(region => (
+                                                    <RegionItem 
+                                                        key={region.name} 
+                                                        region={region} 
+                                                        statuses={tripStatuses} 
+                                                        onUpdateStatus={(newId) => updateRegionStatus(region.name, newId)} 
+                                                        onRemove={() => toggleRegion(region.name)} 
+                                                        statusActions={{ onUpdate: handleUpdateStatus, onDelete: handleDeleteStatus, onAdd: handleAddStatus }} 
+                                                    />
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* --- ACTIONS --- */}
+                            <div className="flex justify-between items-center px-[10px] pt-[10px] pb-0 mt-auto gap-4 flex-shrink-0">
+                                <button onClick={() => handleDeleteGroupById(activeGroupId)} className="w-[60px] h-[42px] bg-[#FFEBEE] rounded-[5px] flex items-center justify-center hover:bg-[#ffcdd2] transition">
+                                    <Trash2 className="w-[21px] h-[21px] text-[#F44336]" />
+                                </button>
+                                <button onClick={handleApply} disabled={isSaving} className="flex-1 h-[42px] bg-[#3A82CE] rounded-[5px] flex items-center justify-center text-white text-[16px] font-normal hover:bg-[#2a6db5] transition disabled:opacity-50">
+                                    {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : "Save Template"}
+                                </button>
+                            </div>
+
+                            {/* ✅✅✅ MODAL OVERLAY DATE PICKER ✅✅✅ */}
+                            {isDatePickerOpen && (
+                                <div 
+                                    className="absolute inset-0 z-[100] flex items-center justify-center bg-gray-900/20 backdrop-blur-[1px] rounded-[10px]"
+                                    onClick={() => setIsDatePickerOpen(false)}
+                                >
+                                    <CustomDateRangePicker 
+                                        startDate={startDate} 
+                                        endDate={endDate} 
+                                        onClose={() => setIsDatePickerOpen(false)}
+                                        onChange={(start, end) => { 
+                                            setStartDate(start); 
+                                            setEndDate(end); 
+                                        }} 
+                                    />
                                 </div>
                             )}
-                        </div>
-                    </div>
 
-                    <div className="flex-1 overflow-y-auto scrollbar-thin pr-2">
-                        {/* ... (Content Panel Logic คงเดิม) ... */}
-                        {!activeGroupId ? (
-                            <div className="h-full flex flex-col">
+                        </div>
+                    ) : (
+                        /* ✅✅✅ LIST MODE (No Active Group) ✅✅✅ */
+                        <div className="flex flex-col h-full p-[20px] pt-[30px]">
+                            <div className="flex-shrink-0 mb-[32px]">
+                                <div className="flex flex-col gap-[8px] pb-[8px] border-b border-[#EEEEEE]">
+                                    <div className="flex justify-between items-start">
+                                        <div><h2 className="font-bold text-[20px] leading-[24px] text-black font-inter">Trip Templates</h2><p className="font-normal text-[16px] leading-[19px] text-black font-inter">Create & manage your travel plans</p></div>
+                                        {tripGroups.length > 0 && (<button onClick={() => setIsViewAll(!isViewAll)} className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-medium transition select-none ${isViewAll ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{isViewAll ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}{isViewAll ? "Hide All" : "View All"}</button>)}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto scrollbar-thin pr-2">
                                 {tripGroups.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center gap-[32px]">
-                                        <div className="flex flex-col items-center gap-[16px] w-full">
-                                            <div className="w-[48px] h-[48px] text-[#3A82CE]"><Layers className="w-full h-full" strokeWidth={1.5} /></div>
-                                            <div className="flex flex-col items-center gap-[8px] w-full text-center"><h3 className="font-bold text-[20px] leading-[24px] text-black font-inter">No Trip Templates yet</h3><p className="font-normal text-[16px] leading-[19px] text-black font-inter">Start by creating your first travel template.</p></div>
-                                        </div>
+                                    <div className="flex flex-col items-center justify-center gap-[32px] mt-[100px]">
+                                        <div className="flex flex-col items-center gap-[16px] w-full"><div className="w-[48px] h-[48px] text-[#3A82CE]"><Layers className="w-full h-full" strokeWidth={1.5} /></div><div className="flex flex-col items-center gap-[8px] w-full text-center"><h3 className="font-bold text-[20px] leading-[24px] text-black font-inter">No Trip Templates yet</h3><p className="font-normal text-[16px] leading-[19px] text-black font-inter">Start by creating your first travel template.</p></div></div>
                                         <button onClick={handleAddGroup} className="w-[220px] h-[42px] bg-[#3A82CE] rounded-[5px] flex items-center justify-center gap-[8px] hover:bg-[#2c6cb0] transition shadow-sm"><div className="w-[14px] h-[14px] flex items-center justify-center"><Plus className="w-full h-full text-white" strokeWidth={3} /></div><span className="font-normal text-[18px] leading-[22px] text-white font-inter">Create New Trip</span></button>
                                     </div>
                                 ) : (
                                     <div className="flex flex-col gap-[16px]">
                                         {tripGroups.map(group => (
-                                            <div
-                                                key={group.id}
-                                                onClick={() => setPreviewGroupId(prev => prev === group.id ? null : group.id)}
-                                                className={`
-                                                    box-border w-full h-[64px] 
-                                                    bg-white border 
-                                                    ${(activeGroupId === group.id || previewGroupId === group.id) ? 'border-[#3A82CE] ring-1 ring-[#3A82CE]' : 'border-[#C2DCF3]'} 
-                                                    shadow-[0px_4px_4px_rgba(0,0,0,0.25)] 
-                                                    rounded-[5px] 
-                                                    flex items-start justify-between 
-                                                    p-[10px] gap-[27px] 
-                                                    cursor-pointer transition-all hover:border-[#3A82CE] group relative
-                                                `}
-                                            >
-                                                <div className="flex items-center gap-[12px]">
-                                                    {group.images && group.images.length > 0 ? (
-                                                        <img src={group.images[0]} alt={group.name} className="w-[44px] h-[44px] rounded-[5px] object-cover" />
-                                                    ) : (
-                                                        <div className="w-[44px] h-[44px] rounded-[5px] bg-[#F0F6FC] flex items-center justify-center text-[#3A82CE]"><ImageIcon className="w-5 h-5" /></div>
-                                                    )}
-                                                    <div className="flex flex-col items-start gap-[4px]">
-                                                        <h3 className="font-inter font-medium text-[16px] leading-[19px] text-black truncate max-w-[175px]">{group.name}</h3>
-                                                        <p className="font-inter font-normal text-[12px] leading-[15px] text-black">{group.regions.length} {group.regions.length > 1 ? 'provinces' : 'province'}</p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center justify-center w-[36px] h-[24px] my-auto">
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === group.id ? null : group.id); }}
-                                                        className="text-black hover:text-gray-600 transition"
-                                                    >
-                                                        <MoreVertical className="w-5 h-5" />
-                                                    </button>
-                                                </div>
-                                                {openMenuId === group.id && (
-                                                    <div className="absolute right-2 top-10 w-32 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
-                                                        <button onClick={(e) => { e.stopPropagation(); setActiveGroupId(group.id); setOpenMenuId(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 flex items-center gap-2 border-b border-gray-50"><Edit3 className="w-4 h-4" /> Edit</button>
-                                                        <button onClick={(e) => { e.stopPropagation(); handleDeleteGroupById(group.id); setOpenMenuId(null); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"><Trash2 className="w-4 h-4" /> Delete</button>
-                                                    </div>
-                                                )}
+                                            <div key={group.id} onClick={() => setPreviewGroupId(prev => prev === group.id ? null : group.id)} className={`box-border w-full h-[64px] bg-white border ${(activeGroupId === group.id || previewGroupId === group.id) ? 'border-[#3A82CE] ring-1 ring-[#3A82CE]' : 'border-[#C2DCF3]'} shadow-[0px_4px_4px_rgba(0,0,0,0.25)] rounded-[5px] flex items-start justify-between p-[10px] gap-[27px] cursor-pointer transition-all hover:border-[#3A82CE] group relative`}>
+                                                <div className="flex items-center gap-[12px]">{group.images && group.images.length > 0 ? (<img src={group.images[0]} alt={group.name} className="w-[44px] h-[44px] rounded-[5px] object-cover" />) : (<div className="w-[44px] h-[44px] rounded-[5px] bg-[#F0F6FC] flex items-center justify-center text-[#3A82CE]"><ImageIcon className="w-5 h-5" /></div>)}<div className="flex flex-col items-start gap-[4px]"><h3 className="font-inter font-medium text-[16px] leading-[19px] text-black truncate max-w-[175px]">{group.name}</h3><p className="font-inter font-normal text-[12px] leading-[15px] text-black">{group.regions.length} {group.regions.length > 1 ? 'provinces' : 'province'}</p></div></div>
+                                                <div className="flex items-center justify-center w-[36px] h-[24px] my-auto"><button onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === group.id ? null : group.id); }} className="text-black hover:text-gray-600 transition"><MoreVertical className="w-5 h-5" /></button></div>
+                                                {openMenuId === group.id && (<div className="absolute right-2 top-10 w-32 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100"><button onClick={(e) => { e.stopPropagation(); setActiveGroupId(group.id); setOpenMenuId(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 flex items-center gap-2 border-b border-gray-50"><Edit3 className="w-4 h-4" /> Edit</button><button onClick={(e) => { e.stopPropagation(); handleDeleteGroupById(group.id); setOpenMenuId(null); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"><Trash2 className="w-4 h-4" /> Delete</button></div>)}
                                             </div>
                                         ))}
-                                        <button onClick={handleAddGroup} className="w-[220px] h-[42px] bg-[#3A82CE] rounded-[5px] flex items-center justify-center gap-[8px] hover:bg-[#2c6cb0] transition shadow-sm mt-4 mx-auto">
-                                            <div className="w-[14px] h-[14px] flex items-center justify-center"><Plus className="w-full h-full text-white" strokeWidth={3} /></div><span className="font-normal text-[18px] leading-[22px] text-white font-inter">Create New Trip</span>
-                                        </button>
+                                        <button onClick={handleAddGroup} className="w-[220px] h-[42px] bg-[#3A82CE] rounded-[5px] flex items-center justify-center gap-[8px] hover:bg-[#2c6cb0] transition shadow-sm mt-4 mx-auto"><div className="w-[14px] h-[14px] flex items-center justify-center"><Plus className="w-full h-full text-white" strokeWidth={3} /></div><span className="font-normal text-[18px] leading-[22px] text-white font-inter">Create New Trip</span></button>
                                     </div>
                                 )}
-                            </div>
-                        ) : (
-                            <div className="animate-in fade-in slide-in-from-right-4 duration-300 space-y-6 pt-2">
-                                <div className="bg-white p-4 rounded-[5px] border border-gray-200 shadow-sm">
-                                    <div className="flex justify-between items-center mb-3"><label className="text-[16px] font-bold text-black flex items-center gap-2"><ImageIcon className="w-4 h-4 text-[#3A82CE]" /> Trip Images ({currentImages.length}/10)</label></div>
-                                    <div className="grid grid-cols-4 gap-2">
-                                        {currentImages.map((img) => (<div key={img.id} className="relative aspect-square rounded-[5px] overflow-hidden border border-gray-200 group bg-gray-50"><img src={img.url} alt="img" className="w-full h-full object-cover transition group-hover:scale-105" /><button onClick={() => handleRemoveImage(img.id)} className="absolute top-1 right-1 bg-white/90 p-1 rounded-full text-red-500 opacity-0 group-hover:opacity-100 transition shadow-sm hover:bg-red-50 hover:text-red-600"><X className="w-3 h-3" /></button></div>))}
-                                        {currentImages.length < 10 && (<div className="aspect-square bg-white border-2 border-dashed border-gray-300 rounded-[5px] flex flex-col items-center justify-center cursor-pointer hover:border-[#3A82CE] hover:bg-[#F0F6FC] transition group" onClick={() => fileInputRef.current?.click()}><div className="w-8 h-8 rounded-full bg-[#F0F6FC] flex items-center justify-center mb-1 group-hover:bg-[#3A82CE] transition"><Plus className="w-4 h-4 text-[#3A82CE] group-hover:text-white" /></div><span className="text-[10px] font-bold text-gray-500 group-hover:text-[#3A82CE]">Add</span></div>)}
-                                    </div>
-                                    <input type="file" ref={fileInputRef} onChange={handleImageChange} accept="image/*" multiple className="hidden" />
-                                </div>
-                                <div className="space-y-4 bg-white p-4 rounded-[5px] border border-gray-200 shadow-sm">
-                                    <div><label className="text-[16px] font-bold text-black flex items-center gap-2 mb-2"><LayoutTemplate className="w-4 h-4 text-[#3A82CE]" /> Template Name</label><input type="text" value={groupName} onChange={(e) => setGroupName(e.target.value)} className="w-full border border-gray-300 rounded-[5px] px-3 py-2.5 text-[16px] focus:ring-1 focus:ring-[#3A82CE] focus:border-[#3A82CE] outline-none transition" placeholder="e.g., Summer Vacation" /></div>
-                                    <div><label className="text-[16px] font-bold text-black flex items-center gap-2 mb-2"><StickyNote className="w-4 h-4 text-[#3A82CE]" /> Note (Optional)</label><textarea rows={3} value={groupNote} onChange={(e) => setGroupNote(e.target.value)} className="w-full border border-gray-300 rounded-[5px] px-3 py-2.5 text-[16px] focus:ring-1 focus:ring-[#3A82CE] focus:border-[#3A82CE] outline-none resize-none transition" placeholder="Add details..." /></div>
-
-                                    <div className="relative">
-                                        <label className="text-[16px] font-bold text-black flex items-center gap-2 mb-2"><Calendar className="w-4 h-4 text-[#3A82CE]" /> Travel Dates</label>
-                                        <div className="w-full border border-gray-300 rounded-[5px] px-3 py-2.5 flex items-center justify-between cursor-pointer hover:border-[#3A82CE] transition bg-white" onClick={(e) => { e.stopPropagation(); setIsDatePickerOpen(!isDatePickerOpen); }}>
-                                            <span className={startDate ? "text-black text-[16px]" : "text-gray-400 text-[16px]"}>{startDate ? `${formatDate(startDate)}${endDate ? ` - ${formatDate(endDate)}` : ''}` : "Select travel dates"}</span>
-                                            <Calendar className="w-4 h-4 text-gray-400" />
-                                        </div>
-                                        {isDatePickerOpen && (
-                                            <div className="absolute top-full left-0 z-50 mt-1" onClick={(e) => e.stopPropagation()}>
-                                                <CustomDateRangePicker startDate={startDate} endDate={endDate} onChange={(start, end) => { setStartDate(start); setEndDate(end); if (start && end) setIsDatePickerOpen(false); }} />
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="pt-2">
-                                    <label className="text-[16px] font-bold text-black mb-3 block flex items-center gap-2"><MapPin className="w-4 h-4 text-[#3A82CE]" /> Selected Regions ({currentGroupRegions.length})</label>
-                                    {currentGroupRegions.length > 0 ? (
-                                        <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3 max-h-[50vh] overflow-y-auto pr-1 scrollbar-thin content-start items-start pb-4">
-                                            {currentGroupRegions.map(region => (<RegionItem key={region.name} region={region} statuses={tripStatuses} onUpdateStatus={(newId) => updateRegionStatus(region.name, newId)} onRemove={() => toggleRegion(region.name)} statusActions={{ onUpdate: handleUpdateStatus, onDelete: handleDeleteStatus, onAdd: handleAddStatus }} />))}
-                                        </div>
-                                    ) : (<div className="flex flex-col items-center justify-center py-8 bg-white border-2 border-dashed border-gray-200 rounded-[5px] text-center"><div className="w-12 h-12 bg-[#F0F6FC] rounded-full flex items-center justify-center mb-3"><MapPin className="w-6 h-6 text-[#3A82CE]" /></div><p className="text-[16px] font-medium text-black">No regions selected yet.</p><p className="text-[14px] text-gray-400 mt-1">Click regions on the map to add them.</p></div>)}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {activeGroupId && (
-                        <div className="p-[20px] border-t border-gray-200 bg-white mt-auto flex-shrink-0 rounded-b-[5px]">
-                            <div className="flex gap-3 animate-in slide-in-from-bottom-2">
-                                <button onClick={handleApply} disabled={isSaving} className="flex-1 bg-[#3A82CE] hover:bg-[#2c6cb0] text-white font-bold py-3 rounded-[5px] shadow-sm transition transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-[16px]">{isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : "Save Template"}</button>
-                                <button onClick={() => handleDeleteGroupById(activeGroupId)} disabled={isSaving} className="px-5 py-3 text-red-600 bg-red-50 hover:bg-red-100 border border-red-100 font-bold rounded-[5px] transition disabled:opacity-50 flex items-center justify-center"><Trash2 className="w-5 h-5" /></button>
                             </div>
                         </div>
                     )}
@@ -590,36 +605,96 @@ export default function EditTripPage({ params }: PageProps) {
     );
 }
 
-// ... CustomDateRangePicker และ RegionItem คงเดิม ...
-function CustomDateRangePicker({ startDate, endDate, onChange }: { startDate: string, endDate: string, onChange: (s: string, e: string) => void }) {
+function CustomDateRangePicker({ startDate, endDate, onChange, onClose }: { startDate: string, endDate: string, onChange: (s: string, e: string) => void, onClose: () => void }) {
     const [viewDate, setViewDate] = useState(startDate ? new Date(startDate) : new Date());
     const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
     const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
+
     const year = viewDate.getFullYear();
     const month = viewDate.getMonth();
     const daysInMonth = getDaysInMonth(year, month);
     const startDay = getFirstDayOfMonth(year, month);
+
     const handleDayClick = (day: number) => {
         const clickedDate = new Date(year, month, day);
         const dateStr = `${clickedDate.getFullYear()}-${String(clickedDate.getMonth() + 1).padStart(2, '0')}-${String(clickedDate.getDate()).padStart(2, '0')}`;
-        if (!startDate || (startDate && endDate)) { onChange(dateStr, ""); } else if (startDate && !endDate) { if (new Date(dateStr) < new Date(startDate)) { onChange(dateStr, startDate); } else { onChange(startDate, dateStr); } }
+        
+        if (!startDate || (startDate && endDate)) {
+            onChange(dateStr, "");
+        } else if (startDate && !endDate) {
+            if (new Date(dateStr) < new Date(startDate)) {
+                onChange(dateStr, startDate);
+            } else {
+                onChange(startDate, dateStr);
+            }
+        }
     };
+
     const isSelected = (day: number) => {
         const d = new Date(year, month, day).setHours(0, 0, 0, 0);
         const s = startDate ? new Date(startDate).setHours(0, 0, 0, 0) : null;
         const e = endDate ? new Date(endDate).setHours(0, 0, 0, 0) : null;
+
         if (s && d === s) return "start";
         if (e && d === e) return "end";
         if (s && e && d > s && d < e) return "range";
         return null;
     };
+
     const nextMonth = () => setViewDate(new Date(year, month + 1, 1));
     const prevMonth = () => setViewDate(new Date(year, month - 1, 1));
+
     return (
-        <div className="bg-white rounded-lg shadow-xl border border-gray-200 p-4 w-[300px] animate-in fade-in zoom-in-95 duration-100">
-            <div className="flex justify-between items-center mb-4"><button onClick={prevMonth} className="p-1 hover:bg-gray-100 rounded-full"><ChevronLeft className="w-5 h-5 text-gray-600" /></button><span className="font-bold text-gray-800">{viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span><button onClick={nextMonth} className="p-1 hover:bg-gray-100 rounded-full"><ChevronRight className="w-5 h-5 text-gray-600" /></button></div>
-            <div className="grid grid-cols-7 gap-1 text-center mb-2">{['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => <div key={d} className="text-xs font-bold text-gray-400">{d}</div>)}</div>
-            <div className="grid grid-cols-7 gap-1">{Array.from({ length: startDay }).map((_, i) => <div key={`empty-${i}`} />)}{Array.from({ length: daysInMonth }).map((_, i) => { const day = i + 1; const status = isSelected(day); let bgClass = "hover:bg-blue-50 text-gray-700"; if (status === 'start' || status === 'end') bgClass = "bg-[#3A82CE] text-white hover:bg-[#2c6cb0]"; if (status === 'range') bgClass = "bg-blue-100 text-blue-800"; return (<button key={day} onClick={() => handleDayClick(day)} className={`w-8 h-8 rounded-full flex items-center justify-center text-sm transition ${bgClass} mx-auto`}>{day}</button>); })}</div>
+        <div className="bg-white rounded-lg shadow-2xl border border-gray-200 p-4 w-[320px] animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+                <button onClick={prevMonth} className="p-1 hover:bg-gray-100 rounded-full transition"><ChevronLeft className="w-5 h-5 text-gray-500" /></button>
+                <span className="font-bold text-gray-800 text-[14px] font-inter">{viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+                <button onClick={nextMonth} className="p-1 hover:bg-gray-100 rounded-full transition"><ChevronRight className="w-5 h-5 text-gray-500" /></button>
+            </div>
+
+            <div className="grid grid-cols-7 gap-1 text-center mb-2">
+                {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(d => (
+                    <div key={d} className="text-[12px] font-medium text-gray-400 font-inter">{d}</div>
+                ))}
+            </div>
+
+            <div className="grid grid-cols-7 gap-1 mb-4">
+                {Array.from({ length: (startDay === 0 ? 6 : startDay - 1) }).map((_, i) => <div key={`empty-${i}`} />)}
+                {Array.from({ length: daysInMonth }).map((_, i) => {
+                    const day = i + 1;
+                    const status = isSelected(day);
+                    let bgClass = "hover:bg-blue-50 text-gray-700";
+                    let textClass = "text-gray-700";
+                    
+                    if (status === 'start' || status === 'end') {
+                        bgClass = "bg-[#3A82CE] hover:bg-[#2c6cb0]";
+                        textClass = "text-white font-bold";
+                    }
+                    if (status === 'range') {
+                        bgClass = "bg-[#E3F2FD]";
+                        textClass = "text-[#1565C0]";
+                    }
+
+                    return (
+                        <button 
+                            key={day} 
+                            onClick={() => handleDayClick(day)} 
+                            className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] transition mx-auto font-inter ${bgClass} ${textClass}`}
+                        >
+                            {day}
+                        </button>
+                    );
+                })}
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-gray-100">
+                <button 
+                    onClick={onClose}
+                    className="bg-[#3A82CE] text-white text-[12px] font-medium px-4 py-1.5 rounded-[5px] hover:bg-[#2c6cb0] transition shadow-sm font-inter"
+                >
+                    Done
+                </button>
+            </div>
         </div>
     );
 }
@@ -627,13 +702,95 @@ function CustomDateRangePicker({ startDate, endDate, onChange }: { startDate: st
 function RegionItem({ region, statuses, onUpdateStatus, onRemove, statusActions }: RegionItemProps) {
     const [isOpen, setIsOpen] = useState(false);
     const currentStatus = statuses.find((s) => s.id === region.statusId) || statuses[0];
+    
     return (
-        <div className={`bg-white border rounded-xl transition-all duration-300 ${isOpen ? 'border-blue-300 shadow-md ring-1 ring-blue-100' : 'border-gray-200 shadow-sm hover:border-blue-200'}`}>
-            <div className="flex items-center justify-between p-3 cursor-pointer select-none" onClick={() => setIsOpen(!isOpen)}>
-                <div className="flex items-center gap-3"><span className="text-sm font-bold text-gray-700">{region.name}</span></div>
-                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: currentStatus?.color }}></div><button onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }} className="text-gray-400 hover:text-blue-500 transition">{isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button><button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-1 rounded transition"><X className="w-4 h-4" /></button></div>
+        <div className={`bg-white border-b border-[#E0E0E0] last:border-none transition-all duration-200 ${isOpen ? 'shadow-md border-transparent ring-1 ring-blue-100 z-10 relative rounded-[5px] my-1' : ''}`}>
+            {/* Header Row */}
+            <div className="box-border flex justify-between items-center px-[10px] h-[35px] hover:bg-gray-50 transition cursor-pointer" onClick={() => setIsOpen(!isOpen)}>
+                <span className="text-[12px] font-normal text-[#9E9E9E] font-inter truncate max-w-[150px]">{region.name}</span>
+                <div className="flex items-center gap-[10px]">
+                    <div className="flex items-center gap-[8px] px-2 py-1 rounded transition">
+                        <div className="w-[12px] h-[12px] rounded-full shadow-sm border border-black/5" style={{ backgroundColor: currentStatus?.color }} />
+                        {isOpen ? <ChevronUp className="w-[10px] h-[10px] text-[#9E9E9E]" /> : <ChevronDown className="w-[10px] h-[10px] text-[#9E9E9E]" />}
+                    </div>
+                    <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="p-1 hover:bg-red-50 rounded transition group">
+                        <X className="w-[10px] h-[10px] text-[#9E9E9E] group-hover:text-red-500" />
+                    </button>
+                </div>
             </div>
-            {isOpen && (<div className="px-3 pb-3 pt-0 animate-in slide-in-from-top-2"><div className="h-px bg-gray-100 w-full mb-3"></div><div className="grid grid-cols-[30px_1fr_40px_30px] gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 px-1"><div></div><div>Label</div><div>Color</div><div className="text-right">Action</div></div><div className="space-y-1.5">{statuses.map((status) => (<div key={status.id} className={`grid grid-cols-[30px_1fr_40px_30px] gap-2 items-center p-1.5 rounded-lg border transition-all cursor-pointer ${status.id === region.statusId ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-200' : 'bg-white border-gray-100 hover:border-gray-300'}`} onClick={() => onUpdateStatus(status.id)}><div className="flex items-center justify-center"><div className={`w-4 h-4 rounded-full border flex items-center justify-center ${status.id === region.statusId ? 'border-blue-500 bg-white' : 'border-gray-300'}`}>{status.id === region.statusId && <div className="w-2 h-2 rounded-full bg-blue-500"></div>}</div></div><div><input type="text" value={status.label} onClick={(e) => e.stopPropagation()} onChange={(e) => statusActions.onUpdate(status.id, 'label', e.target.value)} style={{ width: `${Math.max(status.label.length, 1) + 2}ch` }} className="bg-transparent text-xs font-medium text-gray-700 outline-none border-b border-transparent focus:border-blue-300 focus:bg-white rounded px-1 transition h-6 min-w-[30px] max-w-full" /></div><div className="relative w-5 h-5 rounded-full overflow-hidden border border-gray-200 shadow-sm mx-auto" onClick={(e) => e.stopPropagation()}><input type="color" value={status.color} onChange={(e) => statusActions.onUpdate(status.id, 'color', e.target.value)} className="absolute -top-1 -left-1 w-7 h-7 border-none cursor-pointer" /></div><div className="text-right"><button onClick={(e) => { e.stopPropagation(); statusActions.onDelete(status.id); }} disabled={statuses.length <= 1} className="text-gray-300 hover:text-red-500 transition disabled:opacity-30 disabled:hover:text-gray-300 p-1"><Trash2 className="w-3.5 h-3.5" /></button></div></div>))}</div><button onClick={statusActions.onAdd} className="w-full mt-2 flex items-center justify-center gap-2 py-1.5 text-[10px] font-bold text-blue-500 border border-dashed border-blue-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition"><Plus className="w-3 h-3" /> Add New Status</button></div>)}
+
+            {/* Dropdown Content (Full Management) */}
+            {isOpen && (
+                <div className="px-3 pb-3 pt-0 animate-in slide-in-from-top-2 cursor-default" onClick={(e) => e.stopPropagation()}>
+                    <div className="h-px bg-gray-100 w-full mb-3"></div>
+                    
+                    {/* Header Columns */}
+                    <div className="grid grid-cols-[30px_1fr_40px_30px] gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 px-1">
+                        <div></div>
+                        <div>Label</div>
+                        <div>Color</div>
+                        <div className="text-right">Action</div>
+                    </div>
+
+                    {/* Status List */}
+                    <div className="space-y-1.5">
+                        {statuses.map((status) => (
+                            <div 
+                                key={status.id} 
+                                className={`grid grid-cols-[30px_1fr_40px_30px] gap-2 items-center p-1.5 rounded-lg border transition-all cursor-pointer ${status.id === region.statusId ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-200' : 'bg-white border-gray-100 hover:border-gray-300'}`}
+                                onClick={() => onUpdateStatus(status.id)}
+                            >
+                                {/* Radio Circle */}
+                                <div className="flex items-center justify-center">
+                                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${status.id === region.statusId ? 'border-blue-500 bg-white' : 'border-gray-300'}`}>
+                                        {status.id === region.statusId && <div className="w-2 h-2 rounded-full bg-blue-500"></div>}
+                                    </div>
+                                </div>
+
+                                {/* Label Input */}
+                                <div>
+                                    <input 
+                                        type="text" 
+                                        value={status.label} 
+                                        onClick={(e) => e.stopPropagation()} 
+                                        onChange={(e) => statusActions.onUpdate(status.id, 'label', e.target.value)} 
+                                        className="bg-transparent text-xs font-medium text-gray-700 outline-none border-b border-transparent focus:border-blue-300 focus:bg-white rounded px-1 transition h-6 w-full" 
+                                    />
+                                </div>
+
+                                {/* Color Picker */}
+                                <div className="relative w-5 h-5 rounded-full overflow-hidden border border-gray-200 shadow-sm mx-auto" onClick={(e) => e.stopPropagation()}>
+                                    <input 
+                                        type="color" 
+                                        value={status.color} 
+                                        onChange={(e) => statusActions.onUpdate(status.id, 'color', e.target.value)} 
+                                        className="absolute -top-1 -left-1 w-7 h-7 border-none cursor-pointer p-0" 
+                                    />
+                                </div>
+
+                                {/* Delete Button */}
+                                <div className="text-right">
+                                    <button 
+                                        onClick={(e) => { e.stopPropagation(); statusActions.onDelete(status.id); }} 
+                                        disabled={statuses.length <= 1} 
+                                        className="text-gray-300 hover:text-red-500 transition disabled:opacity-30 disabled:hover:text-gray-300 p-1"
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Add New Button */}
+                    <button 
+                        onClick={statusActions.onAdd} 
+                        className="w-full mt-2 flex items-center justify-center gap-2 py-1.5 text-[10px] font-bold text-blue-500 border border-dashed border-blue-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition"
+                    >
+                        <Plus className="w-3 h-3" /> Add New Status
+                    </button>
+                </div>
+            )}
         </div>
     );
 }
