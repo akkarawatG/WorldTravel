@@ -9,7 +9,7 @@ import { mdiPlus } from '@mdi/js';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Navigation, Pagination, A11y, Autoplay } from 'swiper/modules';
 
-// ✅ Import Supabase Client (ปรับ path ให้ตรงกับโปรเจคของคุณ)
+// ✅ Import Supabase Client
 import { createClient } from '@/utils/supabase/client';
 
 import 'swiper/css';
@@ -23,7 +23,7 @@ import { calculateRelevanceScore } from '@/services/placeService';
 const ITEMS_PER_PAGE = 6;
 const FESTIVALS_PER_PAGE = 3;
 
-// ... (KEEP CONSTANTS & MAPPINGS UNCHANGED) ...
+// ... (CONSTANTS & MAPPINGS KEEP SAME) ...
 const FILTER_GROUPS = [
   { title: "Nature & Outdoors", items: ["Mountains", "National parks", "Islands", "Lakes / Rivers", "Hot Spring", "Gardens"] },
   { title: "History & Culture", items: ["Temples", "Church / Mosque", "Ancient ruins", "Castles", "Old towns", "Museums", "Monuments"] },
@@ -83,15 +83,13 @@ const getDisplayCategories = (tags: string[] = []) => {
   return Array.from(new Set(displayCategories));
 };
 
-// ✅ Helper function to extract image from Supabase JSON response
 const getFestivalImageUrl = (images: any): string => {
   if (Array.isArray(images) && images.length > 0) {
-    // Check if it's an object with url property or a direct string
     return (typeof images[0] === 'object' && images[0] !== null && 'url' in images[0])
       ? images[0].url
       : images[0];
   }
-  return "https://placehold.co/600x400?text=No+Image"; // Default placeholder
+  return "https://placehold.co/600x400?text=No+Image";
 };
 
 interface ExploreClientProps {
@@ -107,7 +105,7 @@ interface SearchResult {
 
 export default function ExploreClient({ initialPlaces, searchParams }: ExploreClientProps) {
   const router = useRouter();
-  const supabase = createClient(); // ✅ Init Supabase Client
+  const supabase = createClient();
 
   // Params
   const paramCountry = typeof searchParams.country === 'string' ? searchParams.country : "Thailand";
@@ -122,20 +120,44 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
   const [showDropdown, setShowDropdown] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
 
-  // ✅ Festival State: Real Data
-  const [dbFestivals, setDbFestivals] = useState<any[]>([]); // Store fetched festivals
+  // Festival State
+  const [dbFestivals, setDbFestivals] = useState<any[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<string>(MONTHS[new Date().getMonth()]);
   const [festivalPage, setFestivalPage] = useState(1);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
-  // --- Fetch Festivals from Supabase ---
+  // ✅ New States for Saving functionality
+  const [userId, setUserId] = useState<string | null>(null);
+  const [savedPlaceIds, setSavedPlaceIds] = useState<Set<string>>(new Set());
+
+  // ✅ 1. Fetch User and Existing Saved Places on Mount
+  useEffect(() => {
+    const checkUserAndSavedPlaces = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user) {
+        setUserId(user.id);
+        const { data: savedData, error } = await supabase
+          .from('saved_places')
+          .select('place_id')
+          .eq('profile_id', user.id);
+          
+        if (savedData && !error) {
+          const ids = new Set(savedData.map(item => item.place_id));
+          setSavedPlaceIds(ids);
+        }
+      }
+    };
+    checkUserAndSavedPlaces();
+  }, []);
+
+  // Fetch Festivals
   useEffect(() => {
     const fetchFestivals = async () => {
-      // ดึงข้อมูล Festivals ตามประเทศ
       const { data, error } = await supabase
         .from('festivals')
         .select('*')
-        .eq('country', paramCountry); // กรองตามประเทศก่อน
+        .eq('country', paramCountry);
 
       if (error) {
         console.error('Error fetching festivals:', error);
@@ -143,11 +165,10 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
         setDbFestivals(data);
       }
     };
-
     fetchFestivals();
   }, [paramCountry]);
 
-  // --- Sync State & Logic ---
+  // Sync State & Logic
   useEffect(() => { if (urlTag) setSelectedFilters(urlTag.split(",")); else setSelectedFilters([]); }, [urlTag]);
   useEffect(() => { setSearchQuery(urlSearchQuery); }, [urlSearchQuery]);
 
@@ -179,19 +200,12 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
   const totalPages = Math.ceil(filteredPlaces.length / ITEMS_PER_PAGE);
   const paginatedItems = filteredPlaces.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-  // ✅ Festival Logic: Filter & Paginate from Real DB Data
+  // Festival Filter Logic
   const filteredFestivals = dbFestivals.filter((festival) => {
     if (selectedMonth === "ALL") return true;
-
-    // Logic 1: Filter by period_str (Text matching)
     const monthName = MONTH_FULL_NAMES[selectedMonth];
     const isPeriodMatch = festival.period_str?.toLowerCase().includes(monthName.toLowerCase());
-
-    // Logic 2: Filter by month_index (Database Column) - Optional if your DB has consistent month_index
-    // const targetMonthIndex = MONTHS.indexOf(selectedMonth) + 1; // 1-12
-    // const isIndexMatch = festival.month_index === targetMonthIndex;
-
-    return isPeriodMatch; // Using Text Match to be safe with existing data format
+    return isPeriodMatch;
   });
 
   const totalFestivalPages = Math.ceil(filteredFestivals.length / FESTIVALS_PER_PAGE);
@@ -202,7 +216,45 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
 
   useEffect(() => { setFestivalPage(1); }, [selectedMonth]);
 
-  // ... (Other Handlers: updateUrlParams, toggleFilter, clearAllFilters, etc. UNCHANGED) ...
+  // ✅ Handle Save/Unsave Place
+  const handleSavePlace = async (placeId: string, placeName: string) => {
+    if (!userId) {
+      alert("Please login to save places.");
+      router.push('/login'); 
+      return;
+    }
+
+    const isAlreadySaved = savedPlaceIds.has(placeId);
+
+    if (isAlreadySaved) {
+        // --- REMOVE ---
+        setSavedPlaceIds(prev => { const newSet = new Set(prev); newSet.delete(placeId); return newSet; });
+        try {
+            const { error } = await supabase.from('saved_places').delete().eq('place_id', placeId).eq('profile_id', userId);
+            if (error) {
+                setSavedPlaceIds(prev => new Set(prev).add(placeId));
+                alert("Failed to remove place.");
+            } else {
+                console.log(`Removed ${placeName}`);
+            }
+        } catch (err) { setSavedPlaceIds(prev => new Set(prev).add(placeId)); }
+    } else {
+        // --- ADD ---
+        setSavedPlaceIds(prev => new Set(prev).add(placeId));
+        try {
+            const { error } = await supabase.from('saved_places').insert([{ profile_id: userId, place_id: placeId }]);
+            if (error) {
+                setSavedPlaceIds(prev => { const newSet = new Set(prev); newSet.delete(placeId); return newSet; });
+                alert("Failed to save place.");
+            } else {
+                console.log(`Saved ${placeName}`);
+            }
+        } catch (err) {
+            setSavedPlaceIds(prev => { const newSet = new Set(prev); newSet.delete(placeId); return newSet; });
+        }
+    }
+  };
+
   const updateUrlParams = (newFilters: string[]) => {
     const params = new URLSearchParams();
     if (newFilters.length > 0) params.set("tag", newFilters.join(","));
@@ -263,26 +315,7 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
         .custom-pagination-container .swiper-pagination-bullet { width: 4px !important; height: 4px !important; background-color: #deecf9 !important; border: 1px solid #c2dcf3 !important; opacity: 1 !important; margin: 0 4px !important; transition: all 0.3s ease-in-out !important; border-radius: 50% !important; flex-shrink: 0 !important; }
         .custom-pagination-container .swiper-pagination-bullet-active { width: 8px !important; height: 8px !important; background-color: #041830 !important; border: 1px solid #c2dcf3 !important; }
         
-        .festival-nav-btn {
-            position: absolute;
-            top: 50%;
-            transform: translateY(-50%);
-            z-index: 50;
-            width: 48px;
-            height: 48px;
-            background-color: #3A82CE66; 
-            border: 1px solid #95C3EA;
-            border-radius: 30px;
-            padding: 9px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            color: #ffffff;
-            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-            cursor: pointer;
-            transition: all 0.2s ease-in-out;
-        }
+        .festival-nav-btn { position: absolute; top: 50%; transform: translateY(-50%); z-index: 50; width: 48px; height: 48px; background-color: #3A82CE66; border: 1px solid #95C3EA; border-radius: 30px; padding: 9px; display: flex; align-items: center; justify-content: center; gap: 10px; color: #ffffff; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); cursor: pointer; transition: all 0.2s ease-in-out; }
         .festival-nav-btn:hover { background-color: #3A82CE; }
         .festival-nav-btn:active { transform: translateY(-50%) scale(0.95); }
         .festival-nav-btn:disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
@@ -292,17 +325,12 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
       <div className="max-w-[1440px] mx-auto px-[156px] pt-6 mb-4">
         <div className="flex items-center gap-2 flex-wrap mb-2 font-Inter font-[600] text-[14px] leading-[100%] text-[#9E9E9E]">
           <span className="hover:underline cursor-pointer" onClick={() => router.push('/')}>Home</span> /
-          <span
-            className="hover:underline cursor-pointer" // เพิ่มสีให้รู้ว่ากดได้ (option)
-            onClick={() => router.push(`/countries?continent=${currentContinent}`)}
-          >
-            {currentContinent}
-          </span> /
+          <span className="hover:underline cursor-pointer" onClick={() => router.push(`/countries?continent=${currentContinent}`)}>{currentContinent}</span> /
           <span className="text-[#101828] hover:underline cursor-pointer">{paramCountry}</span>
         </div>
       </div>
 
-      {/* HERO SLIDER (Unchanged) */}
+      {/* HERO SLIDER (Unchanged for now, focusing on Grid) */}
       <div className="w-full h-[414px] bg-[#DEECF9]">
         <div className="w-full max-w-[1440px] h-[414px] mx-auto bg-[#DEECF9] flex justify-center">
           {displaySlides.length === 0 ? (
@@ -392,7 +420,7 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* SIDEBAR FILTER (Unchanged) */}
+          {/* SIDEBAR FILTER */}
           <div className="hidden lg:block lg:col-span-1">
             <div className="w-[266px] h-fit bg-[#F5F5F5] p-[16px] rounded-[16px] flex flex-col gap-[10px] border border-[#EEEEEE]">
               <div className="w-full h-[24px] mb-[12px] flex items-center justify-center flex-shrink-0"><h3 className="font-Inter font-[700] text-[20px] leading-[100%] tracking-[0] text-center text-[#212121]">Filters</h3></div>
@@ -442,6 +470,8 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
                 {paginatedItems.map((place) => {
                   const displayCategories = getDisplayCategories(place.category_tags);
                   const displayString = displayCategories.length > 0 ? displayCategories.slice(0, 3).join(", ") : "Attraction";
+                  const isSaved = savedPlaceIds.has(String(place.id)); // Check if saved
+
                   return (
                     <div key={place.id} className="w-[264px] h-[426px] flex flex-col gap-[8px] cursor-pointer group select-none" onClick={() => router.push(`/detail?id=${place.id}`)}>
                       <div className="flex flex-col gap-2 min-w-0">
@@ -460,7 +490,25 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
                             <button onClick={(e) => e.stopPropagation()} className={`next-btn-${place.id} absolute right-2 top-1/2 -translate-y-1/2 z-10 w-[24px] h-[24px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-all shadow-sm cursor-pointer text-white`}><ArrowRight className="w-[14px] h-[14px]" /></button>
                             <div className={`pagination-custom-${place.id} custom-pagination-container absolute bottom-3 left-0 w-full flex justify-center gap-1 z-20 !pointer-events-none`}></div>
                           </Swiper>
-                          <div className="absolute top-2 right-2 z-20"><button onClick={(e) => { e.stopPropagation(); console.log(`Add ${place.name} to trip`); }} className="flex h-[24px] w-[32px] group-hover:w-[60px] items-center justify-center rounded-[8px] border border-white bg-[#00000066] group-hover:bg-[#1565C0] text-white shadow-sm transition-all duration-300 ease-in-out overflow-hidden cursor-pointer backdrop-blur-[2px]"><Icon path={mdiPlus} size="16px" className="flex-shrink-0" /><span className="max-w-0 opacity-0 group-hover:max-w-[40px] group-hover:opacity-100 group-hover:ml-[4px] text-[12px] font-inter font-normal whitespace-nowrap transition-all duration-300">Add</span></button></div>
+                          
+                          {/* ✅ ADD/TOGGLE BUTTON */}
+                          <div className="absolute top-2 right-2 z-20">
+                            <button 
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                handleSavePlace(String(place.id), place.name);
+                              }} 
+                              className={`flex h-[24px] w-[32px] group-hover:w-[60px] items-center justify-center rounded-[8px] border border-white text-white shadow-sm transition-all duration-300 ease-in-out overflow-hidden cursor-pointer backdrop-blur-[2px] 
+                                ${isSaved ? "bg-[#3A82CE] group-hover:bg-[#1565C0]" : "bg-[#00000066] group-hover:bg-[#1565C0]"}
+                              `}
+                            >
+                              {isSaved ? (<Check size="16px" className="flex-shrink-0" />) : (<Icon path={mdiPlus} size="16px" className="flex-shrink-0" />)}
+                              <span className="max-w-0 opacity-0 group-hover:max-w-[40px] group-hover:opacity-100 group-hover:ml-[4px] text-[12px] font-inter font-normal whitespace-nowrap transition-all duration-300">
+                                {isSaved ? "Saved" : "Add"}
+                              </span>
+                            </button>
+                          </div>
+
                         </div>
                         <div className="w-full h-[87px] flex flex-col gap-[4px] min-w-0">
                           <h4 className="text-[20px] font-inter font-normal text-[#212121] leading-none w-full"><span className="inline-block max-w-full truncate border-b border-transparent group-hover:border-[#212121] pb-[1px] transition-colors duration-200 align-bottom">{place.name}</span></h4>
@@ -490,67 +538,38 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
           </div>
         </div>
 
-        {/* ✅ FESTIVAL SECTION */}
+        {/* FESTIVAL SECTION */}
         <h1 className="text-3xl md:text-4xl font-extrabold text-[#194473] mb-8 mt-12">
           Recommend festival in {selectedMonth === "ALL" ? paramCountry : MONTH_FULL_NAMES[selectedMonth]}
         </h1>
 
-        {/* ✅ 1. Main Wrapper: w-[1014px] h-[373px] Centered */}
         <div className="w-[1014px] h-[373px] mx-auto mb-10 flex flex-col gap-[24px] relative">
-
           <div className="relative w-full h-full">
-
             {filteredFestivals.length === 0 ? (
               <div className="w-full h-full flex items-center justify-center text-gray-500 rounded-[24px] bg-[#F5F5F5]">
                 No festivals found for {selectedMonth === "ALL" ? "any month" : selectedMonth} in {paramCountry}.
               </div>
             ) : (
               <>
-                {/* Navigation Buttons (Outside wrapper) */}
                 {totalFestivalPages > 1 && (
                   <>
-                    <button onClick={() => setFestivalPage(p => Math.max(1, p - 1))} disabled={festivalPage === 1} className="festival-nav-btn" style={{ left: '-60px' }}>
-                      <ArrowLeft className="w-[24px] h-[24px]" />
-                    </button>
-                    <button onClick={() => setFestivalPage(p => Math.min(totalFestivalPages, p + 1))} disabled={festivalPage === totalFestivalPages} className="festival-nav-btn" style={{ right: '-60px' }}>
-                      <ArrowRight className="w-[24px] h-[24px]" />
-                    </button>
+                    <button onClick={() => setFestivalPage(p => Math.max(1, p - 1))} disabled={festivalPage === 1} className="festival-nav-btn" style={{ left: '-60px' }}><ArrowLeft className="w-[24px] h-[24px]" /></button>
+                    <button onClick={() => setFestivalPage(p => Math.min(totalFestivalPages, p + 1))} disabled={festivalPage === totalFestivalPages} className="festival-nav-btn" style={{ right: '-60px' }}><ArrowRight className="w-[24px] h-[24px]" /></button>
                   </>
                 )}
-
-                {/* ✅ 2. Grid Items */}
                 <div className="grid grid-cols-3 gap-[27px]">
                   {currentFestivals.map((festival) => (
-
-                    /* ✅ 3. Card Item: w-[320px] h-[373px] */
                     <div key={festival.id} className="w-[320px] h-[373px] flex flex-col gap-[8px] p-[16px] rounded-[24px] bg-[#F5F5F5] hover:shadow-md transition-shadow">
-
-                      {/* Image: Adjusted width to fit padding (320 - 32 = 288px width) */}
                       <div className="relative w-[288px] h-[115px] rounded-[8px] overflow-hidden flex-shrink-0">
-                        <Image
-                          src={getFestivalImageUrl(festival.images)} // ✅ Use helper function
-                          alt={festival.name}
-                          fill
-                          className="object-cover"
-                          unoptimized
-                        />
+                        <Image src={getFestivalImageUrl(festival.images)} alt={festival.name} fill className="object-cover" unoptimized />
                       </div>
-
-                      {/* Content Container */}
                       <div className="flex flex-col flex-1 overflow-hidden gap-[8px]">
                         <div className="w-[288px] flex flex-col gap-[4px] overflow-hidden">
                           <h3 className="font-inter font-bold text-[18px] text-[#212121] leading-tight line-clamp-2">{festival.name}</h3>
-                          <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight ">
-                            {festival.description} {/* ✅ Map to 'description' */}
-                          </p>
-                          <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight break-words">
-                            <span className="font-bold">When: </span>{festival.period_str} {/* ✅ Map to 'period_str' */}
-                          </p>
-                          <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight break-words">
-                            <span className="font-bold">Top Spot : </span>{festival.province_state} {/* ✅ Map to 'province_state' */}
-                          </p>
+                          <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight ">{festival.description}</p>
+                          <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight break-words"><span className="font-bold">When: </span>{festival.period_str}</p>
+                          <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight break-words"><span className="font-bold">Top Spot : </span>{festival.province_state}</p>
                         </div>
-
                       </div>
                     </div>
                   ))}
@@ -558,18 +577,14 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
               </>
             )}
           </div>
-
         </div>
-        {/* Month Filter (Replacing Pagination) */}
         <div className="flex justify-end items-center gap-[8px] mt-4">
           <button onClick={() => setSelectedMonth("ALL")} className={`flex items-center justify-center w-[40px] h-[24px] px-2 rounded-[4px] border border-[#EEEEEE] text-[12px] font-medium transition-colors cursor-pointer ${selectedMonth === "ALL" ? "bg-[#194473] text-white" : "bg-[#9E9E9E] text-white hover:bg-gray-400"}`}>All</button>
           {MONTHS.map((month) => (
             <button key={month} onClick={() => setSelectedMonth(month)} className={`flex items-center justify-center w-[40px] h-[24px] px-2 rounded-[4px] border border-[#EEEEEE] text-[12px] font-medium transition-colors cursor-pointer ${selectedMonth === month ? "bg-[#194473] text-white" : "bg-[#9E9E9E] text-white hover:bg-gray-400"}`}>{month}</button>
           ))}
         </div>
-
       </div>
-
     </div>
   );
 }

@@ -18,7 +18,6 @@ import {
     Minus,
     RefreshCw,
     Layers,
-    Settings,
     StickyNote,
     Loader2,
     Check,
@@ -35,6 +34,8 @@ import {
 } from "lucide-react";
 import dynamic from 'next/dynamic';
 
+// --- Constants & Types ---
+
 const COUNTRY_NAMES: Record<string, string> = {
     cn: "China", th: "Thailand", my: "Malaysia", jp: "Japan", ae: "United Arab Emirates", sa: "Saudi Arabia", sg: "Singapore", vn: "Vietnam", in: "India", kr: "South Korea", id: "Indonesia", tw: "Taiwan", bh: "Bahrain", kw: "Kuwait", kz: "Kazakhstan", ph: "Philippines", uz: "Uzbekistan", kh: "Cambodia", jo: "Jordan", la: "Laos", bn: "Brunei", om: "Oman", qa: "Qatar", lk: "Sri Lanka", ir: "Iran",
     fr: "France", es: "Spain", it: "Italy", pl: "Poland", hu: "Hungary", hr: "Croatia", tr: "Turkey", gb: "United Kingdom", de: "Germany", gr: "Greece", dk: "Denmark", at: "Austria", nl: "Netherlands", pt: "Portugal", ro: "Romania", ch: "Switzerland", be: "Belgium", lv: "Latvia", ge: "Georgia", se: "Sweden", lt: "Lithuania", ee: "Estonia", no: "Norway", fi: "Finland", is: "Iceland",
@@ -45,7 +46,7 @@ const COUNTRY_NAMES: Record<string, string> = {
 };
 
 const DynamicMap = dynamic(
-    () => import('../../../../components/DynamicMap'),
+    () => import('../../../../components/DynamicMap'), // ตรวจสอบ Path นี้ให้ถูกต้องตามโปรเจคของคุณ
     { ssr: false, loading: () => <div className="p-10 text-gray-400 flex items-center justify-center h-full">Loading Map...</div> }
 );
 
@@ -89,6 +90,8 @@ const DEFAULT_STATUSES: TripStatus[] = [
     { id: 'dream', label: 'Dream', color: '#9C27B0' },
 ];
 
+// --- Main Component ---
+
 export default function EditTripPage({ params }: PageProps) {
     const router = useRouter();
     const supabase = createClient();
@@ -109,6 +112,7 @@ export default function EditTripPage({ params }: PageProps) {
     const [isLoadingRegions, setIsLoadingRegions] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [dbTripId, setDbTripId] = useState<string | null>(null);
+    const [isDataLoaded, setIsDataLoaded] = useState(false); // เพิ่ม State เช็คโหลดเสร็จ
 
     const [tripGroups, setTripGroups] = useState<TripGroup[]>([]);
     const [tripStatuses, setTripStatuses] = useState<TripStatus[]>(DEFAULT_STATUSES);
@@ -140,26 +144,30 @@ export default function EditTripPage({ params }: PageProps) {
 
     const activeGroup = useMemo(() => tripGroups.find(g => g.id === activeGroupId), [tripGroups, activeGroupId]);
 
-    // INIT DATA
+    // --- INIT DATA (Fixed Rating & Color Sync) ---
     useEffect(() => {
         const initData = async () => {
             try {
                 const { data: { user } } = await supabase.auth.getUser();
                 if (!user) return;
+                
                 setDbTripId(tripId);
                 const { data: trip, error: tripError } = await supabase.from('trips').select('country').eq('id', tripId).single();
                 if (tripError || !trip) { router.push('/mytrips'); return; }
                 setCountryCode(trip.country);
 
+                // ✅ FIX 1: เพิ่ม rating ลงใน select query
                 const { data: templates, error: tempError } = await supabase
                     .from('templates')
-                    .select(`id, template_name, notes, images, travel_start_date, travel_end_date, template_provinces ( province_code, status, color )`)
+                    .select(`id, template_name, notes, images, travel_start_date, travel_end_date, rating, template_provinces ( province_code, status, color )`)
                     .eq('trip_id', tripId)
                     .is('deleted_at', null)
                     .order('created_at', { ascending: true });
 
                 if (tempError) throw tempError;
+
                 if (templates) {
+                    // ✅ FIX 2: Color Sync Logic
                     const dbStatuses = new Map<string, string>();
                     templates.forEach((t: any) => {
                         t.template_provinces.forEach((p: any) => {
@@ -169,11 +177,13 @@ export default function EditTripPage({ params }: PageProps) {
                         });
                     });
 
-                    let syncedStatuses = [...DEFAULT_STATUSES];
+                    // Deep Copy เพื่อกัน Reference ผิด
+                    let syncedStatuses = JSON.parse(JSON.stringify(DEFAULT_STATUSES));
+                    
                     dbStatuses.forEach((color, label) => {
-                        const existingIdx = syncedStatuses.findIndex(s => s.label === label);
+                        const existingIdx = syncedStatuses.findIndex((s: TripStatus) => s.label === label);
                         if (existingIdx !== -1) {
-                            syncedStatuses[existingIdx] = { ...syncedStatuses[existingIdx], color: color };
+                            syncedStatuses[existingIdx].color = color;
                         } else {
                             syncedStatuses.push({
                                 id: `db-${label}-${Date.now()}`,
@@ -182,13 +192,15 @@ export default function EditTripPage({ params }: PageProps) {
                             });
                         }
                     });
+                    
                     setTripStatuses(syncedStatuses);
 
                     const mappedGroups: TripGroup[] = templates.map((t: any) => {
                         const mappedRegions = t.template_provinces.map((p: any) => {
-                            let matchedStatus = syncedStatuses.find(s => s.label === p.status && s.color === p.color);
-                            if (!matchedStatus) matchedStatus = syncedStatuses.find(s => s.label === p.status);
+                            let matchedStatus = syncedStatuses.find((s: TripStatus) => s.label === p.status && s.color === p.color);
+                            if (!matchedStatus) matchedStatus = syncedStatuses.find((s: TripStatus) => s.label === p.status);
                             if (!matchedStatus) matchedStatus = syncedStatuses[0];
+                            
                             return { name: p.province_code, statusId: matchedStatus.id };
                         });
 
@@ -203,16 +215,24 @@ export default function EditTripPage({ params }: PageProps) {
                             regions: mappedRegions,
                             travel_start_date: t.travel_start_date,
                             travel_end_date: t.travel_end_date,
-                            rating: t.rating || 0
+                            rating: t.rating || 0 // รับค่า rating มาใช้
                         };
                     });
+
                     setTripGroups(mappedGroups);
+                    
+                    if(mappedGroups.length > 0) {
+                        setIsViewAll(true);
+                    }
                 }
-            } catch (err) { console.error("Error init:", err); }
+            } catch (err) { console.error("Error init:", err); } finally {
+                setIsDataLoaded(true);
+            }
         };
         initData();
-    }, [tripId]);
+    }, [tripId]); // เอา router ออกจาก dependency
 
+    // --- Active Group Effect ---
     useEffect(() => {
         if (activeGroup) {
             setCurrentGroupRegions(activeGroup.regions);
@@ -220,7 +240,7 @@ export default function EditTripPage({ params }: PageProps) {
             setGroupNote(activeGroup.notes || "");
             setStartDate(activeGroup.travel_start_date || "");
             setEndDate(activeGroup.travel_end_date || "");
-            setTripRating(activeGroup.rating || 0);
+            setTripRating(activeGroup.rating || 0); // ✅ Set Rating เมื่อกด Edit
             const loadedImages = (activeGroup.images || []).map((url, idx) => ({ id: `existing-${idx}`, url: url }));
             setCurrentImages(loadedImages);
             setPreviewGroupId(null);

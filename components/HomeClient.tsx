@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { MapPin, ArrowLeft, ArrowRight, Star } from "lucide-react";
+import { MapPin, ArrowLeft, ArrowRight, Star, Check } from "lucide-react";
 import Icon from '@mdi/react';
 import { mdiPlus } from '@mdi/js';
 import Link from "next/link";
@@ -17,11 +17,12 @@ import 'swiper/css/pagination';
 
 import { getTopAttractionsByContinent, CountryData } from '@/services/placeService';
 import { Place } from '@/types/place';
+import { createClient } from "@/utils/supabase/client";
 
 import { CONTINENTS, COUNTRIES_DATA } from "@/data/mockData";
 import { ATTRACTIONS_DATA as MOCK_ATTRACTIONS } from "@/data/attractionsData";
 
-// --- MAPPINGS ---
+// --- MAPPINGS & HELPER FUNCTIONS ---
 const CATEGORY_MATCHING_KEYWORDS: Record<string, string[]> = {
   "Mountains": ["mountain", "mountains", "peak", "volcano", "hill", "doi"],
   "National parks": ["national_park", "national_parks", "nature_reserve", "forest"],
@@ -125,18 +126,48 @@ interface HomeClientProps {
   initialCountries: CountryData[];
 }
 
+// --- MAIN COMPONENT ---
 export default function HomeClient({ initialAttractions, initialCountries }: HomeClientProps) {
   const router = useRouter();
+  const supabase = createClient();
 
+  // Data States
   const [selectedContinent, setSelectedContinent] = useState("Asia");
   const [topAttractions, setTopAttractions] = useState<Place[]>(initialAttractions);
   const [currentCountries, setCurrentCountries] = useState<CountryData[]>(initialCountries);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // User & Saved State
+  const [userId, setUserId] = useState<string | null>(null);
+  const [savedPlaceIds, setSavedPlaceIds] = useState<Set<string>>(new Set());
 
   const displaySlides = topAttractions.slice(0, 8);
 
+  // 1. Initial Load: Check Auth & Get Saved Places
   useEffect(() => {
-    // ป้องกันการ fetch ซ้ำในครั้งแรกถ้ามี initialData อยู่แล้วและเป็น Asia
+    const checkUserAndSavedPlaces = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user) {
+        setUserId(user.id);
+        
+        const { data: savedData, error } = await supabase
+          .from('saved_places')
+          .select('place_id')
+          .eq('profile_id', user.id);
+          
+        if (savedData && !error) {
+          const ids = new Set(savedData.map(item => item.place_id));
+          setSavedPlaceIds(ids);
+        }
+      }
+    };
+
+    checkUserAndSavedPlaces();
+  }, []);
+
+  // 2. Fetch Attractions on Continent Change
+  useEffect(() => {
     if (selectedContinent === "Asia" && topAttractions.length > 0 && topAttractions === initialAttractions) {
         return;
     }
@@ -144,22 +175,18 @@ export default function HomeClient({ initialAttractions, initialCountries }: Hom
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        // ✅ 1. ถ้าเลือก Oceania ให้รวม Australia ด้วย
         const targetContinents = selectedContinent === "Oceania" 
           ? ["Oceania", "Australia"] 
           : [selectedContinent];
 
-        // ✅ 2. ยิง API พร้อมกันทุกทวีปที่ระบุ (Parallel Requests)
         const apiRequests = targetContinents.map(continent => 
             getTopAttractionsByContinent(continent)
         );
         
         const results = await Promise.all(apiRequests);
-
-        // ✅ 3. รวมผลลัพธ์ (Flatten Arrays)
         let combinedAttractions = results.flat();
 
-        // กรณีไม่มีข้อมูลจาก API ให้ใช้ Mock Data (Fallback Logic)
+        // Fallback to mock data if API fails or returns empty
         if (combinedAttractions.length === 0) {
              const mockAttr = MOCK_ATTRACTIONS
             .filter(p => targetContinents.includes(p.location.continent))
@@ -173,14 +200,10 @@ export default function HomeClient({ initialAttractions, initialCountries }: Hom
             combinedAttractions = mockAttr as unknown as Place[];
         }
 
-        // ✅ 4. เรียงลำดับตาม Rating (จากมากไปน้อย)
-        // จุดนี้สำคัญมาก: ทำให้สถานที่ Rating 4.9 (จาก Australia) ขึ้นก่อน 4.8
         combinedAttractions.sort((a, b) => (b.rating || 0) - (a.rating || 0));
-
-        // ✅ 5. ตัดให้เหลือ 8 อันดับแรก
         setTopAttractions(combinedAttractions.slice(0, 8));
 
-        // --- จัดการข้อมูลประเทศ (Countries) ---
+        // Format Countries
         let combinedCountries: any[] = [];
         targetContinents.forEach(continentKey => {
             if (COUNTRIES_DATA[continentKey]) {
@@ -190,7 +213,7 @@ export default function HomeClient({ initialAttractions, initialCountries }: Hom
 
         const formattedCountries = combinedCountries.map(c => ({
           name: c.name,
-          continent: selectedContinent, // UI ยังแสดงเป็นชื่อทวีปหลัก (Oceania)
+          continent: selectedContinent,
           image: c.image
         }));
 
@@ -205,7 +228,85 @@ export default function HomeClient({ initialAttractions, initialCountries }: Hom
     };
 
     fetchData();
-  }, [selectedContinent]); // ลบ initialAttractions ออกจาก dependency เพื่อลดการ re-run ที่ไม่จำเป็น
+  }, [selectedContinent]);
+
+  // 3. Handle Save/Unsave Logic (Toggle)
+  const handleSavePlace = async (placeId: string, placeName: string) => {
+    // Check Authentication
+    if (!userId) {
+      alert("Please login to save places.");
+      router.push('/login'); 
+      return;
+    }
+
+    const isAlreadySaved = savedPlaceIds.has(placeId);
+
+    if (isAlreadySaved) {
+        // --- REMOVE (Unsave) ---
+        // Optimistic Update
+        setSavedPlaceIds(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(placeId);
+            return newSet;
+        });
+
+        try {
+            const { error } = await supabase
+                .from('saved_places')
+                .delete()
+                .eq('place_id', placeId)
+                .eq('profile_id', userId);
+
+            if (error) {
+                console.error("Error removing place:", error);
+                // Revert on error
+                setSavedPlaceIds(prev => new Set(prev).add(placeId));
+                alert("Failed to remove place.");
+            } else {
+                console.log(`Removed ${placeName} from saved places`);
+            }
+        } catch (err) {
+            console.error("Unexpected error:", err);
+            setSavedPlaceIds(prev => new Set(prev).add(placeId));
+        }
+
+    } else {
+        // --- ADD (Save) ---
+        // Optimistic Update
+        setSavedPlaceIds(prev => new Set(prev).add(placeId));
+
+        try {
+            const { error } = await supabase
+                .from('saved_places')
+                .insert([
+                    { 
+                        profile_id: userId, 
+                        place_id: placeId 
+                    }
+                ]);
+
+            if (error) {
+                console.error("Error saving place:", error);
+                // Revert on error
+                setSavedPlaceIds(prev => {
+                    const newSet = new Set(prev);
+                    newSet.delete(placeId);
+                    return newSet;
+                });
+                alert("Failed to save place.");
+            } else {
+                console.log(`Saved ${placeName} to trip`);
+            }
+        } catch (err) {
+            console.error("Unexpected error:", err);
+            setSavedPlaceIds(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(placeId);
+                return newSet;
+            });
+        }
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#FFFFFF] font-inter text-gray-800 pb-20">
@@ -248,11 +349,9 @@ export default function HomeClient({ initialAttractions, initialCountries }: Hom
                   }}
                 >
                   {displaySlides.map((slide, index) => {
-                    
                     const imgUrl = Array.isArray(slide.images) && typeof slide.images[0] === 'object' && 'url' in slide.images[0]
                       ? (slide.images[0] as any).url
                       : (slide.images?.[0] || "https://placehold.co/800x400?text=No+Image");
-                    
                     const isRiskySource = !imgUrl.includes('supabase.co') && !imgUrl.includes('unsplash.com');
 
                     return (
@@ -266,7 +365,6 @@ export default function HomeClient({ initialAttractions, initialCountries }: Hom
                           sizes="100vw"
                           unoptimized={isRiskySource}
                         />
-                        
                         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60 pointer-events-none"></div>
 
                         {/* Text Overlay */}
@@ -373,6 +471,7 @@ export default function HomeClient({ initialAttractions, initialCountries }: Hom
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-[24px]">
             {topAttractions.slice(0, 4).map((place) => {
               const displayString = getDisplayCategories(place.category_tags);
+              const isSaved = savedPlaceIds.has(String(place.id));
 
               return (
                 <div
@@ -437,10 +536,29 @@ export default function HomeClient({ initialAttractions, initialCountries }: Hom
                         .pagination-custom-${place.id} .swiper-pagination-bullet-active { width: 8px !important; height: 8px !important; background-color: #041830 !important; border: 1px solid #c2dcf3 !important; }
                       `}</style>
 
+                      {/* Add/Toggle Button */}
                       <div className="absolute top-2 right-2 z-20">
-                        <button onClick={(e) => { e.stopPropagation(); console.log(`Add ${place.name} to trip`); }} className="flex h-[24px] w-[32px] group-hover:w-[60px] items-center justify-center rounded-[8px] border border-white bg-[#00000066] group-hover:bg-[#1565C0] text-white shadow-sm transition-all duration-300 ease-in-out overflow-hidden cursor-pointer backdrop-blur-[2px]">
-                          <Icon path={mdiPlus} size="16px" className="flex-shrink-0" />
-                          <span className="max-w-0 opacity-0 group-hover:max-w-[40px] group-hover:opacity-100 group-hover:ml-[4px] text-[12px] font-inter font-normal whitespace-nowrap transition-all duration-300">Add</span>
+                        <button 
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            handleSavePlace(String(place.id), place.name);
+                          }} 
+                          className={`flex h-[24px] w-[32px] group-hover:w-[60px] items-center justify-center rounded-[8px] border border-white text-white shadow-sm transition-all duration-300 ease-in-out overflow-hidden cursor-pointer backdrop-blur-[2px] 
+                            ${isSaved 
+                                ? "bg-[#3A82CE] group-hover:bg-[#1565C0]" 
+                                : "bg-[#00000066] group-hover:bg-[#1565C0]"
+                            }
+                          `}
+                        >
+                          {isSaved ? (
+                             <Check size="16px" className="flex-shrink-0" />
+                          ) : (
+                             <Icon path={mdiPlus} size="16px" className="flex-shrink-0" />
+                          )}
+                          
+                          <span className="max-w-0 opacity-0 group-hover:max-w-[40px] group-hover:opacity-100 group-hover:ml-[4px] text-[12px] font-inter font-normal whitespace-nowrap transition-all duration-300">
+                             {isSaved ? "Saved" : "Add"}
+                          </span>
                         </button>
                       </div>
                     </div>

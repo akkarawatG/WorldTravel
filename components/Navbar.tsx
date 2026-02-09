@@ -352,12 +352,20 @@ export default function Navbar({
               )}
             </div>
           </div>
+{/* RIGHT: Menu */}
+          {/* ❌ ลบ w-[151px] และ justify-between ออก, ✅ ใช้ flex และ gap เพื่อจัดระยะห่างแทน */}
+          <div className="relative flex items-center gap-8 z-40">
+            
+            <div className="flex items-center gap-6">
+              <Link href="/mytrips" className="text-[20px] font-inter font-[400] text-[#000000] hover:text-[#1976D2] transition leading-none whitespace-nowrap">
+                MyTrip
+              </Link>
 
-          {/* RIGHT: Menu */}
-          <div className="relative w-[151px] h-[24px] flex items-center justify-between z-40">
-            <Link href="/mytrips" className="text-[20px] font-inter font-[400] text-[#000000] hover:text-[#1976D2] transition leading-none whitespace-nowrap">
-              MyTrip
-            </Link>
+              {/* ✅ เพิ่มปุ่ม Itinerary ตรงนี้ */}
+              <Link href="/itinerary" className="text-[20px] font-inter font-[400] text-[#000000] hover:text-[#1976D2] transition leading-none whitespace-nowrap">
+                MyPlan
+              </Link>
+            </div>
 
             <div className="flex items-center justify-end">
               {currentUser ? (
@@ -387,7 +395,7 @@ export default function Navbar({
                 </button>
               )}
 
-              {/* Dropdown Menu */}
+              {/* Dropdown Menu (เหมือนเดิม ไม่เปลี่ยนแปลง) */}
               {showUserMenu && currentUser && (
                 <div className="absolute right-0 top-[35px] w-[190px] h-[202px] bg-white rounded-[8px] border border-[#EEEEEE] p-4 flex flex-col gap-4 z-50 shadow-[0px_4px_20px_rgba(0,0,0,0.1)] font-inter animate-in fade-in zoom-in-95 duration-200">
 
@@ -403,7 +411,6 @@ export default function Navbar({
                   <div className="w-[158px] h-[62px] flex flex-col gap-2">
                     <button
                       onClick={() => {
-                        // ✅ สั่งเปลี่ยนหน้า พร้อมแนบ Params
                         router.push('/review-history?action=edit-profile');
                         setShowUserMenu(false);
                       }}
@@ -428,7 +435,7 @@ export default function Navbar({
                   <button
                     onClick={handleLogoutTrigger}
                     className="w-[158px] h-[32px] rounded-[8px] flex items-center justify-center gap-2 px-[8px] py-[4px] border border-[#EF9A9A] bg-[#F44336] hover:bg-[#d32f2f] transition-colors mt-auto
-                       font-inter font-normal text-[16px] leading-none text-white"
+                        font-inter font-normal text-[16px] leading-none text-white"
                   >
                     <LogOut className="w-[16px] h-[16px]" /> Logout
                   </button>
