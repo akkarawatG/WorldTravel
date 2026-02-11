@@ -372,9 +372,7 @@ export default function EditTripPage({ params }: PageProps) {
                         {countryCode && <img src={`https://flagcdn.com/w40/${countryCode}.png`} alt={countryCode} className="w-[54px] h-[36px] rounded-[5px] object-cover shadow-sm" />}
                         <h1 className="text-[28px] font-bold text-black leading-[34px] tracking-[0.02em]">{countryName}</h1>
                     </div>
-                </div>
-                <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 hidden md:block">
-                    <div className="relative">
+                                        <div className="relative">
                         <button onClick={(e) => { e.stopPropagation(); if (!activeGroupId) return; setIsRegionDropdownOpen(!isRegionDropdownOpen); setRegionSearchQuery(""); }} disabled={isLoadingRegions || !activeGroupId} className={`w-[323px] h-[40px] bg-[#F0F6FC] border border-[#60A3DE] rounded-[10px] flex items-center justify-between px-[16px] transition disabled:opacity-50 disabled:cursor-not-allowed ${!activeGroupId ? "opacity-60" : ""}`}>
                             <div className="flex items-center gap-[10px]">
                                 <MapPin className="w-[22px] h-[24px] text-[#60A3DE]" />
@@ -398,6 +396,7 @@ export default function EditTripPage({ params }: PageProps) {
                         )}
                     </div>
                 </div>
+
                 <div className="flex items-center gap-[24px]">
                     <button onClick={() => router.push('/mytrips')} className="w-[190px] h-[40px] border border-[#3A82CE] rounded-[5px] flex items-center justify-center gap-[10px] hover:bg-[#F0F6FC] transition"><LayoutTemplate className="w-[18px] h-[18px] text-[#3A82CE]" /><span className="font-medium text-[20px] leading-[24px] text-[#3A82CE]">My Templates</span></button>
                     <div className="w-px h-8 bg-gray-300"></div>

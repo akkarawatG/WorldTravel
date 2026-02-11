@@ -2,47 +2,126 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, UserPlus, Users, ChevronDown, Loader2, MapPin } from "lucide-react";
+import { Calendar, UserPlus, Users, ChevronDown, Loader2, MapPin, ChevronLeft, ChevronRight } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { COUNTRIES_DATA } from "@/data/mockData";
 
-// ✅ 1. Import DatePicker
-import DatePicker from "react-datepicker";
-import "react-datepicker/dist/react-datepicker.css";
+// --- Custom Date Picker (Component ภายใน) ---
+function CustomDateRangePicker({ startDate, endDate, onChange, onClose }: { startDate: string, endDate: string, onChange: (s: string, e: string) => void, onClose: () => void }) {
+    const initialDate = startDate ? new Date(startDate) : new Date();
+    const [viewDate, setViewDate] = useState(initialDate);
 
-// ✅ 2. Config Locale (English)
-import { registerLocale } from "react-datepicker";
-import { enUS } from "date-fns/locale/en-US";
-registerLocale('en-US', enUS);
+    const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
+    const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
 
-export default function PlanNewTripForm() {
+    const year = viewDate.getFullYear();
+    const month = viewDate.getMonth();
+    const daysInMonth = getDaysInMonth(year, month);
+    const startDay = getFirstDayOfMonth(year, month);
+
+    const handleDayClick = (day: number) => {
+        const clickedDate = new Date(year, month, day);
+        const offset = clickedDate.getTimezoneOffset();
+        const localDate = new Date(clickedDate.getTime() - (offset * 60 * 1000));
+        const dateStr = localDate.toISOString().split('T')[0];
+        
+        if (!startDate || (startDate && endDate)) {
+            onChange(dateStr, "");
+        } else if (startDate && !endDate) {
+            if (new Date(dateStr) < new Date(startDate)) {
+                onChange(dateStr, startDate);
+            } else {
+                onChange(startDate, dateStr);
+            }
+        }
+    };
+
+    const isSelected = (day: number) => {
+        const d = new Date(year, month, day).setHours(0, 0, 0, 0);
+        const s = startDate ? new Date(startDate).setHours(0, 0, 0, 0) : null;
+        const e = endDate ? new Date(endDate).setHours(0, 0, 0, 0) : null;
+
+        if (s && d === s) return "start";
+        if (e && d === e) return "end";
+        if (s && e && d > s && d < e) return "range";
+        return null;
+    };
+
+    const nextMonth = () => setViewDate(new Date(year, month + 1, 1));
+    const prevMonth = () => setViewDate(new Date(year, month - 1, 1));
+
+    return (
+        <div className="bg-white rounded-lg shadow-2xl border border-gray-200 p-4 w-[320px] animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+                <button onClick={prevMonth} className="p-1 hover:bg-gray-100 rounded-full transition"><ChevronLeft className="w-5 h-5 text-gray-500" /></button>
+                <span className="font-bold text-gray-800 text-[14px] font-inter">{viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+                <button onClick={nextMonth} className="p-1 hover:bg-gray-100 rounded-full transition"><ChevronRight className="w-5 h-5 text-gray-500" /></button>
+            </div>
+
+            <div className="grid grid-cols-7 gap-1 text-center mb-2">
+                {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(d => (
+                    <div key={d} className="text-[12px] font-medium text-gray-400 font-inter">{d}</div>
+                ))}
+            </div>
+
+            <div className="grid grid-cols-7 gap-1 mb-4">
+                {Array.from({ length: (startDay === 0 ? 6 : startDay - 1) }).map((_, i) => <div key={`empty-${i}`} />)}
+                {Array.from({ length: daysInMonth }).map((_, i) => {
+                    const day = i + 1;
+                    const status = isSelected(day);
+                    let bgClass = "hover:bg-blue-50 text-gray-700";
+                    let textClass = "text-gray-700";
+                    
+                    if (status === 'start' || status === 'end') {
+                        bgClass = "bg-[#3A82CE] hover:bg-[#2c6cb0]";
+                        textClass = "text-white font-bold";
+                    }
+                    if (status === 'range') {
+                        bgClass = "bg-[#E3F2FD]";
+                        textClass = "text-[#1565C0]";
+                    }
+
+                    return (
+                        <button key={day} onClick={() => handleDayClick(day)} className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] transition mx-auto font-inter ${bgClass} ${textClass}`}>
+                            {day}
+                        </button>
+                    );
+                })}
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-gray-100">
+                <button onClick={onClose} className="bg-[#3A82CE] text-white text-[12px] font-medium px-4 py-1.5 rounded-[5px] hover:bg-[#2c6cb0] transition shadow-sm font-inter">
+                    Done
+                </button>
+            </div>
+        </div>
+    );
+}
+
+// ✅ 1. กำหนด Interface สำหรับ Props
+interface PlanNewTripFormProps {
+    onSuccess?: () => void;
+}
+
+// --- Main Form Component ---
+// ✅ 2. ใส่ Type ให้กับ props ของ Component
+export default function PlanNewTripForm({ onSuccess }: PlanNewTripFormProps) {
   const router = useRouter();
   const supabase = createClient();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // --- Form States ---
+  // Form States
   const [tripName, setTripName] = useState("");
-  // ใช้ Type Date | null สำหรับ DatePicker
-  const [startDate, setStartDate] = useState<Date | null>(null);
-  const [endDate, setEndDate] = useState<Date | null>(null);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   
-  // --- UI States ---
+  // UI States
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [filteredCountries, setFilteredCountries] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // --- Helpers ---
-  
-  // แปลง Date เป็น string YYYY-MM-DD แบบ Local Time (แก้ปัญหา Timezone เพี้ยน)
-  const formatDateForDB = (date: Date | null) => {
-    if (!date) return null;
-    const offset = date.getTimezoneOffset();
-    const dateLocal = new Date(date.getTime() - (offset * 60 * 1000));
-    return dateLocal.toISOString().split('T')[0];
-  };
-
-  // รวมรายชื่อประเทศ
   const allCountries = useMemo(() => {
     const countries: string[] = [];
     Object.values(COUNTRIES_DATA).forEach((continentList) => {
@@ -55,20 +134,16 @@ export default function PlanNewTripForm() {
     return countries.sort();
   }, []);
 
-  // Filter ประเทศตอนพิมพ์
   useEffect(() => {
     if (!tripName.trim()) {
       setFilteredCountries(allCountries);
     } else {
       const lowerQuery = tripName.toLowerCase();
-      const filtered = allCountries.filter(c => 
-        c.toLowerCase().includes(lowerQuery)
-      );
+      const filtered = allCountries.filter(c => c.toLowerCase().includes(lowerQuery));
       setFilteredCountries(filtered);
     }
   }, [tripName, allCountries]);
 
-  // ปิด Dropdown เมื่อคลิกข้างนอก
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -96,18 +171,14 @@ export default function PlanNewTripForm() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
-      // แปลงวันที่เป็น String format สำหรับ Database
-      const formattedStart = formatDateForDB(startDate);
-      const formattedEnd = formatDateForDB(endDate);
-
       const { data, error } = await supabase
         .from("itineraries")
         .insert([
           {
             profile_id: user?.id,
             name: tripName,
-            start_date: formattedStart,
-            end_date: formattedEnd,
+            start_date: startDate || null,
+            end_date: endDate || null,
           },
         ])
         .select()
@@ -116,15 +187,13 @@ export default function PlanNewTripForm() {
       if (error) throw error;
 
       console.log("Trip created:", data);
-      alert("Trip created successfully!");
       
-      // Reset Form
       setTripName("");
-      setStartDate(null);
-      setEndDate(null);
-
-      // Optional: Redirect
-      // router.push(`/plan/${data.id}`);
+      setStartDate("");
+      setEndDate("");
+      
+      // ✅ เรียก onSuccess เพื่อบอก Parent ว่าเสร็จแล้ว
+      if (onSuccess) onSuccess();
 
     } catch (err: any) {
       console.error("Error creating trip:", err);
@@ -134,8 +203,14 @@ export default function PlanNewTripForm() {
     }
   };
 
+  const displayDate = (dateStr: string) => {
+      if (!dateStr) return "";
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  };
+
   return (
-    <div className="flex flex-col items-start gap-[8px] w-[493px]">
+    <div className="flex flex-col items-start gap-[8px] w-[493px] relative">
       
       {/* Header Section */}
       <div className="flex flex-col items-center gap-[24px] w-full self-stretch">
@@ -147,7 +222,7 @@ export default function PlanNewTripForm() {
         <div className="flex flex-col items-start gap-[4px] w-full self-stretch">
           <div className="flex flex-col items-start gap-[16px] w-full self-stretch">
             
-            {/* --- Destination Input with Dropdown --- */}
+            {/* Destination Input */}
             <div className="relative w-full" ref={dropdownRef}>
               <div className={`box-border flex flex-row items-center px-[8px] py-[12px] gap-[10px] w-full h-[46px] border ${errorMsg ? 'border-red-500' : 'border-[#E0E0E0]'} rounded-[8px] bg-white`}>
                 <input 
@@ -162,7 +237,7 @@ export default function PlanNewTripForm() {
                   className="w-full font-inter font-bold text-[18px] leading-[22px] text-[#000000] outline-none placeholder:text-[#9E9E9E]"
                   disabled={isLoading}
                 />
-                {isDropdownOpen ? <ChevronDown className="w-5 h-5 text-gray-400 rotate-180 transition-transform" /> : <ChevronDown className="w-5 h-5 text-gray-400 transition-transform" />}
+                <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
               </div>
               
               {isDropdownOpen && (
@@ -186,56 +261,57 @@ export default function PlanNewTripForm() {
             </div>
             {errorMsg && <span className="text-red-500 text-xs ml-1">{errorMsg}</span>}
 
-            {/* --- Date Selection Input --- */}
-            <div className="box-border flex flex-col items-start px-[8px] py-[6px] w-full h-[46px] border border-[#E0E0E0] rounded-[8px] bg-white relative">
-               
+            {/* Date Selection Input */}
+            <div 
+                className="box-border flex flex-col items-start px-[8px] py-[6px] w-full h-[46px] border border-[#E0E0E0] rounded-[8px] bg-white relative cursor-pointer hover:border-[#3A82CE] transition"
+                onClick={() => setIsDatePickerOpen(true)}
+            >
                <span className="font-inter font-bold text-[12px] leading-[15px] text-[#000000] mb-[2px]">
                   Dates (optional)
                </span>
 
                <div className="flex flex-row items-center w-full h-[16px] gap-[60px]">
-                  
-                  {/* Start Date Picker */}
-                  <div className="flex flex-row items-end gap-[8px] w-[120px] group relative">
+                  {/* Start Date Display */}
+                  <div className="flex flex-row items-end gap-[8px] w-[120px]">
                       <Calendar className="w-[16px] h-[16px] text-[#212121] mb-[1px]" />
-                      <DatePicker 
-                        selected={startDate}
-                        // ✅ Fix 1: ระบุ Type ให้ date เป็น Date | null
-                        onChange={(date: Date | null) => setStartDate(date)}
-                        selectsStart
-                        startDate={startDate}
-                        endDate={endDate}
-                        placeholderText="Start date"
-                        dateFormat="dd/MM/yyyy"
-                        locale="en-US"
-                        className="font-inter font-normal text-[12px] leading-[15px] text-[#000000] outline-none bg-transparent w-full p-0 border-none focus:ring-0 cursor-pointer placeholder:text-[#9E9E9E]"
-                        disabled={isLoading}
-                      />
+                      <span className={`font-inter font-normal text-[12px] leading-[15px] ${startDate ? 'text-[#000000]' : 'text-[#9E9E9E]'}`}>
+                          {startDate ? displayDate(startDate) : "Start date"}
+                      </span>
                   </div>
 
+                  {/* Vertical Divider */}
                   <div className="absolute left-[135px] top-[24px] w-[16px] h-[0px] border-[0.2px] border-black rotate-90"></div>
 
-                  {/* End Date Picker */}
-                  <div className="flex flex-row items-end gap-[8px] w-[120px] group relative ml-4">
+                  {/* End Date Display */}
+                  <div className="flex flex-row items-end gap-[8px] w-[120px] ml-4">
                       <Calendar className="w-[16px] h-[16px] text-[#212121] mb-[1px]" />
-                      <DatePicker 
-                        selected={endDate}
-                        onChange={(date: Date | null) => setEndDate(date)}
-                        selectsEnd
-                        startDate={startDate}
-                        endDate={endDate}
-                        // ✅ Fix 2: ใช้ ?? undefined เพื่อแปลง null เป็น undefined
-                        minDate={startDate ?? undefined} 
-                        placeholderText="End date"
-                        dateFormat="dd/MM/yyyy"
-                        locale="en-US"
-                        className="font-inter font-normal text-[12px] leading-[15px] text-[#000000] outline-none bg-transparent w-full p-0 border-none focus:ring-0 cursor-pointer placeholder:text-[#9E9E9E]"
-                        disabled={isLoading}
-                      />
+                      <span className={`font-inter font-normal text-[12px] leading-[15px] ${endDate ? 'text-[#000000]' : 'text-[#9E9E9E]'}`}>
+                          {endDate ? displayDate(endDate) : "End date"}
+                      </span>
                   </div>
-
                </div>
             </div>
+
+            {/* Modal Date Picker Overlay */}
+            {isDatePickerOpen && (
+                <div 
+                    className="absolute top-[160px] left-0 z-[100] w-full flex justify-center"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="fixed inset-0 z-[90]" onClick={() => setIsDatePickerOpen(false)}></div>
+                    <div className="relative z-[100]">
+                        <CustomDateRangePicker 
+                            startDate={startDate}
+                            endDate={endDate}
+                            onChange={(start, end) => {
+                                setStartDate(start);
+                                setEndDate(end);
+                            }}
+                            onClose={() => setIsDatePickerOpen(false)}
+                        />
+                    </div>
+                </div>
+            )}
 
           </div>
         </div>
@@ -243,7 +319,6 @@ export default function PlanNewTripForm() {
 
       {/* Footer Actions */}
       <div className="flex flex-col items-center gap-[24px] w-full self-stretch mt-4">
-          
           <div className="flex flex-row justify-between items-center w-full h-[24px]">
               <button type="button" className="flex flex-row items-center gap-[8px] hover:opacity-70 transition-opacity">
                   <div className="w-[16px] h-[16px] flex items-center justify-center">
@@ -278,7 +353,6 @@ export default function PlanNewTripForm() {
                 </span>
               )}
           </button>
-
       </div>
 
     </div>
