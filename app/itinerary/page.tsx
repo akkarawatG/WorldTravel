@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import ItinerarySidebar from "@/components/ItinerarySidebar";
 import PlanNewTripForm from "@/components/PlanNewTripForm";
 import ItineraryCard from "@/components/ItineraryCard";
@@ -18,16 +18,16 @@ interface Itinerary {
 export default function ItineraryPage() {
   const supabase = createClient();
   
-  // State ควบคุมหน้าจอ: 'list' = หน้ารวม, 'create' = หน้าสร้าง, 'detail' = หน้าดูรายละเอียด
+  // State
   const [viewState, setViewState] = useState<'list' | 'create' | 'detail'>('list');
-  const [selectedTripId, setSelectedTripId] = useState<string | null>(null); // เก็บ ID ทริปที่เลือก
+  const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
   
-  // Data States
+  // Data
   const [itineraries, setItineraries] = useState<Itinerary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // 1. Fetch Data
+  // Fetch Data
   useEffect(() => {
     const fetchItineraries = async () => {
       setIsLoading(true);
@@ -36,7 +36,7 @@ export default function ItineraryPage() {
         if (user) {
             const { data, error } = await supabase
                 .from('itineraries')
-                .select('id, name, start_date, end_date')
+                .select('id, name, start_date, end_date') // ✅ ต้องแน่ใจว่าเลือก start_date, end_date มาด้วย
                 .eq('profile_id', user.id)
                 .is('deleted_at', null)
                 .order('created_at', { ascending: false });
@@ -54,16 +54,16 @@ export default function ItineraryPage() {
     fetchItineraries();
   }, [refreshKey]);
 
-  // 2. Delete Function
+  // ✅ หาข้อมูลทริปที่กำลังเลือกอยู่
+  const selectedTrip = useMemo(() => {
+      return itineraries.find(t => t.id === selectedTripId);
+  }, [itineraries, selectedTripId]);
+
+  // Actions
   const handleDelete = async (id: string) => {
     if(!confirm("Are you sure you want to delete this plan?")) return;
-
     try {
-        const { error } = await supabase
-            .from('itineraries')
-            .delete()
-            .eq('id', id);
-
+        const { error } = await supabase.from('itineraries').delete().eq('id', id);
         if (error) throw error;
         setItineraries(prev => prev.filter(item => item.id !== id));
     } catch (error) {
@@ -72,7 +72,6 @@ export default function ItineraryPage() {
     }
   };
 
-  // 3. Handlers
   const handleCreateSuccess = () => {
       setViewState('list');
       setRefreshKey(prev => prev + 1);
@@ -88,12 +87,15 @@ export default function ItineraryPage() {
       <div className="absolute left-0 w-full flex justify-center pb-20">
         <div className="w-[1440px] px-[156px] flex flex-row items-start gap-[24px]">
             
-            {/* Sidebar: เปลี่ยนหน้าตาตาม viewState */}
+            {/* Sidebar */}
             <div className="mt-[38px] flex-shrink-0">
                <ItinerarySidebar 
                   onCreateNewPlan={() => setViewState('create')} 
                   onBackToList={() => setViewState('list')}
                   viewMode={viewState === 'detail' ? 'detail' : 'default'}
+                  // ✅ ส่งวันที่ไปให้ Sidebar คำนวณสีและรายการ
+                  startDate={selectedTrip?.start_date}
+                  endDate={selectedTrip?.end_date}
                />
             </div>
 
@@ -102,7 +104,6 @@ export default function ItineraryPage() {
                {viewState === 'create' ? (
                    <PlanNewTripForm onSuccess={handleCreateSuccess} />
                ) : viewState === 'detail' ? (
-                   // ส่ง ID ไปให้ DetailView โหลดข้อมูล (ในที่นี้ Mock ตามรูป)
                    <ItineraryDetailView tripId={selectedTripId} />
                ) : (
                    // List Mode

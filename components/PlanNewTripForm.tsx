@@ -98,13 +98,11 @@ function CustomDateRangePicker({ startDate, endDate, onChange, onClose }: { star
     );
 }
 
-// ✅ 1. กำหนด Interface สำหรับ Props
 interface PlanNewTripFormProps {
     onSuccess?: () => void;
 }
 
 // --- Main Form Component ---
-// ✅ 2. ใส่ Type ให้กับ props ของ Component
 export default function PlanNewTripForm({ onSuccess }: PlanNewTripFormProps) {
   const router = useRouter();
   const supabase = createClient();
@@ -171,7 +169,8 @@ export default function PlanNewTripForm({ onSuccess }: PlanNewTripFormProps) {
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
-      const { data, error } = await supabase
+      // 1. Insert ลงตาราง itineraries
+      const { data: itineraryData, error: itineraryError } = await supabase
         .from("itineraries")
         .insert([
           {
@@ -184,15 +183,39 @@ export default function PlanNewTripForm({ onSuccess }: PlanNewTripFormProps) {
         .select()
         .single();
 
-      if (error) throw error;
+      if (itineraryError) throw itineraryError;
 
-      console.log("Trip created:", data);
+      // ✅ 2. สร้างข้อมูลวัน (Daily Schedules) เตรียมไว้ทันที
+      let diffDays = 1; // ค่าเริ่มต้นถ้าไม่ได้เลือกวัน
+      if (startDate && endDate) {
+          const start = new Date(startDate);
+          const end = new Date(endDate);
+          const diffTime = end.getTime() - start.getTime();
+          if (diffTime >= 0) {
+              diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+          }
+      }
+
+      const dailySchedulesToInsert = [];
+      for (let i = 1; i <= diffDays; i++) {
+          dailySchedulesToInsert.push({
+              itinerary_id: itineraryData.id,
+              day_number: i
+          });
+      }
+
+      const { error: scheduleError } = await supabase
+          .from('daily_schedules')
+          .insert(dailySchedulesToInsert);
+
+      if (scheduleError) throw scheduleError;
+
+      console.log("Trip and schedules created:", itineraryData);
       
       setTripName("");
       setStartDate("");
       setEndDate("");
       
-      // ✅ เรียก onSuccess เพื่อบอก Parent ว่าเสร็จแล้ว
       if (onSuccess) onSuccess();
 
     } catch (err: any) {
@@ -211,14 +234,10 @@ export default function PlanNewTripForm({ onSuccess }: PlanNewTripFormProps) {
 
   return (
     <div className="flex flex-col items-start gap-[8px] w-[493px] relative">
-      
-      {/* Header Section */}
       <div className="flex flex-col items-center gap-[24px] w-full self-stretch">
         <h2 className="font-inter font-bold text-[36px] leading-[44px] text-center text-[#000000]">
           Plan a new trip
         </h2>
-
-        {/* Inputs Wrapper */}
         <div className="flex flex-col items-start gap-[4px] w-full self-stretch">
           <div className="flex flex-col items-start gap-[16px] w-full self-stretch">
             
@@ -271,18 +290,13 @@ export default function PlanNewTripForm({ onSuccess }: PlanNewTripFormProps) {
                </span>
 
                <div className="flex flex-row items-center w-full h-[16px] gap-[60px]">
-                  {/* Start Date Display */}
                   <div className="flex flex-row items-end gap-[8px] w-[120px]">
                       <Calendar className="w-[16px] h-[16px] text-[#212121] mb-[1px]" />
                       <span className={`font-inter font-normal text-[12px] leading-[15px] ${startDate ? 'text-[#000000]' : 'text-[#9E9E9E]'}`}>
                           {startDate ? displayDate(startDate) : "Start date"}
                       </span>
                   </div>
-
-                  {/* Vertical Divider */}
                   <div className="absolute left-[135px] top-[24px] w-[16px] h-[0px] border-[0.2px] border-black rotate-90"></div>
-
-                  {/* End Date Display */}
                   <div className="flex flex-row items-end gap-[8px] w-[120px] ml-4">
                       <Calendar className="w-[16px] h-[16px] text-[#212121] mb-[1px]" />
                       <span className={`font-inter font-normal text-[12px] leading-[15px] ${endDate ? 'text-[#000000]' : 'text-[#9E9E9E]'}`}>
@@ -354,7 +368,6 @@ export default function PlanNewTripForm({ onSuccess }: PlanNewTripFormProps) {
               )}
           </button>
       </div>
-
     </div>
   );
 }

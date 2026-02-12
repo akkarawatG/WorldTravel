@@ -1,100 +1,165 @@
 "use client";
 
-import { LayoutTemplate, MapPin } from "lucide-react";
+import { ChevronDown, Plus } from "lucide-react";
+import { useMemo, useState } from "react";
 
 interface ItinerarySidebarProps {
   onCreateNewPlan?: () => void;
   onBackToList?: () => void;
   viewMode?: 'default' | 'detail';
+  startDate?: string | null;
+  endDate?: string | null;
 }
 
-export default function ItinerarySidebar({ onCreateNewPlan, onBackToList, viewMode = 'default' }: ItinerarySidebarProps) {
+export default function ItinerarySidebar({ 
+  onCreateNewPlan, 
+  onBackToList, 
+  viewMode = 'default',
+  startDate,
+  endDate
+}: ItinerarySidebarProps) {
   
+  // ✅ 1. เพิ่ม State ควบคุมการเปิด/ปิด Dropdown
+  const [isOverviewOpen, setIsOverviewOpen] = useState(true);
+  const [isItineraryOpen, setIsItineraryOpen] = useState(true);
+
+  // ฟังก์ชันเลือกสีตามวัน
+  const getDayColor = (dayIndex: number) => {
+    switch (dayIndex) {
+        case 1: return { bg: "#FFCF0F", border: "#F6C500" }; // Mon
+        case 2: return { bg: "#FFCAD4", border: "#F08DA1" }; // Tue
+        case 3: return { bg: "#4CAF50", border: "#43A047" }; // Wed
+        case 4: return { bg: "#FF9800", border: "#FB8C00" }; // Thu
+        case 5: return { bg: "#3A82CE", border: "#2666B0" }; // Fri
+        case 6: return { bg: "#8A38F5", border: "#782DD9" }; // Sat
+        case 0: return { bg: "#F44336", border: "#E53935" }; // Sun
+        default: return { bg: "#E0E0E0", border: "#BDBDBD" };
+    }
+  };
+
+  const itineraryDates = useMemo(() => {
+      if (!startDate || !endDate) return [];
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const list = [];
+      const current = new Date(start);
+
+      while (current <= end) {
+          const dayIndex = current.getDay();
+          const colors = getDayColor(dayIndex);
+          list.push({
+              day: current.getDate(),
+              month: current.toLocaleDateString('en-GB', { month: 'long' }),
+              color: colors.bg,
+              borderColor: colors.border
+          });
+          current.setDate(current.getDate() + 1);
+      }
+      return list;
+  }, [startDate, endDate]);
+
   return (
-    <aside className="w-[191px] h-[937px] bg-[#F5F5F5] rounded-[16px] p-[16px] flex flex-col gap-[24px] overflow-hidden font-inter transition-all flex-shrink-0 z-40 sticky top-[110px]">
+    <aside className="w-[191px] h-[937px] bg-[#F5F5F5] rounded-[16px] p-[16px] flex flex-col gap-[24px] overflow-y-auto font-inter transition-all flex-shrink-0 z-40 sticky top-[110px] scrollbar-thin">
       
-      {/* 1. ปุ่ม Create New Plan */}
+      {/* ปุ่ม Create New Plan */}
       <button 
         onClick={onCreateNewPlan}
         className="w-full h-[40px] bg-[#3A82CE] border border-[#1E518C] rounded-[8px] flex items-center justify-center gap-[8px] hover:bg-[#3272b5] transition-colors shadow-sm flex-shrink-0 cursor-pointer"
       >
-        <div className="w-[17px] h-[17px] bg-white rounded-sm flex items-center justify-center">
-            <span className="text-[#3A82CE] text-xs font-bold">+</span>
+        <div className="w-[17.33px] h-[17.33px] bg-white rounded-sm flex items-center justify-center">
+            <Plus className="w-3 h-3 text-[#3A82CE] stroke-[4px]" />
         </div>
         <span className="text-white text-[12px] font-bold leading-[15px]">Create a new plan</span>
       </button>
 
-      {/* 2. Section: Overview */}
+      {/* --- Section: Overview --- */}
       <div className="flex flex-col gap-[16px] w-full">
-         <div className="flex items-center gap-[8px]">
-            <span className="text-[#212121] text-[20px] font-bold leading-[24px]">Overview</span>
+         {/* ✅ 2. ใส่ onClick เพื่อ Toggle State และหมุน Icon */}
+         <div 
+            className="flex items-center gap-[8px] cursor-pointer select-none"
+            onClick={() => setIsOverviewOpen(!isOverviewOpen)}
+         >
+             <ChevronDown 
+                className={`w-6 h-6 text-[#212121] transition-transform duration-200 ${isOverviewOpen ? 'rotate-0' : '-rotate-90'}`} 
+                strokeWidth={2} 
+             />
+             <span className="text-[#212121] text-[20px] font-bold leading-[24px]">Overview</span>
          </div>
-         <div className="flex flex-col gap-[8px] w-full pl-[0px]">
-             {/* My Plan Button */}
-             <button 
-                onClick={onBackToList}
-                className={`box-border flex items-center px-[8px] py-[4px] w-full h-[27px] rounded-[8px] border transition-colors text-left gap-2 ${viewMode === 'default' ? 'border-black bg-transparent' : 'border-transparent hover:bg-gray-200'}`}
-             >
-                <span className="font-normal text-[16px] leading-[19px] text-[#212121]">My plan</span>
-             </button>
-             
-             {/* Place to visit */}
-             <button className="box-border flex items-center px-[8px] py-[4px] w-full h-[27px] border border-transparent rounded-[8px] hover:bg-gray-200 transition-colors text-left">
-                <span className="font-normal text-[16px] leading-[19px] text-[#212121]">Place to visit</span>
-             </button>
-         </div>
+
+         {/* ✅ 3. ซ่อนเนื้อหาถ้า State เป็น false */}
+         {isOverviewOpen && (
+             <div className="flex flex-col gap-[4px] w-full pl-[0px] animate-in slide-in-from-top-1 duration-200">
+                 <button 
+                    onClick={onBackToList}
+                    className={`box-border flex items-center px-[8px] py-[4px] w-full h-[27px] rounded-[8px] border transition-colors text-left ${viewMode === 'default' ? 'border-black bg-transparent' : 'border-transparent hover:bg-gray-200'}`}
+                 >
+                    <span className="font-normal text-[16px] leading-[19px] text-[#212121]">My plan</span>
+                 </button>
+                 
+                 <button className="box-border flex items-center px-[8px] py-[4px] w-full h-[27px] border border-transparent rounded-[8px] hover:bg-gray-200 transition-colors text-left">
+                    <span className="font-normal text-[16px] leading-[19px] text-[#212121]">Place to visit</span>
+                 </button>
+
+                 <button className="box-border flex items-center px-[8px] py-[4px] w-full h-[27px] border border-transparent rounded-[8px] hover:bg-gray-200 transition-colors text-left">
+                    <span className="font-normal text-[16px] leading-[19px] text-[#212121]">Budget</span>
+                 </button>
+             </div>
+         )}
       </div>
 
-      {/* 3. Dynamic Section */}
-      {viewMode === 'detail' ? (
-        // --- Detail Mode: Itinerary List with Colored Dots ---
-        <div className="flex flex-col gap-[16px] w-full animate-in slide-in-from-left-2">
-            <div className="flex items-center gap-[8px] cursor-pointer">
-                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M6 9L12 15L18 9" stroke="#212121" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
+      {/* --- Section: Itinerary --- */}
+      {viewMode === 'detail' && (
+        <div className="flex flex-col gap-[8px] w-full">
+            
+            {/* Header: Itinerary */}
+            <div 
+                className="flex items-center gap-[8px] cursor-pointer mb-2 select-none"
+                onClick={() => setIsItineraryOpen(!isItineraryOpen)}
+            >
+                <ChevronDown 
+                    className={`w-6 h-6 text-[#212121] transition-transform duration-200 ${isItineraryOpen ? 'rotate-0' : '-rotate-90'}`} 
+                    strokeWidth={2} 
+                />
                 <h5 className="text-[#212121] text-[20px] font-bold leading-[24px]">Itinerary</h5>
             </div>
             
-            <div className="flex flex-col gap-[8px] w-full pl-[8px]">
-                {/* Mock Data ตามรูป */}
-                <DateItem day="1" month="January" color="#FFCF0F" />
-                <DateItem day="2" month="January" color="#FFCAD4" />
-                <DateItem day="3" month="January" color="#4CAF50" />
-                <DateItem day="4" month="January" color="#FF9800" />
-                <DateItem day="5" month="January" color="#3A82CE" />
-                <DateItem day="6" month="January" color="#8A38F5" />
-                <DateItem day="7" month="January" color="#F44336" />
-            </div>
-        </div>
-      ) : (
-        // --- Default Mode: Budget ---
-        <div className="flex flex-col gap-[16px] w-full">
-             <div className="flex items-center gap-[8px] cursor-pointer">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M6 9L12 15L18 9" stroke="#212121" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                <h5 className="text-[#212121] text-[20px] font-bold leading-[24px]">Budget</h5>
-             </div>
-             <div className="flex flex-col gap-[4px] w-full pl-[8px]">
-                <button className="box-border flex items-center px-[8px] py-[4px] w-full h-[27px] border border-transparent rounded-[8px] hover:bg-gray-200 transition-colors text-left">
-                  <span className="font-normal text-[16px] leading-[19px] text-[#212121]">View</span>
-                </button>
-             </div>
+            {/* Date List */}
+            {isItineraryOpen && (
+                <div className="flex flex-col gap-[8px] w-full pl-[8px] animate-in slide-in-from-top-1 duration-200">
+                    {itineraryDates.length > 0 ? (
+                        itineraryDates.map((item, index) => (
+                            <div key={index} className="flex items-center gap-[13px] h-[19px] cursor-pointer hover:opacity-70 transition-opacity">
+                                
+                                <div className="w-[10px] h-[10px] flex items-center justify-center flex-shrink-0">
+                                     <div 
+                                        className="w-[10px] h-[10px] rounded-full box-border"
+                                        style={{ 
+                                            backgroundColor: item.color, 
+                                            border: `1px solid ${item.borderColor}`
+                                        }}
+                                     ></div>
+                                </div>
+
+                                <div className="flex flex-row items-center gap-[8px]">
+                                    <span className="font-normal text-[16px] leading-[19px] text-black w-[15px] text-center">
+                                        {item.day}
+                                    </span>
+                                    <span className="font-normal text-[16px] leading-[19px] text-black truncate max-w-[100px]">
+                                        {item.month}
+                                    </span>
+                                </div>
+
+                            </div>
+                        ))
+                    ) : (
+                        <div className="text-gray-400 text-sm px-2">No dates set</div>
+                    )}
+                </div>
+            )}
+
         </div>
       )}
       
     </aside>
   );
-}
-
-// Sub-component สำหรับรายการวันที่พร้อมจุดสี
-function DateItem({ day, month, color }: { day: string, month: string, color: string }) {
-    return (
-        <div className="flex items-center gap-[8px] px-2 py-1 hover:bg-gray-100 rounded cursor-pointer">
-            <div className="w-[10px] h-[10px] rounded-full border border-black/10" style={{ backgroundColor: color }}></div>
-            <span className="text-[16px] text-[#212121] w-[10px] text-center">{day}</span>
-            <span className="text-[16px] text-[#212121]">{month}</span>
-        </div>
-    );
 }
