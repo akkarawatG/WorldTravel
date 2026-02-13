@@ -161,7 +161,7 @@ export default function EditTripPage({ params }: PageProps) {
                     .from('templates')
                     .select(`id, template_name, notes, images, travel_start_date, travel_end_date, rating, template_provinces ( province_code, status, color )`)
                     .eq('trip_id', tripId)
-                    .is('deleted_at', null)
+                    // .is('deleted_at', null)
                     .order('created_at', { ascending: true });
 
                 if (tempError) throw tempError;
