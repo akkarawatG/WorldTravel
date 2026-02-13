@@ -5,6 +5,7 @@ import ItinerarySidebar from "@/components/ItinerarySidebar";
 import PlanNewTripForm from "@/components/PlanNewTripForm";
 import ItineraryCard from "@/components/ItineraryCard";
 import ItineraryDetailView from "@/components/ItineraryDetailView";
+import PlaceToVisit from "@/components/PlaceToVisit";
 import { createClient } from "@/utils/supabase/client";
 import { Loader2 } from "lucide-react";
 
@@ -15,11 +16,13 @@ interface Itinerary {
   end_date: string | null;
 }
 
+type ViewState = 'list' | 'create' | 'detail' | 'place_to_visit';
+
 export default function ItineraryPage() {
   const supabase = createClient();
   
   // State
-  const [viewState, setViewState] = useState<'list' | 'create' | 'detail'>('list');
+  const [viewState, setViewState] = useState<ViewState>('list');
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
   
   // Data
@@ -30,15 +33,16 @@ export default function ItineraryPage() {
   // Fetch Data
   useEffect(() => {
     const fetchItineraries = async () => {
-      setIsLoading(true);
+      if (itineraries.length === 0) setIsLoading(true);
+      
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
             const { data, error } = await supabase
                 .from('itineraries')
-                .select('id, name, start_date, end_date') // ✅ ต้องแน่ใจว่าเลือก start_date, end_date มาด้วย
+                .select('id, name, start_date, end_date')
                 .eq('profile_id', user.id)
-                .is('deleted_at', null)
+                // .is('deleted_at', null)
                 .order('created_at', { ascending: false });
             
             if (error) throw error;
@@ -54,12 +58,14 @@ export default function ItineraryPage() {
     fetchItineraries();
   }, [refreshKey]);
 
-  // ✅ หาข้อมูลทริปที่กำลังเลือกอยู่
+  const handleDataRefresh = () => {
+      setRefreshKey(prev => prev + 1);
+  };
+
   const selectedTrip = useMemo(() => {
       return itineraries.find(t => t.id === selectedTripId);
   }, [itineraries, selectedTripId]);
 
-  // Actions
   const handleDelete = async (id: string) => {
     if(!confirm("Are you sure you want to delete this plan?")) return;
     try {
@@ -74,12 +80,19 @@ export default function ItineraryPage() {
 
   const handleCreateSuccess = () => {
       setViewState('list');
-      setRefreshKey(prev => prev + 1);
+      handleDataRefresh();
   };
 
   const handleCardClick = (id: string) => {
       setSelectedTripId(id);
       setViewState('detail');
+  };
+
+  // ✅ Helper Function เพื่อกำหนด viewMode ให้ถูกต้องตาม viewState
+  const getSidebarViewMode = () => {
+      if (viewState === 'detail') return 'detail';
+      if (viewState === 'place_to_visit') return 'place_to_visit';
+      return 'default'; // สำหรับ 'list' และ 'create' ให้ active ที่ My Plan
   };
 
   return (
@@ -92,8 +105,11 @@ export default function ItineraryPage() {
                <ItinerarySidebar 
                   onCreateNewPlan={() => setViewState('create')} 
                   onBackToList={() => setViewState('list')}
-                  viewMode={viewState === 'detail' ? 'detail' : 'default'}
-                  // ✅ ส่งวันที่ไปให้ Sidebar คำนวณสีและรายการ
+                  onPlaceToVisit={() => setViewState('place_to_visit')} 
+                  
+                  // ✅ แก้ไขตรงนี้: เรียกใช้ฟังก์ชันคำนวณโหมด
+                  viewMode={getSidebarViewMode()}
+                  
                   startDate={selectedTrip?.start_date}
                   endDate={selectedTrip?.end_date}
                />
@@ -104,7 +120,12 @@ export default function ItineraryPage() {
                {viewState === 'create' ? (
                    <PlanNewTripForm onSuccess={handleCreateSuccess} />
                ) : viewState === 'detail' ? (
-                   <ItineraryDetailView tripId={selectedTripId} />
+                   <ItineraryDetailView 
+                        tripId={selectedTripId} 
+                        onDataUpdate={handleDataRefresh} 
+                   />
+               ) : viewState === 'place_to_visit' ? ( 
+                   <PlaceToVisit />
                ) : (
                    // List Mode
                    <>

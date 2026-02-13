@@ -6,20 +6,21 @@ import { useMemo, useState } from "react";
 interface ItinerarySidebarProps {
   onCreateNewPlan?: () => void;
   onBackToList?: () => void;
-  viewMode?: 'default' | 'detail';
+  onPlaceToVisit?: () => void;
+  viewMode?: 'default' | 'detail' | 'place_to_visit' | 'budget'; // ✅ เพิ่ม type ให้ครบ
   startDate?: string | null;
   endDate?: string | null;
 }
 
 export default function ItinerarySidebar({ 
   onCreateNewPlan, 
-  onBackToList, 
+  onBackToList,
+  onPlaceToVisit, 
   viewMode = 'default',
   startDate,
   endDate
 }: ItinerarySidebarProps) {
   
-  // ✅ 1. เพิ่ม State ควบคุมการเปิด/ปิด Dropdown
   const [isOverviewOpen, setIsOverviewOpen] = useState(true);
   const [isItineraryOpen, setIsItineraryOpen] = useState(true);
 
@@ -58,6 +59,14 @@ export default function ItinerarySidebar({
       return list;
   }, [startDate, endDate]);
 
+  // ✅ Helper Class สำหรับปุ่ม Active/Inactive
+  const getButtonClass = (isActive: boolean) => 
+    `box-border flex items-center px-[8px] py-[4px] w-full h-[27px] rounded-[8px] border transition-colors text-left ${
+      isActive 
+        ? 'border-black bg-transparent' // Active State
+        : 'border-transparent hover:bg-gray-200' // Inactive State
+    }`;
+
   return (
     <aside className="w-[191px] h-[937px] bg-[#F5F5F5] rounded-[16px] p-[16px] flex flex-col gap-[24px] overflow-y-auto font-inter transition-all flex-shrink-0 z-40 sticky top-[110px] scrollbar-thin">
       
@@ -74,7 +83,6 @@ export default function ItinerarySidebar({
 
       {/* --- Section: Overview --- */}
       <div className="flex flex-col gap-[16px] w-full">
-         {/* ✅ 2. ใส่ onClick เพื่อ Toggle State และหมุน Icon */}
          <div 
             className="flex items-center gap-[8px] cursor-pointer select-none"
             onClick={() => setIsOverviewOpen(!isOverviewOpen)}
@@ -86,21 +94,30 @@ export default function ItinerarySidebar({
              <span className="text-[#212121] text-[20px] font-bold leading-[24px]">Overview</span>
          </div>
 
-         {/* ✅ 3. ซ่อนเนื้อหาถ้า State เป็น false */}
          {isOverviewOpen && (
              <div className="flex flex-col gap-[4px] w-full pl-[0px] animate-in slide-in-from-top-1 duration-200">
+                 
+                 {/* My Plan Button */}
                  <button 
                     onClick={onBackToList}
-                    className={`box-border flex items-center px-[8px] py-[4px] w-full h-[27px] rounded-[8px] border transition-colors text-left ${viewMode === 'default' ? 'border-black bg-transparent' : 'border-transparent hover:bg-gray-200'}`}
+                    className={getButtonClass(viewMode === 'default')}
                  >
                     <span className="font-normal text-[16px] leading-[19px] text-[#212121]">My plan</span>
                  </button>
                  
-                 <button className="box-border flex items-center px-[8px] py-[4px] w-full h-[27px] border border-transparent rounded-[8px] hover:bg-gray-200 transition-colors text-left">
+                 {/* Place to visit Button */}
+                 <button
+                    onClick={onPlaceToVisit} 
+                    className={getButtonClass(viewMode === 'place_to_visit')}
+                 >
                     <span className="font-normal text-[16px] leading-[19px] text-[#212121]">Place to visit</span>
                  </button>
 
-                 <button className="box-border flex items-center px-[8px] py-[4px] w-full h-[27px] border border-transparent rounded-[8px] hover:bg-gray-200 transition-colors text-left">
+                 {/* Budget Button (สมมติว่ามีหน้า Budget ในอนาคต) */}
+                 <button 
+                    className={getButtonClass(viewMode === 'budget')}
+                    // onClick={onBudget} 
+                 >
                     <span className="font-normal text-[16px] leading-[19px] text-[#212121]">Budget</span>
                  </button>
              </div>
