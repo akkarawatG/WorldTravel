@@ -7,7 +7,9 @@ interface ItinerarySidebarProps {
   onCreateNewPlan?: () => void;
   onBackToList?: () => void;
   onPlaceToVisit?: () => void;
-  viewMode?: 'default' | 'detail' | 'place_to_visit' | 'budget'; // ✅ เพิ่ม type ให้ครบ
+  // ✅ เพิ่ม Prop รับฟังก์ชันเมื่อกดวันที่
+  onDateClick?: (dayNumber: number) => void;
+  viewMode?: 'default' | 'detail' | 'place_to_visit' | 'budget';
   startDate?: string | null;
   endDate?: string | null;
 }
@@ -16,6 +18,7 @@ export default function ItinerarySidebar({
   onCreateNewPlan, 
   onBackToList,
   onPlaceToVisit, 
+  onDateClick, 
   viewMode = 'default',
   startDate,
   endDate
@@ -24,7 +27,6 @@ export default function ItinerarySidebar({
   const [isOverviewOpen, setIsOverviewOpen] = useState(true);
   const [isItineraryOpen, setIsItineraryOpen] = useState(true);
 
-  // ฟังก์ชันเลือกสีตามวัน
   const getDayColor = (dayIndex: number) => {
     switch (dayIndex) {
         case 1: return { bg: "#FFCF0F", border: "#F6C500" }; // Mon
@@ -44,33 +46,34 @@ export default function ItinerarySidebar({
       const end = new Date(endDate);
       const list = [];
       const current = new Date(start);
+      let dayCount = 1; // ✅ ตัวนับวันที่ (Day 1, Day 2...)
 
       while (current <= end) {
           const dayIndex = current.getDay();
           const colors = getDayColor(dayIndex);
           list.push({
+              dayNum: dayCount, // ✅ เก็บเลขวันไว้ใช้ส่งค่า
               day: current.getDate(),
               month: current.toLocaleDateString('en-GB', { month: 'long' }),
               color: colors.bg,
               borderColor: colors.border
           });
           current.setDate(current.getDate() + 1);
+          dayCount++;
       }
       return list;
   }, [startDate, endDate]);
 
-  // ✅ Helper Class สำหรับปุ่ม Active/Inactive
   const getButtonClass = (isActive: boolean) => 
     `box-border flex items-center px-[8px] py-[4px] w-full h-[27px] rounded-[8px] border transition-colors text-left ${
       isActive 
-        ? 'border-black bg-transparent' // Active State
-        : 'border-transparent hover:bg-gray-200' // Inactive State
+        ? 'border-black bg-transparent font-semibold' 
+        : 'border-transparent hover:bg-gray-200 font-normal' 
     }`;
 
   return (
     <aside className="w-[191px] h-[937px] bg-[#F5F5F5] rounded-[16px] p-[16px] flex flex-col gap-[24px] overflow-y-auto font-inter transition-all flex-shrink-0 z-40 sticky top-[110px] scrollbar-thin">
       
-      {/* ปุ่ม Create New Plan */}
       <button 
         onClick={onCreateNewPlan}
         className="w-full h-[40px] bg-[#3A82CE] border border-[#1E518C] rounded-[8px] flex items-center justify-center gap-[8px] hover:bg-[#3272b5] transition-colors shadow-sm flex-shrink-0 cursor-pointer"
@@ -81,7 +84,6 @@ export default function ItinerarySidebar({
         <span className="text-white text-[12px] font-bold leading-[15px]">Create a new plan</span>
       </button>
 
-      {/* --- Section: Overview --- */}
       <div className="flex flex-col gap-[16px] w-full">
          <div 
             className="flex items-center gap-[8px] cursor-pointer select-none"
@@ -96,39 +98,28 @@ export default function ItinerarySidebar({
 
          {isOverviewOpen && (
              <div className="flex flex-col gap-[4px] w-full pl-[0px] animate-in slide-in-from-top-1 duration-200">
-                 
-                 {/* My Plan Button */}
                  <button 
                     onClick={onBackToList}
                     className={getButtonClass(viewMode === 'default')}
                  >
-                    <span className="font-normal text-[16px] leading-[19px] text-[#212121]">My plan</span>
+                    <span className="text-[16px] leading-[19px] text-[#212121]">My plan</span>
                  </button>
-                 
-                 {/* Place to visit Button */}
                  <button
                     onClick={onPlaceToVisit} 
                     className={getButtonClass(viewMode === 'place_to_visit')}
                  >
-                    <span className="font-normal text-[16px] leading-[19px] text-[#212121]">Place to visit</span>
+                    <span className="text-[16px] leading-[19px] text-[#212121]">Place to visit</span>
                  </button>
-
-                 {/* Budget Button (สมมติว่ามีหน้า Budget ในอนาคต) */}
-                 <button 
-                    className={getButtonClass(viewMode === 'budget')}
-                    // onClick={onBudget} 
-                 >
-                    <span className="font-normal text-[16px] leading-[19px] text-[#212121]">Budget</span>
+                 <button className={getButtonClass(viewMode === 'budget')}>
+                    <span className="text-[16px] leading-[19px] text-[#212121]">Budget</span>
                  </button>
              </div>
          )}
       </div>
 
-      {/* --- Section: Itinerary --- */}
+      {/* แสดง Itinerary เฉพาะหน้า Detail */}
       {viewMode === 'detail' && (
         <div className="flex flex-col gap-[8px] w-full">
-            
-            {/* Header: Itinerary */}
             <div 
                 className="flex items-center gap-[8px] cursor-pointer mb-2 select-none"
                 onClick={() => setIsItineraryOpen(!isItineraryOpen)}
@@ -140,13 +131,16 @@ export default function ItinerarySidebar({
                 <h5 className="text-[#212121] text-[20px] font-bold leading-[24px]">Itinerary</h5>
             </div>
             
-            {/* Date List */}
             {isItineraryOpen && (
                 <div className="flex flex-col gap-[8px] w-full pl-[8px] animate-in slide-in-from-top-1 duration-200">
                     {itineraryDates.length > 0 ? (
                         itineraryDates.map((item, index) => (
-                            <div key={index} className="flex items-center gap-[13px] h-[19px] cursor-pointer hover:opacity-70 transition-opacity">
-                                
+                            <div 
+                                key={index} 
+                                // ✅ เมื่อคลิก ให้เรียก onDateClick พร้อมส่งเลขวันที่ (Day Number)
+                                onClick={() => onDateClick?.(item.dayNum)}
+                                className="flex items-center gap-[13px] h-[19px] cursor-pointer hover:opacity-70 transition-opacity"
+                            >
                                 <div className="w-[10px] h-[10px] flex items-center justify-center flex-shrink-0">
                                      <div 
                                         className="w-[10px] h-[10px] rounded-full box-border"
@@ -156,7 +150,6 @@ export default function ItinerarySidebar({
                                         }}
                                      ></div>
                                 </div>
-
                                 <div className="flex flex-row items-center gap-[8px]">
                                     <span className="font-normal text-[16px] leading-[19px] text-black w-[15px] text-center">
                                         {item.day}
@@ -165,7 +158,6 @@ export default function ItinerarySidebar({
                                         {item.month}
                                     </span>
                                 </div>
-
                             </div>
                         ))
                     ) : (
@@ -173,7 +165,6 @@ export default function ItinerarySidebar({
                     )}
                 </div>
             )}
-
         </div>
       )}
       

@@ -9,13 +9,25 @@ import {
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 
-// Load Map แบบ Dynamic
 const ItineraryMap = dynamic(() => import("./Map/ItineraryMap"), {
     ssr: false,
     loading: () => <div className="w-full h-full bg-gray-200 flex items-center justify-center">Loading Map...</div>
 });
 
-// --- Custom Date Picker (แก้ไขให้เลือกช่วงเวลาได้ถูกต้อง) ---
+const getDayColor = (date: Date) => {
+    const dayIndex = date.getDay();
+    switch (dayIndex) {
+        case 1: return "#FFCF0F";
+        case 2: return "#FFCAD4";
+        case 3: return "#4CAF50";
+        case 4: return "#FF9800";
+        case 5: return "#3A82CE";
+        case 6: return "#8A38F5";
+        case 0: return "#F44336";
+        default: return "#E0E0E0";
+    }
+};
+
 function CustomDateRangePicker({
     startDate,
     endDate,
@@ -44,14 +56,11 @@ function CustomDateRangePicker({
         const localDate = new Date(clickedDate.getTime() - (offset * 60 * 1000));
         const dateStr = localDate.toISOString().split('T')[0];
 
-        // Logic การเลือกช่วงเวลา (Start -> End)
         if (!startDate || (startDate && endDate)) {
-            // เริ่มเลือกใหม่
             onChange(dateStr, "");
         } else if (startDate && !endDate) {
-            // เลือกวันจบ
             if (new Date(dateStr) < new Date(startDate)) {
-                onChange(dateStr, startDate); // สลับถ้าวันจบน้อยกว่าวันเริ่ม
+                onChange(dateStr, startDate);
             } else {
                 onChange(startDate, dateStr);
             }
@@ -128,6 +137,7 @@ interface Place {
     images: string[] | string | null;
     latitude: number;
     longitude: number;
+    country?: string;
 }
 
 interface ScheduleItem {
@@ -160,25 +170,57 @@ interface SavedPlace {
 
 interface ItineraryDetailViewProps {
     tripId: string | null;
-    onDataUpdate?: () => void; // รับ prop นี้มาจาก Parent
+    onDataUpdate?: () => void;
+    // ✅ เพิ่ม Prop รับค่าวันที่ต้องการให้ Scroll
+    scrollToDay?: number | null;
 }
 
-export default function ItineraryDetailView({ tripId, onDataUpdate }: ItineraryDetailViewProps) {
+export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay }: ItineraryDetailViewProps) {
     const supabase = createClient();
 
-    // State
     const [loading, setLoading] = useState(true);
     const [trip, setTrip] = useState<ItineraryData | null>(null);
     const [schedules, setSchedules] = useState<DailyScheduleData[]>([]);
     const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([]);
 
-    // UI State
     const [expandedDayIndex, setExpandedDayIndex] = useState<number | null>(0);
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [editedTitle, setEditedTitle] = useState("");
 
     const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
     const [tempDates, setTempDates] = useState({ start: "", end: "" });
+
+    const [isViewAll, setIsViewAll] = useState(false);
+
+    // ✅ useEffect สำหรับจัดการ Scrolling
+    useEffect(() => {
+        if (scrollToDay !== null && scrollToDay !== undefined && scrollToDay > 0) {
+            // 1. เปิด Accordion ของวันนั้น (ลบ 1 เพราะ index เริ่มที่ 0)
+            setExpandedDayIndex(scrollToDay - 1);
+            setIsViewAll(false); // ปิดโหมด View All เพื่อโฟกัสวัน
+
+            // 2. สั่ง Scroll ไปหา Element
+            setTimeout(() => {
+                const element = document.getElementById(`day-${scrollToDay}`);
+                if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 100);
+        }
+    }, [scrollToDay]);
+
+    const filteredSavedPlaces = useMemo(() => {
+        if (!trip || !trip.name || savedPlaces.length === 0) return [];
+        const tripCountry = trip.name.trim().toLowerCase();
+        return savedPlaces.filter(saved => {
+            const placeCountry = saved.places?.country?.trim().toLowerCase();
+            return (
+                placeCountry === tripCountry || 
+                tripCountry.includes(placeCountry || "") ||
+                placeCountry?.includes(tripCountry)
+            );
+        });
+    }, [savedPlaces, trip]);
 
     const fetchSchedules = async (id: string) => {
         const { data, error } = await supabase
@@ -187,7 +229,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate }: ItineraryD
             id, day_number, 
             daily_schedule_items (
                 id, place_id, item_type, note, order_index,
-                places (id, name, description_short, images, lat, lon)
+                places (id, name, description_short, images, lat, lon, country) 
             )
         `)
             .eq('itinerary_id', id)
@@ -206,7 +248,8 @@ export default function ItineraryDetailView({ tripId, onDataUpdate }: ItineraryD
                     description_short: rawPlace.description_short,
                     images: rawPlace.images,
                     latitude: rawPlace.lat,
-                    longitude: rawPlace.lon
+                    longitude: rawPlace.lon,
+                    country: rawPlace.country
                 } : null;
                 return { ...item, places: mappedPlace };
             });
@@ -238,7 +281,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate }: ItineraryD
                 if (user) {
                     const { data: savedData, error: savedError } = await supabase
                         .from('saved_places')
-                        .select(`id, place_id, places (id, name, description_short, images, lat, lon)`)
+                        .select(`id, place_id, places (id, name, description_short, images, lat, lon, country)`)
                         .eq('profile_id', user.id);
 
                     if (!savedError && savedData) {
@@ -254,7 +297,8 @@ export default function ItineraryDetailView({ tripId, onDataUpdate }: ItineraryD
                                     description_short: rawPlace.description_short,
                                     images: rawPlace.images,
                                     latitude: rawPlace.lat,
-                                    longitude: rawPlace.lon
+                                    longitude: rawPlace.lon,
+                                    country: rawPlace.country
                                 }
                             } as SavedPlace;
                         }).filter((item): item is SavedPlace => item !== null);
@@ -289,24 +333,90 @@ export default function ItineraryDetailView({ tripId, onDataUpdate }: ItineraryD
         return days;
     }, [trip]);
 
-    const mapLocations = useMemo(() => {
+const mapLocations = useMemo(() => {
+        if (!trip) return [];
+
+        const locations: any[] = [];
+
+        // กรณี 1: View All (แสดงทั้งหมด แบ่งสีตามวัน และเลข Pin เรียงต่อกัน)
+        if (isViewAll) {
+            let globalIndex = 1; // ✅ 1. สร้างตัวนับลำดับรวม เริ่มต้นที่ 1
+
+            schedules.forEach((daySchedule) => {
+                // คำนวณวันเพื่อหาสี
+                const date = new Date(trip.start_date);
+                date.setDate(date.getDate() + (daySchedule.day_number - 1));
+                const color = getDayColor(date);
+
+                daySchedule.daily_schedule_items.forEach((item) => {
+                    if (item.item_type === 'place' && item.places) {
+                        locations.push({
+                            id: item.id,
+                            name: item.places.name,
+                            lat: item.places.latitude,
+                            lng: item.places.longitude,
+                            
+                            // ✅ 2. ใช้ globalIndex แทน item.order_index แล้วบวกค่าเพิ่มทีละ 1
+                            order_index: globalIndex++, 
+                            
+                            color: color, 
+                            day_number: daySchedule.day_number 
+                        });
+                    }
+                });
+            });
+            return locations;
+        }
+
+        // กรณี 2: แสดงเฉพาะวันที่เปิดอยู่ (ใช้ลำดับของวันนั้นๆ ตามปกติ)
         if (expandedDayIndex === null) return [];
         const currentDayNum = expandedDayIndex + 1;
         const dbSchedule = schedules.find(s => s.day_number === currentDayNum);
-        if (!dbSchedule) return [];
-        return dbSchedule.daily_schedule_items
-            .filter(item => item.item_type === 'place' && item.places)
-            .map(item => ({
-                id: item.id,
-                name: item.places?.name || "Unknown",
-                lat: item.places?.latitude || 0,
-                lng: item.places?.longitude || 0,
-                order_index: item.order_index
-            }));
-    }, [expandedDayIndex, schedules]);
+        
+        if (dbSchedule) {
+            const date = new Date(trip.start_date);
+            date.setDate(date.getDate() + (currentDayNum - 1));
+            const color = getDayColor(date);
+
+            dbSchedule.daily_schedule_items.forEach((item) => {
+                if (item.item_type === 'place' && item.places) {
+                    locations.push({
+                        id: item.id,
+                        name: item.places.name,
+                        lat: item.places.latitude,
+                        lng: item.places.longitude,
+                        
+                        // ✅ กรณีดูทีละวัน ใช้ลำดับเดิมของวันนั้นๆ (1, 2, 3...)
+                        order_index: item.order_index, 
+                        
+                        color: color 
+                    });
+                }
+            });
+        }
+        
+        return locations;
+    }, [expandedDayIndex, schedules, isViewAll, trip]);
 
     const toggleDay = (index: number) => {
-        setExpandedDayIndex(expandedDayIndex === index ? null : index);
+        if (expandedDayIndex === index) {
+            setExpandedDayIndex(null); 
+        } else {
+            setExpandedDayIndex(index);
+            setIsViewAll(false); 
+        }
+    };
+
+    const handleViewAll = () => {
+        setIsViewAll(prev => {
+            const newState = !prev;
+            if (newState) {
+                setExpandedDayIndex(null);
+            } else {
+                setExpandedDayIndex(0); 
+            }
+            return newState;
+        });
     };
 
     const handleUpdateTitle = async () => {
@@ -320,10 +430,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate }: ItineraryD
             if (error) throw error;
             setTrip({ ...trip, name: editedTitle });
             setIsEditingTitle(false);
-
-            // ✅ แจ้ง Parent ให้โหลด Sidebar ใหม่
             if (onDataUpdate) onDataUpdate();
-
         } catch (err: any) {
             console.error("Failed to update title:", err.message);
         }
@@ -345,23 +452,17 @@ export default function ItineraryDetailView({ tripId, onDataUpdate }: ItineraryD
 
     const handleCommitDates = async (newStart: string, newEnd: string) => {
         if (!trip) return;
-
         try {
             const { error } = await supabase
                 .from('itineraries')
                 .update({ start_date: newStart, end_date: newEnd })
                 .eq('id', trip.id);
-
             if (error) throw error;
-
             setTrip({ ...trip, start_date: newStart, end_date: newEnd });
-
             const start = new Date(newStart);
             const end = new Date(newEnd);
             const diffDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-
             const existingDaysCount = schedules.length;
-
             if (diffDays > existingDaysCount) {
                 const newSchedules = [];
                 for (let i = existingDaysCount + 1; i <= diffDays; i++) {
@@ -371,16 +472,11 @@ export default function ItineraryDetailView({ tripId, onDataUpdate }: ItineraryD
                     });
                 }
                 await supabase.from('daily_schedules').insert(newSchedules);
-
                 const updatedSchedules = await fetchSchedules(trip.id);
                 setSchedules(updatedSchedules);
             }
-
-            // ✅ แจ้ง Parent ให้โหลด Sidebar ใหม่
             if (onDataUpdate) onDataUpdate();
-
             setIsDatePickerOpen(false);
-
         } catch (err: any) {
             console.error("Failed to update dates:", err.message);
             alert("Failed to update dates");
@@ -393,11 +489,9 @@ export default function ItineraryDetailView({ tripId, onDataUpdate }: ItineraryD
             alert("Please create or extend your trip dates first.");
             return;
         }
-
         try {
             const currentDay = schedules.find(s => s.id === dayId);
             const newOrderIndex = (currentDay?.daily_schedule_items.length || 0) + 1;
-
             const { data, error } = await supabase
                 .from('daily_schedule_items')
                 .insert({
@@ -408,9 +502,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate }: ItineraryD
                 })
                 .select()
                 .single();
-
             if (error) throw error;
-
             setSchedules(prev => prev.map(day => {
                 if (day.id === dayId) {
                     const newItem: ScheduleItem = {
@@ -428,7 +520,6 @@ export default function ItineraryDetailView({ tripId, onDataUpdate }: ItineraryD
                 }
                 return day;
             }));
-
         } catch (err: any) {
             console.error("Failed to add place:", err.message);
         }
@@ -439,7 +530,6 @@ export default function ItineraryDetailView({ tripId, onDataUpdate }: ItineraryD
         try {
             const { error } = await supabase.from('daily_schedule_items').delete().eq('id', itemId);
             if (error) throw error;
-
             setSchedules(prev => prev.map(day => {
                 if (day.id === dayId) {
                     return {
@@ -474,7 +564,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate }: ItineraryD
             <div className="w-[433px] flex flex-col gap-[24px] overflow-y-auto pr-2 h-[900px] scrollbar-hide pb-20">
 
                 {/* Title & Edit */}
-                <div className="flex flex-col gap-[24px] items-center">
+                <div className="flex flex-col gap-[24px]">
                     {isEditingTitle ? (
                         <div className="flex items-center gap-2 w-full justify-center">
                             <input
@@ -519,6 +609,8 @@ export default function ItineraryDetailView({ tripId, onDataUpdate }: ItineraryD
                     return (
                         <div key={day.day_number} className="flex flex-col w-full">
                             <div
+                                // ✅ เพิ่ม ID ให้แต่ละวันเพื่อใช้ Scroll
+                                id={`day-${day.day_number}`}
                                 className="flex items-center gap-[13px] py-2 cursor-pointer w-full hover:bg-gray-50 rounded px-2 transition-colors"
                                 onClick={() => toggleDay(index)}
                             >
@@ -538,21 +630,18 @@ export default function ItineraryDetailView({ tripId, onDataUpdate }: ItineraryD
                                         <span className="font-inter font-normal text-[16px]">Add a place</span>
                                     </div>
 
-                                    {/* --- Scheduled Items List --- */}
+                                    {/* Items List */}
                                     {items.map((item) => (
                                         <div key={item.id} className="flex flex-row items-center gap-[8px] relative group/card w-full pr-[10px]">
-
                                             <div className="absolute -left-[34px] top-[50%] -translate-y-1/2 w-[36px] flex justify-center">
                                                 <div className="w-[20px] h-[25px] bg-[#1E518C] rounded-[4px] flex items-center justify-center text-white text-xs z-10 border border-[#C2DCF3]">
                                                     {item.order_index}
                                                 </div>
                                             </div>
-
                                             <div className="flex flex-row flex-1 min-w-0 h-[102px] bg-white rounded-[8px] overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-transparent hover:border-[#1E518C]">
                                                 <div className="w-[24px] bg-gray-50 flex items-center justify-center cursor-grab active:cursor-grabbing border-r border-gray-100 flex-shrink-0">
                                                     <GripVertical className="w-4 h-4 text-gray-400" />
                                                 </div>
-
                                                 <div className="flex-1 min-w-0 bg-[#F5F5F5] p-[8px] flex flex-col justify-start gap-[6px] h-full overflow-hidden">
                                                     <h4 className="font-inter font-semibold text-[14px] text-black truncate w-full">
                                                         {item.places?.name || "Note"}
@@ -564,7 +653,6 @@ export default function ItineraryDetailView({ tripId, onDataUpdate }: ItineraryD
                                                         }
                                                     </p>
                                                 </div>
-
                                                 {item.item_type === 'place' && item.places && (
                                                     <div className="w-[109px] h-[102px] relative border-l border-[#1E518C] bg-gray-200 flex-shrink-0">
                                                         <Image
@@ -577,7 +665,6 @@ export default function ItineraryDetailView({ tripId, onDataUpdate }: ItineraryD
                                                     </div>
                                                 )}
                                             </div>
-
                                             <button
                                                 onClick={() => handleDeleteItem(item.id, dayData?.id || "")}
                                                 className="w-[28px] h-[28px] bg-[#F5F5F5] border border-[#EEEEEE] rounded-[30px] flex items-center justify-center flex-shrink-0 opacity-0 group-hover/card:opacity-100 transition-all shadow-sm hover:bg-red-50 hover:border-red-200 cursor-pointer"
@@ -587,23 +674,21 @@ export default function ItineraryDetailView({ tripId, onDataUpdate }: ItineraryD
                                         </div>
                                     ))}
 
-                                    {/* --- Saved Places Suggestions --- */}
-                                    {savedPlaces.length > 0 && (
+                                    {/* Saved Places Suggestions */}
+                                    {filteredSavedPlaces.length > 0 && (
                                         <div className="flex flex-col gap-[8px] mt-4">
                                             <div className="flex items-center gap-[8px]">
-                                                <span className="font-inter font-normal text-[12px] text-black">Saved Place</span>
+                                                <span className="font-inter font-normal text-[12px] text-black">Saved Place in {trip.name}</span>
                                                 <ChevronDown className="w-[16px] h-[16px] text-black" />
                                             </div>
-
                                             <div className="flex gap-[8px] overflow-x-auto pb-2 scrollbar-thin">
-                                                {savedPlaces.map((saved) => (
+                                                {filteredSavedPlaces.map((saved) => (
                                                     saved.places && (
                                                         <div key={saved.id} className="flex items-center gap-[10px] p-0 pr-2 border border-dashed border-[#9E9E9E] rounded-[8px] h-[40px] bg-white hover:bg-gray-50 flex-shrink-0 min-w-[150px]">
                                                             <div className="w-[40px] h-[40px] relative rounded-l-[8px] overflow-hidden">
                                                                 <Image src={getImageSrc(saved.places.images)} alt={saved.places.name} fill className="object-cover" unoptimized />
                                                             </div>
                                                             <span className="text-[12px] font-normal text-black truncate flex-1 max-w-[120px]">{saved.places.name}</span>
-
                                                             {dayData ? (
                                                                 <div
                                                                     onClick={() => handleAddSavedPlace(dayData.id, saved.places)}
@@ -630,49 +715,52 @@ export default function ItineraryDetailView({ tripId, onDataUpdate }: ItineraryD
                 })}
             </div>
 
-{/* --- RIGHT COLUMN: Map --- */}
-      <div className="w-[459px] bg-[#E5E5E5] overflow-hidden relative border border-gray-200 h-[928px] rounded-[16px] mt-[9px] sticky top-[20px] flex flex-col">
-        
-        {/* Header Section */}
-        <div className="w-full h-[52px] bg-white flex flex-row items-center justify-between px-[16px] border-b border-gray-200 flex-shrink-0 relative z-[1000]">
-            
-            {/* ✅ Left: Date Picker Trigger (Updated Style Frame 1760) */}
-            <div 
-                onClick={handleOpenDatePicker}
-                className="box-border flex flex-row items-center px-[8px] py-[4px] gap-[8px] bg-white border border-black rounded-[8px] cursor-pointer hover:bg-gray-50 transition-colors"
-            >
-                 <Calendar className="w-[16px] h-[16px] text-black" />
-                 <span className="font-inter font-normal text-[16px] leading-[19px] text-center text-black">
-                    {dateRangeStr}
-                 </span>
-            </div>
+            {/* --- RIGHT COLUMN: Map --- */}
+            <div className="w-[459px] bg-[#E5E5E5] overflow-hidden relative border border-gray-200 h-[928px] rounded-[16px] mt-[9px] sticky top-[20px] flex flex-col">
 
-            {/* Right: View All Button */}
-            <button className="box-border flex flex-row justify-center items-center px-[12px] py-[8px] gap-[8px] bg-[#2666B0] border-2 border-[#95C3EA] rounded-[16px] hover:bg-[#1e5594] transition-colors">
-                <span className="font-inter font-normal text-[14px] leading-[17px] text-white">
-                    View All
-                </span>
-            </button>
+                {/* Header Section */}
+                <div className="w-full h-[52px] bg-white flex flex-row items-center justify-between px-[16px] border-b border-gray-200 flex-shrink-0 relative z-[1000]">
 
-            {/* Date Picker Popover */}
-            {isDatePickerOpen && (
-                <div className="absolute top-[60px] left-[16px] animate-in fade-in zoom-in-95 duration-200 z-[1100]">
-                    <CustomDateRangePicker 
-                        startDate={tempDates.start}
-                        endDate={tempDates.end}
-                        onChange={handlePickerChange}
-                        onClose={() => setIsDatePickerOpen(false)}
-                    />
+                    {/* Left: Date Picker Trigger */}
+                    <div
+                        onClick={handleOpenDatePicker}
+                        className="box-border flex flex-row items-center px-[8px] py-[4px] gap-[8px] bg-white border border-black rounded-[8px] cursor-pointer hover:bg-gray-50 transition-colors"
+                    >
+                        <Calendar className="w-[16px] h-[16px] text-black" />
+                        <span className="font-inter font-normal text-[16px] leading-[19px] text-center text-black">
+                            {dateRangeStr}
+                        </span>
+                    </div>
+
+                    {/* Right: View All Button */}
+                    <button 
+                        onClick={handleViewAll}
+                        className={`box-border flex flex-row justify-center items-center px-[12px] py-[8px] gap-[8px] border-2 rounded-[16px] transition-colors ${isViewAll ? 'bg-[#154a85] border-[#1E518C] shadow-inner' : 'bg-[#2666B0] border-[#95C3EA] hover:bg-[#1e5594]'}`}
+                    >
+                        <span className="font-inter font-normal text-[14px] leading-[17px] text-white select-none">
+                            {isViewAll ? "Close All" : "View All"}
+                        </span>
+                    </button>
+
+                    {/* Date Picker Popover */}
+                    {isDatePickerOpen && (
+                        <div className="absolute top-[60px] left-[16px] animate-in fade-in zoom-in-95 duration-200 z-[1100]">
+                            <CustomDateRangePicker
+                                startDate={tempDates.start}
+                                endDate={tempDates.end}
+                                onChange={handlePickerChange}
+                                onClose={() => setIsDatePickerOpen(false)}
+                            />
+                        </div>
+                    )}
                 </div>
-            )}
-        </div>
 
-        {/* Map Container */}
-        <div className="flex-1 relative w-full h-full">
-            <ItineraryMap locations={mapLocations} />
-        </div>
+                {/* Map Container */}
+                <div className="flex-1 relative w-full h-full">
+                    <ItineraryMap locations={mapLocations} />
+                </div>
 
-      </div>
+            </div>
 
         </div>
     );

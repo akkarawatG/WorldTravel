@@ -25,6 +25,9 @@ export default function ItineraryPage() {
   const [viewState, setViewState] = useState<ViewState>('list');
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
   
+  // ✅ State สำหรับระบุวันที่ต้องการให้ Scroll ไปหา
+  const [targetDay, setTargetDay] = useState<number | null>(null);
+  
   // Data
   const [itineraries, setItineraries] = useState<Itinerary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -42,14 +45,13 @@ export default function ItineraryPage() {
                 .from('itineraries')
                 .select('id, name, start_date, end_date')
                 .eq('profile_id', user.id)
-                // .is('deleted_at', null)
                 .order('created_at', { ascending: false });
             
             if (error) throw error;
             setItineraries(data || []);
         }
-      } catch (error) {
-        console.error("Error fetching itineraries:", error);
+      } catch (error: any) {
+        console.error("Error fetching itineraries:", error.message || error);
       } finally {
         setIsLoading(false);
       }
@@ -88,11 +90,20 @@ export default function ItineraryPage() {
       setViewState('detail');
   };
 
-  // ✅ Helper Function เพื่อกำหนด viewMode ให้ถูกต้องตาม viewState
   const getSidebarViewMode = () => {
       if (viewState === 'detail') return 'detail';
       if (viewState === 'place_to_visit') return 'place_to_visit';
-      return 'default'; // สำหรับ 'list' และ 'create' ให้ active ที่ My Plan
+      return 'default'; 
+  };
+
+  // ✅ ฟังก์ชันรับ Event เมื่อกดวันที่ใน Sidebar
+  const handleDateClick = (dayNumber: number) => {
+      // รีเซ็ตค่าก่อนเพื่อให้ useEffect ใน DetailView ทำงานได้แม้กดวันเดิมซ้ำ
+      setTargetDay(null); 
+      setTimeout(() => {
+          setTargetDay(dayNumber);
+          setViewState('detail'); // บังคับให้กลับมาหน้า Detail ถ้าหลุดไปหน้าอื่น
+      }, 10);
   };
 
   return (
@@ -107,9 +118,10 @@ export default function ItineraryPage() {
                   onBackToList={() => setViewState('list')}
                   onPlaceToVisit={() => setViewState('place_to_visit')} 
                   
-                  // ✅ แก้ไขตรงนี้: เรียกใช้ฟังก์ชันคำนวณโหมด
+                  // ✅ ส่ง prop onDateClick
+                  onDateClick={handleDateClick}
+
                   viewMode={getSidebarViewMode()}
-                  
                   startDate={selectedTrip?.start_date}
                   endDate={selectedTrip?.end_date}
                />
@@ -122,7 +134,9 @@ export default function ItineraryPage() {
                ) : viewState === 'detail' ? (
                    <ItineraryDetailView 
                         tripId={selectedTripId} 
-                        onDataUpdate={handleDataRefresh} 
+                        onDataUpdate={handleDataRefresh}
+                        // ✅ ส่ง prop scrollToDay
+                        scrollToDay={targetDay} 
                    />
                ) : viewState === 'place_to_visit' ? ( 
                    <PlaceToVisit />
