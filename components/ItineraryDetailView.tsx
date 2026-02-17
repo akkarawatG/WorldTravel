@@ -5,29 +5,34 @@ import Image from "next/image";
 import dynamic from "next/dynamic";
 import {
     MapPin, Calendar, ChevronRight, ChevronDown, Plus,
-    GripVertical, Trash2, Loader2, Pencil, Check, X, ChevronLeft
+    GripVertical, Trash2, Loader2, Pencil, Check, X, ChevronLeft,
+    Car, Clock
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
+import { getRouteData } from "@/utils/openRouteService";
 
+// --- Load Map แบบ Dynamic ---
 const ItineraryMap = dynamic(() => import("./Map/ItineraryMap"), {
     ssr: false,
     loading: () => <div className="w-full h-full bg-gray-200 flex items-center justify-center">Loading Map...</div>
 });
 
+// --- Helper: เลือกสีตามวัน ---
 const getDayColor = (date: Date) => {
     const dayIndex = date.getDay();
     switch (dayIndex) {
-        case 1: return "#FFCF0F";
-        case 2: return "#FFCAD4";
-        case 3: return "#4CAF50";
-        case 4: return "#FF9800";
-        case 5: return "#3A82CE";
-        case 6: return "#8A38F5";
-        case 0: return "#F44336";
+        case 1: return "#FFCF0F"; // Mon
+        case 2: return "#FFCAD4"; // Tue
+        case 3: return "#4CAF50"; // Wed
+        case 4: return "#FF9800"; // Thu
+        case 5: return "#3A82CE"; // Fri
+        case 6: return "#8A38F5"; // Sat
+        case 0: return "#F44336"; // Sun
         default: return "#E0E0E0";
     }
 };
 
+// --- Custom Date Picker Component ---
 function CustomDateRangePicker({
     startDate,
     endDate,
@@ -127,7 +132,7 @@ function CustomDateRangePicker({
     );
 }
 
-// --- Types ---
+// --- Types & Interfaces ---
 
 interface Place {
     id: string;
@@ -137,7 +142,7 @@ interface Place {
     images: string[] | string | null;
     latitude: number;
     longitude: number;
-    country?: string;
+    country?: string; 
 }
 
 interface ScheduleItem {
@@ -171,18 +176,20 @@ interface SavedPlace {
 interface ItineraryDetailViewProps {
     tripId: string | null;
     onDataUpdate?: () => void;
-    // ✅ เพิ่ม Prop รับค่าวันที่ต้องการให้ Scroll
-    scrollToDay?: number | null;
+    scrollToDay?: number | null; 
 }
 
+// --- MAIN COMPONENT ---
 export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay }: ItineraryDetailViewProps) {
     const supabase = createClient();
 
+    // State
     const [loading, setLoading] = useState(true);
     const [trip, setTrip] = useState<ItineraryData | null>(null);
     const [schedules, setSchedules] = useState<DailyScheduleData[]>([]);
     const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([]);
 
+    // UI State
     const [expandedDayIndex, setExpandedDayIndex] = useState<number | null>(0);
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [editedTitle, setEditedTitle] = useState("");
@@ -190,16 +197,55 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
     const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
     const [tempDates, setTempDates] = useState({ start: "", end: "" });
 
+    // View All State
     const [isViewAll, setIsViewAll] = useState(false);
 
-    // ✅ useEffect สำหรับจัดการ Scrolling
+    // ✅ 1. เพิ่ม geometry เข้าไปใน type ของ State
+    const [travelStats, setTravelStats] = useState<Record<string, { dist: string, dur: string, geometry: any }>>({});
+
+    // ✅ Effect: คำนวณเส้นทางเมื่อ schedules เปลี่ยนแปลง
+    useEffect(() => {
+        const calculateRoutes = async () => {
+            if (!schedules.length) return;
+
+            // ✅ ต้องกำหนด Type ให้ตรงกับ State ด้านบน
+            const newStats: Record<string, { dist: string, dur: string, geometry: any }> = {};
+
+            for (const day of schedules) {
+                const sortedItems = [...day.daily_schedule_items].sort((a, b) => a.order_index - b.order_index);
+
+                for (let i = 1; i < sortedItems.length; i++) {
+                    const prev = sortedItems[i - 1];
+                    const curr = sortedItems[i];
+
+                    if (prev.item_type === 'place' && prev.places && curr.item_type === 'place' && curr.places) {
+                        const res = await getRouteData(
+                            { lat: prev.places.latitude, lng: prev.places.longitude },
+                            { lat: curr.places.latitude, lng: curr.places.longitude }
+                        );
+
+                        if (res) {
+                            newStats[curr.id] = {
+                                dist: res.distance,
+                                dur: res.duration,
+                                geometry: res.geometry // ✅ 2. เก็บ Geometry ที่ได้จาก API ลง State
+                            };
+                        }
+                    }
+                }
+            }
+            setTravelStats(prev => ({ ...prev, ...newStats }));
+        };
+
+        calculateRoutes();
+    }, [schedules]);
+
+    // --- Effect: Handle Scrolling ---
     useEffect(() => {
         if (scrollToDay !== null && scrollToDay !== undefined && scrollToDay > 0) {
-            // 1. เปิด Accordion ของวันนั้น (ลบ 1 เพราะ index เริ่มที่ 0)
             setExpandedDayIndex(scrollToDay - 1);
-            setIsViewAll(false); // ปิดโหมด View All เพื่อโฟกัสวัน
-
-            // 2. สั่ง Scroll ไปหา Element
+            setIsViewAll(false);
+            
             setTimeout(() => {
                 const element = document.getElementById(`day-${scrollToDay}`);
                 if (element) {
@@ -209,9 +255,11 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
         }
     }, [scrollToDay]);
 
+    // --- Logic: Filter Saved Places ---
     const filteredSavedPlaces = useMemo(() => {
         if (!trip || !trip.name || savedPlaces.length === 0) return [];
         const tripCountry = trip.name.trim().toLowerCase();
+        
         return savedPlaces.filter(saved => {
             const placeCountry = saved.places?.country?.trim().toLowerCase();
             return (
@@ -222,6 +270,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
         });
     }, [savedPlaces, trip]);
 
+    // --- Fetching Logic ---
     const fetchSchedules = async (id: string) => {
         const { data, error } = await supabase
             .from('daily_schedules')
@@ -333,34 +382,32 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
         return days;
     }, [trip]);
 
-const mapLocations = useMemo(() => {
+    // --- Logic: Prepare Map Locations ---
+    const mapLocations = useMemo(() => {
         if (!trip) return [];
-
         const locations: any[] = [];
 
-        // กรณี 1: View All (แสดงทั้งหมด แบ่งสีตามวัน และเลข Pin เรียงต่อกัน)
         if (isViewAll) {
-            let globalIndex = 1; // ✅ 1. สร้างตัวนับลำดับรวม เริ่มต้นที่ 1
-
+            let globalIndex = 1;
             schedules.forEach((daySchedule) => {
-                // คำนวณวันเพื่อหาสี
                 const date = new Date(trip.start_date);
                 date.setDate(date.getDate() + (daySchedule.day_number - 1));
                 const color = getDayColor(date);
 
                 daySchedule.daily_schedule_items.forEach((item) => {
                     if (item.item_type === 'place' && item.places) {
+                        // ✅ 3. ดึง geometry จาก State ส่งไปให้ Map
+                        const stats = travelStats[item.id]; 
+                        
                         locations.push({
                             id: item.id,
                             name: item.places.name,
                             lat: item.places.latitude,
                             lng: item.places.longitude,
-                            
-                            // ✅ 2. ใช้ globalIndex แทน item.order_index แล้วบวกค่าเพิ่มทีละ 1
-                            order_index: globalIndex++, 
-                            
+                            order_index: globalIndex++,
                             color: color, 
-                            day_number: daySchedule.day_number 
+                            day_number: daySchedule.day_number,
+                            geometry: stats?.geometry || null // ส่ง geometry ไปด้วย
                         });
                     }
                 });
@@ -368,7 +415,6 @@ const mapLocations = useMemo(() => {
             return locations;
         }
 
-        // กรณี 2: แสดงเฉพาะวันที่เปิดอยู่ (ใช้ลำดับของวันนั้นๆ ตามปกติ)
         if (expandedDayIndex === null) return [];
         const currentDayNum = expandedDayIndex + 1;
         const dbSchedule = schedules.find(s => s.day_number === currentDayNum);
@@ -380,24 +426,25 @@ const mapLocations = useMemo(() => {
 
             dbSchedule.daily_schedule_items.forEach((item) => {
                 if (item.item_type === 'place' && item.places) {
+                    // ✅ 3. ดึง geometry จาก State ส่งไปให้ Map (กรณีดูรายวัน)
+                    const stats = travelStats[item.id];
+
                     locations.push({
                         id: item.id,
                         name: item.places.name,
                         lat: item.places.latitude,
                         lng: item.places.longitude,
-                        
-                        // ✅ กรณีดูทีละวัน ใช้ลำดับเดิมของวันนั้นๆ (1, 2, 3...)
-                        order_index: item.order_index, 
-                        
-                        color: color 
+                        order_index: item.order_index,
+                        color: color,
+                        geometry: stats?.geometry || null // ส่ง geometry ไปด้วย
                     });
                 }
             });
         }
-        
         return locations;
-    }, [expandedDayIndex, schedules, isViewAll, trip]);
+    }, [expandedDayIndex, schedules, isViewAll, trip, travelStats]); // ✅ เพิ่ม travelStats เป็น dependency
 
+    // --- Handlers ---
     const toggleDay = (index: number) => {
         if (expandedDayIndex === index) {
             setExpandedDayIndex(null); 
@@ -527,19 +574,61 @@ const mapLocations = useMemo(() => {
 
     const handleDeleteItem = async (itemId: string, dayId: string) => {
         if (!confirm("Remove this place?")) return;
+
         try {
-            const { error } = await supabase.from('daily_schedule_items').delete().eq('id', itemId);
-            if (error) throw error;
+            // 1. Delete item
+            const { error: deleteError } = await supabase
+                .from('daily_schedule_items')
+                .delete()
+                .eq('id', itemId);
+
+            if (deleteError) throw deleteError;
+
+            // 2. Find schedule
+            const currentDaySchedule = schedules.find(day => day.id === dayId);
+            if (!currentDaySchedule) return;
+
+            // 3. Re-index remaining items
+            const remainingItems = currentDaySchedule.daily_schedule_items
+                .filter(item => item.id !== itemId)
+                .sort((a, b) => a.order_index - b.order_index)
+                .map((item, index) => ({
+                    ...item,
+                    order_index: index + 1
+                }));
+
+            // 4. Update DB
+            const updates = remainingItems.map(item => ({
+                id: item.id,
+                daily_schedule_id: dayId,
+                place_id: item.place_id,
+                item_type: item.item_type,
+                order_index: item.order_index
+            }));
+
+            if (updates.length > 0) {
+                const { error: updateError } = await supabase
+                    .from('daily_schedule_items')
+                    .upsert(updates, { onConflict: 'id' });
+
+                if (updateError) throw updateError;
+            }
+
+            // 5. Update State
             setSchedules(prev => prev.map(day => {
                 if (day.id === dayId) {
                     return {
                         ...day,
-                        daily_schedule_items: day.daily_schedule_items.filter(i => i.id !== itemId)
+                        daily_schedule_items: remainingItems
                     };
                 }
                 return day;
             }));
-        } catch (err) { console.error("Delete failed", err); }
+
+        } catch (err: any) {
+            console.error("Delete failed:", err.message);
+            alert("Failed to delete item");
+        }
     };
 
     const getImageSrc = (images: string[] | string | null | undefined) => {
@@ -564,7 +653,7 @@ const mapLocations = useMemo(() => {
             <div className="w-[433px] flex flex-col gap-[24px] overflow-y-auto pr-2 h-[900px] scrollbar-hide pb-20">
 
                 {/* Title & Edit */}
-                <div className="flex flex-col gap-[24px]">
+                <div className="flex flex-col gap-[24px] items-center">
                     {isEditingTitle ? (
                         <div className="flex items-center gap-2 w-full justify-center">
                             <input
@@ -609,7 +698,6 @@ const mapLocations = useMemo(() => {
                     return (
                         <div key={day.day_number} className="flex flex-col w-full">
                             <div
-                                // ✅ เพิ่ม ID ให้แต่ละวันเพื่อใช้ Scroll
                                 id={`day-${day.day_number}`}
                                 className="flex items-center gap-[13px] py-2 cursor-pointer w-full hover:bg-gray-50 rounded px-2 transition-colors"
                                 onClick={() => toggleDay(index)}
@@ -631,48 +719,89 @@ const mapLocations = useMemo(() => {
                                     </div>
 
                                     {/* Items List */}
-                                    {items.map((item) => (
-                                        <div key={item.id} className="flex flex-row items-center gap-[8px] relative group/card w-full pr-[10px]">
-                                            <div className="absolute -left-[34px] top-[50%] -translate-y-1/2 w-[36px] flex justify-center">
-                                                <div className="w-[20px] h-[25px] bg-[#1E518C] rounded-[4px] flex items-center justify-center text-white text-xs z-10 border border-[#C2DCF3]">
-                                                    {item.order_index}
+                                    {items.map((item, itemIndex) => {
+                                        const stats = travelStats[item.id];
+
+                                        return (
+                                            <div key={item.id} className="flex flex-col gap-[8px] w-full relative group/card">
+                                                
+                                                {/* Row 1: Place Card */}
+                                                <div className="flex flex-row items-center gap-[8px] w-full pr-[10px]">
+                                                    <div className="absolute -left-[34px] top-[51px] -translate-y-1/2 w-[36px] flex justify-center">
+                                                        <div className="w-[20px] h-[25px] bg-[#1E518C] rounded-[4px] flex items-center justify-center text-white text-xs z-10 border border-[#C2DCF3]">
+                                                            {item.order_index}
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex flex-row flex-1 min-w-0 h-[101px] bg-white rounded-[8px] overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-transparent hover:border-[#1E518C]">
+                                                        <div className="w-[24px] bg-gray-50 flex items-center justify-center cursor-grab active:cursor-grabbing border-r border-gray-100 flex-shrink-0">
+                                                            <GripVertical className="w-4 h-4 text-gray-400" />
+                                                        </div>
+                                                        <div className="flex-1 min-w-0 bg-[#F5F5F5] p-[8px] flex flex-col justify-start gap-[6px] h-full overflow-hidden">
+                                                            <h4 className="font-inter font-semibold text-[14px] text-black truncate w-full">
+                                                                {item.places?.name || "Note"}
+                                                            </h4>
+                                                            <p className="font-inter font-normal text-[12px] text-[#212121] leading-[15px] line-clamp-3">
+                                                                {item.item_type === 'note'
+                                                                    ? item.note
+                                                                    : (item.places?.description_short || item.places?.description || "No description")
+                                                                }
+                                                            </p>
+                                                        </div>
+                                                        {item.item_type === 'place' && item.places && (
+                                                            <div className="w-[109px] h-[101px] relative border-l border-[#1E518C] bg-gray-200 flex-shrink-0">
+                                                                <Image
+                                                                    src={getImageSrc(item.places.images)}
+                                                                    alt={item.places.name}
+                                                                    fill
+                                                                    className="object-cover"
+                                                                    unoptimized
+                                                                />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleDeleteItem(item.id, dayData?.id || "")}
+                                                        className="w-[28px] h-[28px] bg-[#F5F5F5] border border-[#EEEEEE] rounded-[30px] flex items-center justify-center flex-shrink-0 opacity-0 group-hover/card:opacity-100 transition-all shadow-sm hover:bg-red-50 hover:border-red-200 cursor-pointer"
+                                                    >
+                                                        <Trash2 className="w-[14px] h-[14px] text-[#212121] hover:text-red-500" />
+                                                    </button>
                                                 </div>
-                                            </div>
-                                            <div className="flex flex-row flex-1 min-w-0 h-[102px] bg-white rounded-[8px] overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-transparent hover:border-[#1E518C]">
-                                                <div className="w-[24px] bg-gray-50 flex items-center justify-center cursor-grab active:cursor-grabbing border-r border-gray-100 flex-shrink-0">
-                                                    <GripVertical className="w-4 h-4 text-gray-400" />
-                                                </div>
-                                                <div className="flex-1 min-w-0 bg-[#F5F5F5] p-[8px] flex flex-col justify-start gap-[6px] h-full overflow-hidden">
-                                                    <h4 className="font-inter font-semibold text-[14px] text-black truncate w-full">
-                                                        {item.places?.name || "Note"}
-                                                    </h4>
-                                                    <p className="font-inter font-normal text-[12px] text-[#212121] leading-[15px] line-clamp-3">
-                                                        {item.item_type === 'note'
-                                                            ? item.note
-                                                            : (item.places?.description_short || item.places?.description || "No description")
-                                                        }
-                                                    </p>
-                                                </div>
-                                                {item.item_type === 'place' && item.places && (
-                                                    <div className="w-[109px] h-[102px] relative border-l border-[#1E518C] bg-gray-200 flex-shrink-0">
-                                                        <Image
-                                                            src={getImageSrc(item.places.images)}
-                                                            alt={item.places.name}
-                                                            fill
-                                                            className="object-cover"
-                                                            unoptimized
-                                                        />
+
+                                                {/* Row 2: Travel Info */}
+                                                {itemIndex > 0 && item.item_type === 'place' && (
+                                                    <div className="flex flex-row items-center gap-[16px] pl-[34px] w-full animate-in fade-in slide-in-from-top-1">
+                                                        {stats ? (
+                                                            <>
+                                                                <div className="flex items-center gap-[6px] bg-blue-50 px-2 py-1 rounded-md">
+                                                                    <Clock className="w-[14px] h-[14px] text-blue-600" />
+                                                                    <span className="font-inter font-medium text-[11px] text-blue-700">
+                                                                        {stats.dur}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="flex items-center gap-[6px] bg-gray-50 px-2 py-1 rounded-md">
+                                                                    <Car className="w-[14px] h-[14px] text-gray-600" />
+                                                                    <span className="font-inter font-medium text-[11px] text-gray-700">
+                                                                        {stats.dist}
+                                                                    </span>
+                                                                </div>
+                                                            </>
+                                                        ) : (
+                                                            <div className="flex items-center gap-[8px] opacity-40">
+                                                                <Loader2 className="w-[12px] h-[12px] animate-spin" />
+                                                                <span className="text-[10px]">Calculating route...</span>
+                                                            </div>
+                                                        )}
+                                                        
+                                                        <button className="flex items-center gap-[6px] ml-auto text-[11px] text-gray-400 hover:text-blue-500 transition-colors mr-[10px]">
+                                                            <Clock className="w-[14px] h-[14px]" />
+                                                            <span>Add time</span>
+                                                        </button>
                                                     </div>
                                                 )}
+
                                             </div>
-                                            <button
-                                                onClick={() => handleDeleteItem(item.id, dayData?.id || "")}
-                                                className="w-[28px] h-[28px] bg-[#F5F5F5] border border-[#EEEEEE] rounded-[30px] flex items-center justify-center flex-shrink-0 opacity-0 group-hover/card:opacity-100 transition-all shadow-sm hover:bg-red-50 hover:border-red-200 cursor-pointer"
-                                            >
-                                                <Trash2 className="w-[14px] h-[14px] text-[#212121] hover:text-red-500" />
-                                            </button>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
 
                                     {/* Saved Places Suggestions */}
                                     {filteredSavedPlaces.length > 0 && (
@@ -689,18 +818,12 @@ const mapLocations = useMemo(() => {
                                                                 <Image src={getImageSrc(saved.places.images)} alt={saved.places.name} fill className="object-cover" unoptimized />
                                                             </div>
                                                             <span className="text-[12px] font-normal text-black truncate flex-1 max-w-[120px]">{saved.places.name}</span>
-                                                            {dayData ? (
-                                                                <div
-                                                                    onClick={() => handleAddSavedPlace(dayData.id, saved.places)}
-                                                                    className="w-[24px] h-[24px] bg-[#F5F5F5] border border-[#EEEEEE] rounded-full flex items-center justify-center mr-1 cursor-pointer hover:bg-[#3A82CE] hover:border-[#3A82CE] group"
-                                                                >
-                                                                    <Plus className="w-[16px] h-[16px] text-black group-hover:text-white" />
-                                                                </div>
-                                                            ) : (
-                                                                <div className="w-[24px] h-[24px] bg-gray-100 border border-gray-200 rounded-full flex items-center justify-center mr-1 cursor-not-allowed opacity-50" title="Extend trip dates to enable">
-                                                                    <Plus className="w-[16px] h-[16px] text-gray-400" />
-                                                                </div>
-                                                            )}
+                                                            <div
+                                                                onClick={() => handleAddSavedPlace(dayData?.id, saved.places)}
+                                                                className="w-[24px] h-[24px] bg-[#F5F5F5] border border-[#EEEEEE] rounded-full flex items-center justify-center mr-1 cursor-pointer hover:bg-[#3A82CE] hover:border-[#3A82CE] group"
+                                                            >
+                                                                <Plus className="w-[16px] h-[16px] text-black group-hover:text-white" />
+                                                            </div>
                                                         </div>
                                                     )
                                                 ))}
@@ -718,10 +841,7 @@ const mapLocations = useMemo(() => {
             {/* --- RIGHT COLUMN: Map --- */}
             <div className="w-[459px] bg-[#E5E5E5] overflow-hidden relative border border-gray-200 h-[928px] rounded-[16px] mt-[9px] sticky top-[20px] flex flex-col">
 
-                {/* Header Section */}
                 <div className="w-full h-[52px] bg-white flex flex-row items-center justify-between px-[16px] border-b border-gray-200 flex-shrink-0 relative z-[1000]">
-
-                    {/* Left: Date Picker Trigger */}
                     <div
                         onClick={handleOpenDatePicker}
                         className="box-border flex flex-row items-center px-[8px] py-[4px] gap-[8px] bg-white border border-black rounded-[8px] cursor-pointer hover:bg-gray-50 transition-colors"
@@ -732,7 +852,6 @@ const mapLocations = useMemo(() => {
                         </span>
                     </div>
 
-                    {/* Right: View All Button */}
                     <button 
                         onClick={handleViewAll}
                         className={`box-border flex flex-row justify-center items-center px-[12px] py-[8px] gap-[8px] border-2 rounded-[16px] transition-colors ${isViewAll ? 'bg-[#154a85] border-[#1E518C] shadow-inner' : 'bg-[#2666B0] border-[#95C3EA] hover:bg-[#1e5594]'}`}
@@ -742,7 +861,6 @@ const mapLocations = useMemo(() => {
                         </span>
                     </button>
 
-                    {/* Date Picker Popover */}
                     {isDatePickerOpen && (
                         <div className="absolute top-[60px] left-[16px] animate-in fade-in zoom-in-95 duration-200 z-[1100]">
                             <CustomDateRangePicker
@@ -755,13 +873,10 @@ const mapLocations = useMemo(() => {
                     )}
                 </div>
 
-                {/* Map Container */}
                 <div className="flex-1 relative w-full h-full">
                     <ItineraryMap locations={mapLocations} />
                 </div>
-
             </div>
-
         </div>
     );
 }
