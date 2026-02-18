@@ -10,6 +10,10 @@ import {
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { getRouteData } from "@/utils/openRouteService";
+import TimePickerPopup from "./TimePickerPopup";
+import { formatTimeDisplay } from "@/utils/timeHelpers";
+// ✅ 1. เพิ่ม Import Drag & Drop
+import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 
 // --- Load Map แบบ Dynamic ---
 const ItineraryMap = dynamic(() => import("./Map/ItineraryMap"), {
@@ -152,6 +156,8 @@ interface ScheduleItem {
     note: string;
     order_index: number;
     places: Place | null;
+    start_time?: string | null;
+    end_time?: string | null;
 }
 
 interface DailyScheduleData {
@@ -200,15 +206,96 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
     // View All State
     const [isViewAll, setIsViewAll] = useState(false);
 
-    // ✅ 1. เพิ่ม geometry เข้าไปใน type ของ State
+    // Active TimePicker State
+    const [activeTimePickerId, setActiveTimePickerId] = useState<string | null>(null);
+
+    // Travel Stats State
     const [travelStats, setTravelStats] = useState<Record<string, { dist: string, dur: string, geometry: any }>>({});
 
-    // ✅ Effect: คำนวณเส้นทางเมื่อ schedules เปลี่ยนแปลง
+    // ✅ 2. ฟังก์ชัน Handle Drag & Drop
+    const onDragEnd = async (result: DropResult) => {
+        const { source, destination } = result;
+
+        // ถ้าลากไปวางในที่ว่าง หรือวางที่เดิม
+        if (!destination) return;
+        if (source.droppableId === destination.droppableId && source.index === destination.index) return;
+
+        // ดึงข้อมูลวันต้นทาง และ วันปลายทาง
+        const sourceDayId = source.droppableId;
+        const destDayId = destination.droppableId;
+
+        // Copy State มาเพื่อแก้ไข
+        const newSchedules = JSON.parse(JSON.stringify(schedules)) as DailyScheduleData[];
+        const sourceDayIndex = newSchedules.findIndex(s => s.id === sourceDayId);
+        const destDayIndex = newSchedules.findIndex(s => s.id === destDayId);
+
+        if (sourceDayIndex === -1 || destDayIndex === -1) return;
+
+        const sourceItems = newSchedules[sourceDayIndex].daily_schedule_items;
+        const destItems = newSchedules[destDayIndex].daily_schedule_items;
+
+        // ดึง Item ออกจากตำแหน่งเดิม
+        const [movedItem] = sourceItems.splice(source.index, 1);
+        
+        // แทรก Item ลงในตำแหน่งใหม่
+        destItems.splice(destination.index, 0, movedItem);
+
+        // ฟังก์ชันช่วยเรียงลำดับ order_index ใหม่ (1, 2, 3...)
+        const reindexItems = (items: ScheduleItem[]) => {
+            return items.map((item, index) => ({
+                ...item,
+                order_index: index + 1
+            }));
+        };
+
+        // Re-index ทั้งต้นทางและปลายทาง
+        newSchedules[sourceDayIndex].daily_schedule_items = reindexItems(sourceItems);
+        if (sourceDayId !== destDayId) {
+            newSchedules[destDayIndex].daily_schedule_items = reindexItems(destItems);
+        } else {
+            // ถ้าวันเดียวกัน destItems ก็คือ sourceItems ที่ถูกแก้แล้ว
+            newSchedules[sourceDayIndex].daily_schedule_items = reindexItems(sourceItems);
+        }
+
+        // อัปเดตหน้าจอก่อน (Optimistic UI)
+        setSchedules(newSchedules);
+
+        // บันทึกลง Supabase
+        try {
+            const itemsToUpdate: any[] = [];
+            // เตรียมข้อมูลที่จะอัปเดต (เฉพาะวันที่เกี่ยวข้อง)
+            const daysToUpdate = sourceDayId === destDayId 
+                ? [newSchedules[sourceDayIndex]] 
+                : [newSchedules[sourceDayIndex], newSchedules[destDayIndex]];
+
+            daysToUpdate.forEach(day => {
+                day.daily_schedule_items.forEach(item => {
+                    itemsToUpdate.push({
+                        id: item.id,
+                        order_index: item.order_index,
+                        daily_schedule_id: day.id // เผื่อกรณีลากข้ามวัน
+                    });
+                });
+            });
+
+            if (itemsToUpdate.length > 0) {
+                const { error } = await supabase
+                    .from('daily_schedule_items')
+                    .upsert(itemsToUpdate, { onConflict: 'id' });
+                
+                if (error) throw error;
+            }
+        } catch (err) {
+            console.error("Drag update failed:", err);
+            // ถ้า Error อาจจะโหลดข้อมูลใหม่ หรือแจ้งเตือน
+        }
+    };
+
+    // Effect: Calculate Routes
     useEffect(() => {
         const calculateRoutes = async () => {
             if (!schedules.length) return;
 
-            // ✅ ต้องกำหนด Type ให้ตรงกับ State ด้านบน
             const newStats: Record<string, { dist: string, dur: string, geometry: any }> = {};
 
             for (const day of schedules) {
@@ -228,7 +315,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                             newStats[curr.id] = {
                                 dist: res.distance,
                                 dur: res.duration,
-                                geometry: res.geometry // ✅ 2. เก็บ Geometry ที่ได้จาก API ลง State
+                                geometry: res.geometry
                             };
                         }
                     }
@@ -240,7 +327,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
         calculateRoutes();
     }, [schedules]);
 
-    // --- Effect: Handle Scrolling ---
+    // Effect: Scrolling
     useEffect(() => {
         if (scrollToDay !== null && scrollToDay !== undefined && scrollToDay > 0) {
             setExpandedDayIndex(scrollToDay - 1);
@@ -255,7 +342,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
         }
     }, [scrollToDay]);
 
-    // --- Logic: Filter Saved Places ---
+    // Logic: Filter Saved Places
     const filteredSavedPlaces = useMemo(() => {
         if (!trip || !trip.name || savedPlaces.length === 0) return [];
         const tripCountry = trip.name.trim().toLowerCase();
@@ -270,14 +357,14 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
         });
     }, [savedPlaces, trip]);
 
-    // --- Fetching Logic ---
+    // Fetching Logic
     const fetchSchedules = async (id: string) => {
         const { data, error } = await supabase
             .from('daily_schedules')
             .select(`
             id, day_number, 
             daily_schedule_items (
-                id, place_id, item_type, note, order_index,
+                id, place_id, item_type, note, order_index, start_time, end_time,
                 places (id, name, description_short, images, lat, lon, country) 
             )
         `)
@@ -382,7 +469,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
         return days;
     }, [trip]);
 
-    // --- Logic: Prepare Map Locations ---
+    // Map Locations Logic
     const mapLocations = useMemo(() => {
         if (!trip) return [];
         const locations: any[] = [];
@@ -396,9 +483,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
 
                 daySchedule.daily_schedule_items.forEach((item) => {
                     if (item.item_type === 'place' && item.places) {
-                        // ✅ 3. ดึง geometry จาก State ส่งไปให้ Map
                         const stats = travelStats[item.id]; 
-                        
                         locations.push({
                             id: item.id,
                             name: item.places.name,
@@ -407,7 +492,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                             order_index: globalIndex++,
                             color: color, 
                             day_number: daySchedule.day_number,
-                            geometry: stats?.geometry || null // ส่ง geometry ไปด้วย
+                            geometry: stats?.geometry || null 
                         });
                     }
                 });
@@ -426,9 +511,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
 
             dbSchedule.daily_schedule_items.forEach((item) => {
                 if (item.item_type === 'place' && item.places) {
-                    // ✅ 3. ดึง geometry จาก State ส่งไปให้ Map (กรณีดูรายวัน)
                     const stats = travelStats[item.id];
-
                     locations.push({
                         id: item.id,
                         name: item.places.name,
@@ -436,13 +519,13 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                         lng: item.places.longitude,
                         order_index: item.order_index,
                         color: color,
-                        geometry: stats?.geometry || null // ส่ง geometry ไปด้วย
+                        geometry: stats?.geometry || null 
                     });
                 }
             });
         }
         return locations;
-    }, [expandedDayIndex, schedules, isViewAll, trip, travelStats]); // ✅ เพิ่ม travelStats เป็น dependency
+    }, [expandedDayIndex, schedules, isViewAll, trip, travelStats]); 
 
     // --- Handlers ---
     const toggleDay = (index: number) => {
@@ -576,7 +659,6 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
         if (!confirm("Remove this place?")) return;
 
         try {
-            // 1. Delete item
             const { error: deleteError } = await supabase
                 .from('daily_schedule_items')
                 .delete()
@@ -584,11 +666,9 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
 
             if (deleteError) throw deleteError;
 
-            // 2. Find schedule
             const currentDaySchedule = schedules.find(day => day.id === dayId);
             if (!currentDaySchedule) return;
 
-            // 3. Re-index remaining items
             const remainingItems = currentDaySchedule.daily_schedule_items
                 .filter(item => item.id !== itemId)
                 .sort((a, b) => a.order_index - b.order_index)
@@ -597,7 +677,6 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                     order_index: index + 1
                 }));
 
-            // 4. Update DB
             const updates = remainingItems.map(item => ({
                 id: item.id,
                 daily_schedule_id: dayId,
@@ -614,7 +693,6 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                 if (updateError) throw updateError;
             }
 
-            // 5. Update State
             setSchedules(prev => prev.map(day => {
                 if (day.id === dayId) {
                     return {
@@ -628,6 +706,57 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
         } catch (err: any) {
             console.error("Delete failed:", err.message);
             alert("Failed to delete item");
+        }
+    };
+
+    const handleSaveTime = async (itemId: string, start: string, end: string) => {
+        try {
+            const { error } = await supabase
+                .from('daily_schedule_items')
+                .update({ 
+                    start_time: start, 
+                    end_time: end 
+                })
+                .eq('id', itemId);
+
+            if (error) throw error;
+
+            setSchedules(prev => prev.map(day => ({
+                ...day,
+                daily_schedule_items: day.daily_schedule_items.map(item => 
+                    item.id === itemId 
+                    ? { ...item, start_time: start, end_time: end } 
+                    : item
+                )
+            })));
+
+            setActiveTimePickerId(null);
+        } catch (err) {
+            console.error("Error saving time:", err);
+        }
+    };
+
+    const handleClearTime = async (itemId: string) => {
+        try {
+            const { error } = await supabase
+                .from('daily_schedule_items')
+                .update({ start_time: null, end_time: null })
+                .eq('id', itemId);
+
+            if (error) throw error;
+
+            setSchedules(prev => prev.map(day => ({
+                ...day,
+                daily_schedule_items: day.daily_schedule_items.map(item => 
+                    item.id === itemId 
+                    ? { ...item, start_time: null, end_time: null } 
+                    : item
+                )
+            })));
+
+            setActiveTimePickerId(null);
+        } catch (err) {
+            console.error("Error clearing time:", err);
         }
     };
 
@@ -650,193 +779,246 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
         <div className="w-full flex flex-row gap-[24px] relative h-full min-h-[900px]">
 
             {/* --- LEFT COLUMN: Timeline --- */}
-            <div className="w-[433px] flex flex-col gap-[24px] overflow-y-auto pr-2 h-[900px] scrollbar-hide pb-20">
+            {/* ✅ 3. หุ้ม DragDropContext ไว้ด้านนอก */}
+            <DragDropContext onDragEnd={onDragEnd}>
+                <div className="w-[433px] flex flex-col gap-[24px] overflow-y-auto pr-2 h-[900px] scrollbar-hide pb-20">
 
-                {/* Title & Edit */}
-                <div className="flex flex-col gap-[24px] items-center">
-                    {isEditingTitle ? (
-                        <div className="flex items-center gap-2 w-full justify-center">
-                            <input
-                                type="text"
-                                value={editedTitle}
-                                onChange={(e) => setEditedTitle(e.target.value)}
-                                className="font-inter font-semibold text-[32px] leading-[39px] text-black text-center border-b-2 border-[#3A82CE] outline-none bg-transparent min-w-[200px]"
-                                autoFocus
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') handleUpdateTitle();
-                                    if (e.key === 'Escape') {
-                                        setEditedTitle(trip.name);
-                                        setIsEditingTitle(false);
-                                    }
-                                }}
-                            />
-                            <button onClick={handleUpdateTitle} className="p-2 hover:bg-green-50 rounded-full transition-colors">
-                                <Check className="w-6 h-6 text-green-600" />
-                            </button>
-                            <button onClick={() => { setEditedTitle(trip.name); setIsEditingTitle(false); }} className="p-2 hover:bg-red-50 rounded-full transition-colors">
-                                <X className="w-6 h-6 text-red-600" />
-                            </button>
-                        </div>
-                    ) : (
-                        <div className="group flex items-center gap-3 cursor-pointer p-2 hover:bg-gray-50 rounded-lg transition-colors" onClick={() => {
-                            setEditedTitle(trip.name);
-                            setIsEditingTitle(true);
-                        }}>
-                            <h1 className="font-inter font-semibold text-[32px] leading-[39px] text-black text-center">
-                                {trip.name}
-                            </h1>
-                            <Pencil className="w-5 h-5 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
-                    )}
-                </div>
-
-                {daysArray.map((day, index) => {
-                    const dayData = schedules.find(s => s.day_number === day.day_number);
-                    const items = dayData?.daily_schedule_items || [];
-                    const isExpanded = expandedDayIndex === index;
-
-                    return (
-                        <div key={day.day_number} className="flex flex-col w-full">
-                            <div
-                                id={`day-${day.day_number}`}
-                                className="flex items-center gap-[13px] py-2 cursor-pointer w-full hover:bg-gray-50 rounded px-2 transition-colors"
-                                onClick={() => toggleDay(index)}
-                            >
-                                <div className="w-[32px] h-[32px] flex items-center justify-center">
-                                    <ChevronDown className={`w-8 h-8 text-black transition-transform ${isExpanded ? 'rotate-0' : '-rotate-90'}`} />
-                                </div>
-                                <span className="font-inter font-bold text-[18px] text-black flex-1">{day.dateString}</span>
+                    <div className="flex flex-col gap-[24px] items-center">
+                        {isEditingTitle ? (
+                            <div className="flex items-center gap-2 w-full justify-center">
+                                <input
+                                    type="text"
+                                    value={editedTitle}
+                                    onChange={(e) => setEditedTitle(e.target.value)}
+                                    className="font-inter font-semibold text-[32px] leading-[39px] text-black text-center border-b-2 border-[#3A82CE] outline-none bg-transparent min-w-[200px]"
+                                    autoFocus
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') handleUpdateTitle();
+                                        if (e.key === 'Escape') {
+                                            setEditedTitle(trip.name);
+                                            setIsEditingTitle(false);
+                                        }
+                                    }}
+                                />
+                                <button onClick={handleUpdateTitle} className="p-2 hover:bg-green-50 rounded-full transition-colors">
+                                    <Check className="w-6 h-6 text-green-600" />
+                                </button>
+                                <button onClick={() => { setEditedTitle(trip.name); setIsEditingTitle(false); }} className="p-2 hover:bg-red-50 rounded-full transition-colors">
+                                    <X className="w-6 h-6 text-red-600" />
+                                </button>
                             </div>
+                        ) : (
+                            <div className="group flex items-center gap-3 cursor-pointer p-2 hover:bg-gray-50 rounded-lg transition-colors" onClick={() => {
+                                setEditedTitle(trip.name);
+                                setIsEditingTitle(true);
+                            }}>
+                                <h1 className="font-inter font-semibold text-[32px] leading-[39px] text-black text-center">
+                                    {trip.name}
+                                </h1>
+                                <Pencil className="w-5 h-5 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </div>
+                        )}
+                    </div>
 
-                            <div className="w-full h-px bg-black opacity-20 my-2"></div>
+                    {daysArray.map((day, index) => {
+                        const dayData = schedules.find(s => s.day_number === day.day_number);
+                        const items = dayData?.daily_schedule_items || [];
+                        const isExpanded = expandedDayIndex === index;
 
-                            {isExpanded && (
-                                <div className="flex flex-col gap-[16px] pb-6 ml-[15px] border-l-2 border-[#E0E0E0] pl-[15px] animate-in slide-in-from-top-2">
-
-                                    <div className="w-full h-[36px] bg-[#F5F5F5] border border-[#EEEEEE] rounded-[8px] flex items-center px-[16px] gap-[8px] text-[#616161] cursor-pointer hover:border-[#3A82CE] transition">
-                                        <Plus className="w-[16px] h-[16px]" />
-                                        <span className="font-inter font-normal text-[16px]">Add a place</span>
+                        return (
+                            <div key={day.day_number} className="flex flex-col w-full">
+                                <div
+                                    id={`day-${day.day_number}`}
+                                    className="flex items-center gap-[13px] py-2 cursor-pointer w-full hover:bg-gray-50 rounded px-2 transition-colors"
+                                    onClick={() => toggleDay(index)}
+                                >
+                                    <div className="w-[32px] h-[32px] flex items-center justify-center">
+                                        <ChevronDown className={`w-8 h-8 text-black transition-transform ${isExpanded ? 'rotate-0' : '-rotate-90'}`} />
                                     </div>
+                                    <span className="font-inter font-bold text-[18px] text-black flex-1">{day.dateString}</span>
+                                </div>
 
-                                    {/* Items List */}
-                                    {items.map((item, itemIndex) => {
-                                        const stats = travelStats[item.id];
+                                <div className="w-full h-px bg-black opacity-20 my-2"></div>
 
-                                        return (
-                                            <div key={item.id} className="flex flex-col gap-[8px] w-full relative group/card">
-                                                
-                                                {/* Row 1: Place Card */}
-                                                <div className="flex flex-row items-center gap-[8px] w-full pr-[10px]">
-                                                    <div className="absolute -left-[34px] top-[51px] -translate-y-1/2 w-[36px] flex justify-center">
-                                                        <div className="w-[20px] h-[25px] bg-[#1E518C] rounded-[4px] flex items-center justify-center text-white text-xs z-10 border border-[#C2DCF3]">
-                                                            {item.order_index}
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex flex-row flex-1 min-w-0 h-[101px] bg-white rounded-[8px] overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-transparent hover:border-[#1E518C]">
-                                                        <div className="w-[24px] bg-gray-50 flex items-center justify-center cursor-grab active:cursor-grabbing border-r border-gray-100 flex-shrink-0">
-                                                            <GripVertical className="w-4 h-4 text-gray-400" />
-                                                        </div>
-                                                        <div className="flex-1 min-w-0 bg-[#F5F5F5] p-[8px] flex flex-col justify-start gap-[6px] h-full overflow-hidden">
-                                                            <h4 className="font-inter font-semibold text-[14px] text-black truncate w-full">
-                                                                {item.places?.name || "Note"}
-                                                            </h4>
-                                                            <p className="font-inter font-normal text-[12px] text-[#212121] leading-[15px] line-clamp-3">
-                                                                {item.item_type === 'note'
-                                                                    ? item.note
-                                                                    : (item.places?.description_short || item.places?.description || "No description")
-                                                                }
-                                                            </p>
-                                                        </div>
-                                                        {item.item_type === 'place' && item.places && (
-                                                            <div className="w-[109px] h-[101px] relative border-l border-[#1E518C] bg-gray-200 flex-shrink-0">
-                                                                <Image
-                                                                    src={getImageSrc(item.places.images)}
-                                                                    alt={item.places.name}
-                                                                    fill
-                                                                    className="object-cover"
-                                                                    unoptimized
-                                                                />
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                    <button
-                                                        onClick={() => handleDeleteItem(item.id, dayData?.id || "")}
-                                                        className="w-[28px] h-[28px] bg-[#F5F5F5] border border-[#EEEEEE] rounded-[30px] flex items-center justify-center flex-shrink-0 opacity-0 group-hover/card:opacity-100 transition-all shadow-sm hover:bg-red-50 hover:border-red-200 cursor-pointer"
+                                {isExpanded && (
+                                    <div className="flex flex-col gap-[16px] pb-6 ml-[15px] border-l-2 border-[#E0E0E0] pl-[15px] animate-in slide-in-from-top-2">
+
+                                        <div className="w-full h-[36px] bg-[#F5F5F5] border border-[#EEEEEE] rounded-[8px] flex items-center px-[16px] gap-[8px] text-[#616161] cursor-pointer hover:border-[#3A82CE] transition">
+                                            <Plus className="w-[16px] h-[16px]" />
+                                            <span className="font-inter font-normal text-[16px]">Add a place</span>
+                                        </div>
+
+                                        {/* ✅ 4. เพิ่ม Droppable (พื้นที่รับการวางของแต่ละวัน) */}
+                                        {dayData && (
+                                            <Droppable droppableId={dayData.id}>
+                                                {(provided) => (
+                                                    <div
+                                                        ref={provided.innerRef}
+                                                        {...provided.droppableProps}
+                                                        className="flex flex-col gap-[8px] w-full"
                                                     >
-                                                        <Trash2 className="w-[14px] h-[14px] text-[#212121] hover:text-red-500" />
-                                                    </button>
-                                                </div>
+                                                        {items.map((item, itemIndex) => {
+                                                            const stats = travelStats[item.id];
 
-                                                {/* Row 2: Travel Info */}
-                                                {itemIndex > 0 && item.item_type === 'place' && (
-                                                    <div className="flex flex-row items-center gap-[16px] pl-[34px] w-full animate-in fade-in slide-in-from-top-1">
-                                                        {stats ? (
-                                                            <>
-                                                                <div className="flex items-center gap-[6px] bg-blue-50 px-2 py-1 rounded-md">
-                                                                    <Clock className="w-[14px] h-[14px] text-blue-600" />
-                                                                    <span className="font-inter font-medium text-[11px] text-blue-700">
-                                                                        {stats.dur}
-                                                                    </span>
-                                                                </div>
-                                                                <div className="flex items-center gap-[6px] bg-gray-50 px-2 py-1 rounded-md">
-                                                                    <Car className="w-[14px] h-[14px] text-gray-600" />
-                                                                    <span className="font-inter font-medium text-[11px] text-gray-700">
-                                                                        {stats.dist}
-                                                                    </span>
-                                                                </div>
-                                                            </>
-                                                        ) : (
-                                                            <div className="flex items-center gap-[8px] opacity-40">
-                                                                <Loader2 className="w-[12px] h-[12px] animate-spin" />
-                                                                <span className="text-[10px]">Calculating route...</span>
-                                                            </div>
-                                                        )}
-                                                        
-                                                        <button className="flex items-center gap-[6px] ml-auto text-[11px] text-gray-400 hover:text-blue-500 transition-colors mr-[10px]">
-                                                            <Clock className="w-[14px] h-[14px]" />
-                                                            <span>Add time</span>
-                                                        </button>
+                                                            // ✅ 5. หุ้ม Item ด้วย Draggable
+                                                            return (
+                                                                <Draggable key={item.id} draggableId={item.id} index={itemIndex}>
+                                                                    {(provided, snapshot) => (
+                                                                        <div
+                                                                            ref={provided.innerRef}
+                                                                            {...provided.draggableProps}
+                                                                            className={`flex flex-col gap-[8px] w-full relative group/card ${snapshot.isDragging ? 'opacity-80 z-50' : ''}`}
+                                                                        >
+                                                                            {/* Row 1: Place Card */}
+                                                                            <div className="flex flex-row items-center gap-[8px] w-full pr-[10px]">
+                                                                                <div className="absolute -left-[34px] top-[51px] -translate-y-1/2 w-[36px] flex justify-center">
+                                                                                    <div className="w-[20px] h-[25px] bg-[#1E518C] rounded-[4px] flex items-center justify-center text-white text-xs z-10 border border-[#C2DCF3]">
+                                                                                        {item.order_index}
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div className="flex flex-row flex-1 min-w-0 h-[101px] bg-white rounded-[8px] overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-transparent hover:border-[#1E518C]">
+                                                                                    
+                                                                                    {/* ✅ 6. Drag Handle (จับที่ไอคอนนี้เพื่อลาก) */}
+                                                                                    <div 
+                                                                                        {...provided.dragHandleProps}
+                                                                                        className="w-[24px] bg-gray-50 flex items-center justify-center cursor-grab active:cursor-grabbing border-r border-gray-100 flex-shrink-0"
+                                                                                    >
+                                                                                        <GripVertical className="w-4 h-4 text-gray-400" />
+                                                                                    </div>
+
+                                                                                    <div className="flex-1 min-w-0 bg-[#F5F5F5] p-[8px] flex flex-col justify-start gap-[6px] h-full overflow-hidden">
+                                                                                        <h4 className="font-inter font-semibold text-[14px] text-black truncate w-full">
+                                                                                            {item.places?.name || "Note"}
+                                                                                        </h4>
+                                                                                        <p className="font-inter font-normal text-[12px] text-[#212121] leading-[15px] line-clamp-3">
+                                                                                            {item.item_type === 'note'
+                                                                                                ? item.note
+                                                                                                : (item.places?.description_short || item.places?.description || "No description")
+                                                                                            }
+                                                                                        </p>
+                                                                                    </div>
+                                                                                    {item.item_type === 'place' && item.places && (
+                                                                                        <div className="w-[109px] h-[101px] relative border-l border-[#1E518C] bg-gray-200 flex-shrink-0">
+                                                                                            <Image
+                                                                                                src={getImageSrc(item.places.images)}
+                                                                                                alt={item.places.name}
+                                                                                                fill
+                                                                                                className="object-cover"
+                                                                                                unoptimized
+                                                                                            />
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                                <button
+                                                                                    onClick={() => handleDeleteItem(item.id, dayData?.id || "")}
+                                                                                    className="w-[28px] h-[28px] bg-[#F5F5F5] border border-[#EEEEEE] rounded-[30px] flex items-center justify-center flex-shrink-0 opacity-0 group-hover/card:opacity-100 transition-all shadow-sm hover:bg-red-50 hover:border-red-200 cursor-pointer"
+                                                                                >
+                                                                                    <Trash2 className="w-[14px] h-[14px] text-[#212121] hover:text-red-500" />
+                                                                                </button>
+                                                                            </div>
+
+                                                                            {/* Row 2: Travel Info & Time Picker */}
+                                                                            <div className="flex flex-row items-center gap-[16px] pl-[34px] w-full animate-in fade-in slide-in-from-top-1 relative mt-1">
+                                                                                
+                                                                                {itemIndex > 0 && item.item_type === 'place' && (
+                                                                                    <>
+                                                                                        {stats ? (
+                                                                                            <>
+                                                                                                <div className="flex items-center gap-[6px] bg-blue-50 px-2 py-1 rounded-md">
+                                                                                                    <Clock className="w-[14px] h-[14px] text-blue-600" />
+                                                                                                    <span className="font-inter font-medium text-[11px] text-blue-700">
+                                                                                                        {stats.dur}
+                                                                                                    </span>
+                                                                                                </div>
+                                                                                                <div className="flex items-center gap-[6px] bg-gray-50 px-2 py-1 rounded-md">
+                                                                                                    <Car className="w-[14px] h-[14px] text-gray-600" />
+                                                                                                    <span className="font-inter font-medium text-[11px] text-gray-700">
+                                                                                                        {stats.dist}
+                                                                                                    </span>
+                                                                                                </div>
+                                                                                            </>
+                                                                                        ) : (
+                                                                                            <div className="flex items-center gap-[8px] opacity-40">
+                                                                                                <Loader2 className="w-[12px] h-[12px] animate-spin" />
+                                                                                                <span className="text-[10px]">Calculating...</span>
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </>
+                                                                                )}
+                                                                                
+                                                                                <div className="relative">
+                                                                                    <button 
+                                                                                        onClick={() => setActiveTimePickerId(activeTimePickerId === item.id ? null : item.id)}
+                                                                                        className="flex items-center gap-[6px] text-[11px] text-gray-400 hover:text-blue-500 transition-colors"
+                                                                                    >
+                                                                                        <Clock className="w-[14px] h-[14px]" />
+                                                                                        <span className="font-inter font-normal text-[12px] leading-[15px] text-black">
+                                                                                            {item.start_time 
+                                                                                                ? `${formatTimeDisplay(item.start_time || null)} - ${formatTimeDisplay(item.end_time || null)}`
+                                                                                                : "Add time"
+                                                                                            }
+                                                                                        </span>
+                                                                                    </button>
+
+                                                                                    {activeTimePickerId === item.id && (
+                                                                                        <TimePickerPopup 
+                                                                                            initialStartTime={item.start_time || null}
+                                                                                            initialEndTime={item.end_time || null}
+                                                                                            onSave={(s, e) => handleSaveTime(item.id, s, e)}
+                                                                                            onClose={() => setActiveTimePickerId(null)}
+                                                                                            onClear={() => handleClearTime(item.id)}
+                                                                                        />
+                                                                                    )}
+                                                                                </div>
+
+                                                                            </div>
+
+                                                                        </div>
+                                                                    )}
+                                                                </Draggable>
+                                                            );
+                                                        })}
+                                                        {provided.placeholder}
                                                     </div>
                                                 )}
+                                            </Droppable>
+                                        )}
 
-                                            </div>
-                                        );
-                                    })}
-
-                                    {/* Saved Places Suggestions */}
-                                    {filteredSavedPlaces.length > 0 && (
-                                        <div className="flex flex-col gap-[8px] mt-4">
-                                            <div className="flex items-center gap-[8px]">
-                                                <span className="font-inter font-normal text-[12px] text-black">Saved Place in {trip.name}</span>
-                                                <ChevronDown className="w-[16px] h-[16px] text-black" />
-                                            </div>
-                                            <div className="flex gap-[8px] overflow-x-auto pb-2 scrollbar-thin">
-                                                {filteredSavedPlaces.map((saved) => (
-                                                    saved.places && (
-                                                        <div key={saved.id} className="flex items-center gap-[10px] p-0 pr-2 border border-dashed border-[#9E9E9E] rounded-[8px] h-[40px] bg-white hover:bg-gray-50 flex-shrink-0 min-w-[150px]">
-                                                            <div className="w-[40px] h-[40px] relative rounded-l-[8px] overflow-hidden">
-                                                                <Image src={getImageSrc(saved.places.images)} alt={saved.places.name} fill className="object-cover" unoptimized />
+                                        {/* Saved Places Suggestions */}
+                                        {filteredSavedPlaces.length > 0 && (
+                                            <div className="flex flex-col gap-[8px] mt-4">
+                                                <div className="flex items-center gap-[8px]">
+                                                    <span className="font-inter font-normal text-[12px] text-black">Saved Place in {trip.name}</span>
+                                                    <ChevronDown className="w-[16px] h-[16px] text-black" />
+                                                </div>
+                                                <div className="flex gap-[8px] overflow-x-auto pb-2 scrollbar-thin">
+                                                    {filteredSavedPlaces.map((saved) => (
+                                                        saved.places && (
+                                                            <div key={saved.id} className="flex items-center gap-[10px] p-0 pr-2 border border-dashed border-[#9E9E9E] rounded-[8px] h-[40px] bg-white hover:bg-gray-50 flex-shrink-0 min-w-[150px]">
+                                                                <div className="w-[40px] h-[40px] relative rounded-l-[8px] overflow-hidden">
+                                                                    <Image src={getImageSrc(saved.places.images)} alt={saved.places.name} fill className="object-cover" unoptimized />
+                                                                </div>
+                                                                <span className="text-[12px] font-normal text-black truncate flex-1 max-w-[120px]">{saved.places.name}</span>
+                                                                <div
+                                                                    onClick={() => handleAddSavedPlace(dayData?.id, saved.places)}
+                                                                    className="w-[24px] h-[24px] bg-[#F5F5F5] border border-[#EEEEEE] rounded-full flex items-center justify-center mr-1 cursor-pointer hover:bg-[#3A82CE] hover:border-[#3A82CE] group"
+                                                                >
+                                                                    <Plus className="w-[16px] h-[16px] text-black group-hover:text-white" />
+                                                                </div>
                                                             </div>
-                                                            <span className="text-[12px] font-normal text-black truncate flex-1 max-w-[120px]">{saved.places.name}</span>
-                                                            <div
-                                                                onClick={() => handleAddSavedPlace(dayData?.id, saved.places)}
-                                                                className="w-[24px] h-[24px] bg-[#F5F5F5] border border-[#EEEEEE] rounded-full flex items-center justify-center mr-1 cursor-pointer hover:bg-[#3A82CE] hover:border-[#3A82CE] group"
-                                                            >
-                                                                <Plus className="w-[16px] h-[16px] text-black group-hover:text-white" />
-                                                            </div>
-                                                        </div>
-                                                    )
-                                                ))}
+                                                        )
+                                                    ))}
+                                                </div>
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
 
-                                </div>
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            </DragDropContext>
 
             {/* --- RIGHT COLUMN: Map --- */}
             <div className="w-[459px] bg-[#E5E5E5] overflow-hidden relative border border-gray-200 h-[928px] rounded-[16px] mt-[9px] sticky top-[20px] flex flex-col">

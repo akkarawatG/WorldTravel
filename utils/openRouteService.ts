@@ -1,11 +1,9 @@
 // utils/openRouteService.ts
 
-const ORS_API_KEY = process.env.NEXT_PUBLIC_ORS_API_KEY;
-
 interface RouteResult {
     distance: string;
     duration: string;
-    geometry: any; // พิกัดสำหรับวาดเส้นบน Leaflet
+    geometry: any;
     rawDistance: number;
     rawDuration: number;
 }
@@ -14,35 +12,19 @@ export const getRouteData = async (
     start: { lat: number; lng: number },
     end: { lat: number; lng: number }
 ): Promise<RouteResult | null> => {
-    if (!ORS_API_KEY) {
-        console.error("Missing OpenRouteService API Key");
-        return null;
-    }
-
+    
     try {
-        // ใช้ POST Endpoint เพื่อรองรับพิกัดทั่วโลกและเสถียรกว่า
-        const url = `https://api.openrouteservice.org/v2/directions/driving-car/geojson`;
-
-        const response = await fetch(url, {
+        // ✅ เปลี่ยน URL มาเรียก API ของเราเอง
+        const response = await fetch('/api/ors', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json; charset=utf-8',
-                'Authorization': ORS_API_KEY // ส่ง Token ผ่าน Header
+                'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                coordinates: [
-                    [start.lng, start.lat],
-                    [end.lng, end.lat]
-                ],
-                // ✅ เพิ่ม radiuses เพื่อขยายการค้นหาถนน (หน่วยเป็นเมตร) 
-                // -1 หมายถึงไม่จำกัดระยะทาง หรือใส่ 5000 (5km) เพื่อความปลอดภัย
-                radiuses: [5000, 5000]
-            })
+            body: JSON.stringify({ start, end }) // ส่งแค่ start/end ให้ Server จัดการต่อ
         });
 
         if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`ORS API Error (${response.status}):`, errorText);
+            console.error(`Route API Error (${response.status})`);
             return null;
         }
 
@@ -53,7 +35,7 @@ export const getRouteData = async (
         const route = data.features[0];
         const distanceMeters = route.properties.summary.distance;
         const durationSeconds = route.properties.summary.duration;
-        const geometry = route.geometry.coordinates; // Array ของ [lng, lat]
+        const geometry = route.geometry.coordinates; 
 
         return {
             distance: formatDistance(distanceMeters),

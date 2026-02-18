@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@hello-pangea/dnd": "^18.0.1",
     "@mdi/js": "^7.4.47",
     "@mdi/react": "^1.6.1",
     "@supabase/ssr": "^0.8.0",
