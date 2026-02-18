@@ -1,18 +1,17 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
 import {
     MapPin, Calendar, ChevronRight, ChevronDown, Plus,
     GripVertical, Trash2, Loader2, Pencil, Check, X, ChevronLeft,
-    Car, Clock
+    Car, Clock, FileText
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { getRouteData } from "@/utils/openRouteService";
 import TimePickerPopup from "./TimePickerPopup";
 import { formatTimeDisplay } from "@/utils/timeHelpers";
-// ✅ 1. เพิ่ม Import Drag & Drop
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 
 // --- Load Map แบบ Dynamic ---
@@ -34,6 +33,20 @@ const getDayColor = (date: Date) => {
         case 0: return "#F44336"; // Sun
         default: return "#E0E0E0";
     }
+};
+
+// --- Helper Functions for Formatting ---
+const formatDistance = (meters: number): string => {
+    if (meters < 1000) return `${Math.round(meters)} m`;
+    return `${(meters / 1000).toFixed(1)} km`;
+};
+
+const formatDuration = (seconds: number): string => {
+    const minutes = Math.round(seconds / 60);
+    if (minutes < 60) return `${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    const remainingMins = minutes % 60;
+    return remainingMins === 0 ? `${hours} hr` : `${hours} hr ${remainingMins} min`;
 };
 
 // --- Custom Date Picker Component ---
@@ -151,7 +164,7 @@ interface Place {
 
 interface ScheduleItem {
     id: string;
-    place_id: string;
+    place_id: string | null;
     item_type: 'place' | 'note';
     note: string;
     order_index: number;
@@ -211,20 +224,21 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
 
     // Travel Stats State
     const [travelStats, setTravelStats] = useState<Record<string, { dist: string, dur: string, geometry: any }>>({});
+    const [dayTotals, setDayTotals] = useState<Record<number, { totalDist: string, totalDur: string }>>({});
 
-    // ✅ 2. ฟังก์ชัน Handle Drag & Drop
+    // Cache for routes
+    const routeCache = useRef(new Map<string, any>());
+
+    // Drag & Drop Logic
     const onDragEnd = async (result: DropResult) => {
         const { source, destination } = result;
 
-        // ถ้าลากไปวางในที่ว่าง หรือวางที่เดิม
         if (!destination) return;
         if (source.droppableId === destination.droppableId && source.index === destination.index) return;
 
-        // ดึงข้อมูลวันต้นทาง และ วันปลายทาง
         const sourceDayId = source.droppableId;
         const destDayId = destination.droppableId;
 
-        // Copy State มาเพื่อแก้ไข
         const newSchedules = JSON.parse(JSON.stringify(schedules)) as DailyScheduleData[];
         const sourceDayIndex = newSchedules.findIndex(s => s.id === sourceDayId);
         const destDayIndex = newSchedules.findIndex(s => s.id === destDayId);
@@ -234,13 +248,9 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
         const sourceItems = newSchedules[sourceDayIndex].daily_schedule_items;
         const destItems = newSchedules[destDayIndex].daily_schedule_items;
 
-        // ดึง Item ออกจากตำแหน่งเดิม
         const [movedItem] = sourceItems.splice(source.index, 1);
-        
-        // แทรก Item ลงในตำแหน่งใหม่
         destItems.splice(destination.index, 0, movedItem);
 
-        // ฟังก์ชันช่วยเรียงลำดับ order_index ใหม่ (1, 2, 3...)
         const reindexItems = (items: ScheduleItem[]) => {
             return items.map((item, index) => ({
                 ...item,
@@ -248,24 +258,19 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
             }));
         };
 
-        // Re-index ทั้งต้นทางและปลายทาง
         newSchedules[sourceDayIndex].daily_schedule_items = reindexItems(sourceItems);
         if (sourceDayId !== destDayId) {
             newSchedules[destDayIndex].daily_schedule_items = reindexItems(destItems);
         } else {
-            // ถ้าวันเดียวกัน destItems ก็คือ sourceItems ที่ถูกแก้แล้ว
             newSchedules[sourceDayIndex].daily_schedule_items = reindexItems(sourceItems);
         }
 
-        // อัปเดตหน้าจอก่อน (Optimistic UI)
         setSchedules(newSchedules);
 
-        // บันทึกลง Supabase
         try {
             const itemsToUpdate: any[] = [];
-            // เตรียมข้อมูลที่จะอัปเดต (เฉพาะวันที่เกี่ยวข้อง)
-            const daysToUpdate = sourceDayId === destDayId 
-                ? [newSchedules[sourceDayIndex]] 
+            const daysToUpdate = sourceDayId === destDayId
+                ? [newSchedules[sourceDayIndex]]
                 : [newSchedules[sourceDayIndex], newSchedules[destDayIndex]];
 
             daysToUpdate.forEach(day => {
@@ -273,7 +278,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                     itemsToUpdate.push({
                         id: item.id,
                         order_index: item.order_index,
-                        daily_schedule_id: day.id // เผื่อกรณีลากข้ามวัน
+                        daily_schedule_id: day.id 
                     });
                 });
             });
@@ -282,46 +287,108 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                 const { error } = await supabase
                     .from('daily_schedule_items')
                     .upsert(itemsToUpdate, { onConflict: 'id' });
-                
+
                 if (error) throw error;
             }
         } catch (err) {
             console.error("Drag update failed:", err);
-            // ถ้า Error อาจจะโหลดข้อมูลใหม่ หรือแจ้งเตือน
         }
     };
 
-    // Effect: Calculate Routes
+    // Effect: Calculate Routes (Improved with Caching & Batching)
     useEffect(() => {
         const calculateRoutes = async () => {
             if (!schedules.length) return;
 
             const newStats: Record<string, { dist: string, dur: string, geometry: any }> = {};
+            const newDayTotals: Record<number, { totalDist: string, totalDur: string }> = {};
+
+            // 1. Identify tasks (only unknown routes)
+            const tasks: { id: string; start: { lat: number; lng: number }; end: { lat: number; lng: number } }[] = [];
 
             for (const day of schedules) {
-                const sortedItems = [...day.daily_schedule_items].sort((a, b) => a.order_index - b.order_index);
+                // กรองเฉพาะ place เพื่อคำนวณเส้นทางข้าม note
+                const placeItems = day.daily_schedule_items
+                    .filter(item => item.item_type === 'place' && item.places)
+                    .sort((a, b) => a.order_index - b.order_index);
 
-                for (let i = 1; i < sortedItems.length; i++) {
-                    const prev = sortedItems[i - 1];
-                    const curr = sortedItems[i];
+                for (let i = 1; i < placeItems.length; i++) {
+                    const prev = placeItems[i - 1];
+                    const curr = placeItems[i];
 
-                    if (prev.item_type === 'place' && prev.places && curr.item_type === 'place' && curr.places) {
-                        const res = await getRouteData(
-                            { lat: prev.places.latitude, lng: prev.places.longitude },
-                            { lat: curr.places.latitude, lng: curr.places.longitude }
-                        );
+                    if (prev.places && curr.places) {
+                        const start = { lat: prev.places.latitude, lng: prev.places.longitude };
+                        const end = { lat: curr.places.latitude, lng: curr.places.longitude };
+                        const cacheKey = `${start.lat},${start.lng}-${end.lat},${end.lng}`;
 
-                        if (res) {
-                            newStats[curr.id] = {
-                                dist: res.distance,
-                                dur: res.duration,
-                                geometry: res.geometry
-                            };
+                        if (routeCache.current.has(cacheKey)) {
+                            newStats[curr.id] = routeCache.current.get(cacheKey);
+                        } else {
+                            tasks.push({ id: curr.id, start, end });
                         }
                     }
                 }
             }
+
+            // 2. Batch Processing
+            const BATCH_SIZE = 3;
+            for (let i = 0; i < tasks.length; i += BATCH_SIZE) {
+                const batch = tasks.slice(i, i + BATCH_SIZE);
+                await Promise.all(batch.map(async (task) => {
+                    const res = await getRouteData(task.start, task.end);
+                    if (res) {
+                        const data = {
+                            dist: res.distance,
+                            dur: res.duration,
+                            geometry: res.geometry,
+                            rawDist: res.rawDistance,
+                            rawDur: res.rawDuration
+                        };
+                        const cacheKey = `${task.start.lat},${task.start.lng}-${task.end.lat},${task.end.lng}`;
+                        routeCache.current.set(cacheKey, data);
+                        newStats[task.id] = data;
+                    }
+                }));
+                
+                if (i + BATCH_SIZE < tasks.length) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+
+            // 3. Calculate Totals
+            for (const day of schedules) {
+                const placeItems = day.daily_schedule_items
+                    .filter(item => item.item_type === 'place' && item.places)
+                    .sort((a, b) => a.order_index - b.order_index);
+
+                let dailyDistRaw = 0;
+                let dailyDurRaw = 0;
+
+                for (let i = 1; i < placeItems.length; i++) {
+                    const curr = placeItems[i];
+                    const prev = placeItems[i-1];
+                    
+                    let cached = newStats[curr.id];
+                    
+                    if (!cached && prev.places && curr.places) {
+                         const key = `${prev.places.latitude},${prev.places.longitude}-${curr.places.latitude},${curr.places.longitude}`;
+                         cached = routeCache.current.get(key);
+                         if (cached) newStats[curr.id] = cached;
+                    }
+
+                    if (cached) {
+                        dailyDistRaw += cached.rawDist || 0;
+                        dailyDurRaw += cached.rawDur || 0;
+                    }
+                }
+                newDayTotals[day.day_number] = {
+                    totalDist: formatDistance(dailyDistRaw),
+                    totalDur: formatDuration(dailyDurRaw)
+                };
+            }
+
             setTravelStats(prev => ({ ...prev, ...newStats }));
+            setDayTotals(newDayTotals);
         };
 
         calculateRoutes();
@@ -656,7 +723,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
     };
 
     const handleDeleteItem = async (itemId: string, dayId: string) => {
-        if (!confirm("Remove this place?")) return;
+        if (!confirm("Remove this item?")) return;
 
         try {
             const { error: deleteError } = await supabase
@@ -682,7 +749,8 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                 daily_schedule_id: dayId,
                 place_id: item.place_id,
                 item_type: item.item_type,
-                order_index: item.order_index
+                order_index: item.order_index,
+                note: item.note
             }));
 
             if (updates.length > 0) {
@@ -759,6 +827,60 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
             console.error("Error clearing time:", err);
         }
     };
+    
+    // ✅ Function: Add Note
+    const handleAddNote = async (dayId: string | undefined) => {
+        if (!dayId) return;
+        try {
+            const currentDay = schedules.find(s => s.id === dayId);
+            const newOrderIndex = (currentDay?.daily_schedule_items.length || 0) + 1;
+
+            const { data, error } = await supabase
+                .from('daily_schedule_items')
+                .insert({
+                    daily_schedule_id: dayId,
+                    item_type: 'note',
+                    note: '',
+                    order_index: newOrderIndex
+                })
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            setSchedules(prev => prev.map(day => {
+                if (day.id === dayId) {
+                    const newItem: ScheduleItem = {
+                        id: data.id,
+                        place_id: null,
+                        item_type: 'note',
+                        note: '',
+                        order_index: newOrderIndex,
+                        places: null
+                    };
+                    return { ...day, daily_schedule_items: [...day.daily_schedule_items, newItem] };
+                }
+                return day;
+            }));
+        } catch (err: any) {
+            console.error("Failed to add note:", err.message);
+        }
+    };
+
+    // ✅ Function: Update Note Text
+    const handleUpdateNote = async (itemId: string, text: string) => {
+        setSchedules(prev => prev.map(day => ({
+            ...day,
+            daily_schedule_items: day.daily_schedule_items.map(item =>
+                item.id === itemId ? { ...item, note: text } : item
+            )
+        })));
+    };
+    
+    // ✅ Function: Save Note on Blur
+    const handleBlurNote = async (itemId: string, text: string) => {
+        await supabase.from('daily_schedule_items').update({ note: text }).eq('id', itemId);
+    };
 
     const getImageSrc = (images: string[] | string | null | undefined) => {
         if (!images) return "https://placehold.co/600x400?text=No+Image";
@@ -779,7 +901,6 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
         <div className="w-full flex flex-row gap-[24px] relative h-full min-h-[900px]">
 
             {/* --- LEFT COLUMN: Timeline --- */}
-            {/* ✅ 3. หุ้ม DragDropContext ไว้ด้านนอก */}
             <DragDropContext onDragEnd={onDragEnd}>
                 <div className="w-[433px] flex flex-col gap-[24px] overflow-y-auto pr-2 h-[900px] scrollbar-hide pb-20">
 
@@ -824,6 +945,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                         const dayData = schedules.find(s => s.day_number === day.day_number);
                         const items = dayData?.daily_schedule_items || [];
                         const isExpanded = expandedDayIndex === index;
+                        const total = dayTotals[day.day_number];
 
                         return (
                             <div key={day.day_number} className="flex flex-col w-full">
@@ -835,7 +957,9 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                                     <div className="w-[32px] h-[32px] flex items-center justify-center">
                                         <ChevronDown className={`w-8 h-8 text-black transition-transform ${isExpanded ? 'rotate-0' : '-rotate-90'}`} />
                                     </div>
-                                    <span className="font-inter font-bold text-[18px] text-black flex-1">{day.dateString}</span>
+                                    <div className="flex flex-col flex-1 justify-center">
+                                        <span className="font-inter font-bold text-[18px] text-black">{day.dateString}</span>
+                                    </div>
                                 </div>
 
                                 <div className="w-full h-px bg-black opacity-20 my-2"></div>
@@ -843,12 +967,21 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                                 {isExpanded && (
                                     <div className="flex flex-col gap-[16px] pb-6 ml-[15px] border-l-2 border-[#E0E0E0] pl-[15px] animate-in slide-in-from-top-2">
 
-                                        <div className="w-full h-[36px] bg-[#F5F5F5] border border-[#EEEEEE] rounded-[8px] flex items-center px-[16px] gap-[8px] text-[#616161] cursor-pointer hover:border-[#3A82CE] transition">
-                                            <Plus className="w-[16px] h-[16px]" />
-                                            <span className="font-inter font-normal text-[16px]">Add a place</span>
+                                        {/* ✅ Buttons Row (Add Place + Add Note) */}
+                                        <div className="flex flex-row gap-[8px] w-full">
+                                            <div className="flex-1 h-[36px] bg-[#F5F5F5] border border-[#EEEEEE] rounded-[8px] flex items-center justify-center gap-[8px] text-[#616161] cursor-pointer hover:border-[#3A82CE] transition">
+                                                <Plus className="w-[16px] h-[16px]" />
+                                                <span className="font-inter font-normal text-[16px]">Add a place</span>
+                                            </div>
+                                            <div 
+                                                onClick={() => handleAddNote(dayData?.id)}
+                                                className="w-[36px] h-[36px] bg-[#F5F5F5] border border-[#EEEEEE] rounded-full flex items-center justify-center cursor-pointer hover:bg-[#FFF8E1] hover:border-[#FBC02D] transition group"
+                                                title="Add Note"
+                                            >
+                                                <FileText className="w-[16px] h-[16px] text-[#616161] group-hover:text-[#F57F17]" />
+                                            </div>
                                         </div>
 
-                                        {/* ✅ 4. เพิ่ม Droppable (พื้นที่รับการวางของแต่ละวัน) */}
                                         {dayData && (
                                             <Droppable droppableId={dayData.id}>
                                                 {(provided) => (
@@ -860,128 +993,181 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                                                         {items.map((item, itemIndex) => {
                                                             const stats = travelStats[item.id];
 
-                                                            // ✅ 5. หุ้ม Item ด้วย Draggable
-                                                            return (
-                                                                <Draggable key={item.id} draggableId={item.id} index={itemIndex}>
-                                                                    {(provided, snapshot) => (
-                                                                        <div
-                                                                            ref={provided.innerRef}
-                                                                            {...provided.draggableProps}
-                                                                            className={`flex flex-col gap-[8px] w-full relative group/card ${snapshot.isDragging ? 'opacity-80 z-50' : ''}`}
-                                                                        >
-                                                                            {/* Row 1: Place Card */}
-                                                                            <div className="flex flex-row items-center gap-[8px] w-full pr-[10px]">
-                                                                                <div className="absolute -left-[34px] top-[51px] -translate-y-1/2 w-[36px] flex justify-center">
-                                                                                    <div className="w-[20px] h-[25px] bg-[#1E518C] rounded-[4px] flex items-center justify-center text-white text-xs z-10 border border-[#C2DCF3]">
-                                                                                        {item.order_index}
-                                                                                    </div>
-                                                                                </div>
-                                                                                <div className="flex flex-row flex-1 min-w-0 h-[101px] bg-white rounded-[8px] overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-transparent hover:border-[#1E518C]">
-                                                                                    
-                                                                                    {/* ✅ 6. Drag Handle (จับที่ไอคอนนี้เพื่อลาก) */}
+                                                            // ✅ Render Condition: Check Type (Place vs Note)
+                                                            if (item.item_type === 'note') {
+                                                                // --- Note Item UI ---
+                                                                return (
+                                                                    <Draggable key={item.id} draggableId={item.id} index={itemIndex}>
+                                                                        {(provided, snapshot) => (
+                                                                            <div
+                                                                                ref={provided.innerRef}
+                                                                                {...provided.draggableProps}
+                                                                                className={`flex flex-row items-center gap-[8px] w-full pr-[10px] ${snapshot.isDragging ? 'opacity-80 z-50' : ''}`}
+                                                                            >
+                                                                                 {/* Note ไม่มีเลขลำดับ ใส่ div ว่างไว้เพื่อให้ตรง grid */}
+                                                                                 <div className="absolute -left-[34px] w-[36px]" /> 
+
+                                                                                {/* Box Note */}
+                                                                                <div className="flex flex-row flex-1 h-[36px] bg-[#F5F5F5] rounded-[8px] border border-[#EEEEEE] items-center overflow-hidden">
+                                                                                    {/* Drag Handle */}
                                                                                     <div 
                                                                                         {...provided.dragHandleProps}
-                                                                                        className="w-[24px] bg-gray-50 flex items-center justify-center cursor-grab active:cursor-grabbing border-r border-gray-100 flex-shrink-0"
+                                                                                        className="w-[24px] h-full flex items-center justify-center cursor-grab active:cursor-grabbing border-r border-[#EEEEEE]"
                                                                                     >
                                                                                         <GripVertical className="w-4 h-4 text-gray-400" />
                                                                                     </div>
-
-                                                                                    <div className="flex-1 min-w-0 bg-[#F5F5F5] p-[8px] flex flex-col justify-start gap-[6px] h-full overflow-hidden">
-                                                                                        <h4 className="font-inter font-semibold text-[14px] text-black truncate w-full">
-                                                                                            {item.places?.name || "Note"}
-                                                                                        </h4>
-                                                                                        <p className="font-inter font-normal text-[12px] text-[#212121] leading-[15px] line-clamp-3">
-                                                                                            {item.item_type === 'note'
-                                                                                                ? item.note
-                                                                                                : (item.places?.description_short || item.places?.description || "No description")
-                                                                                            }
-                                                                                        </p>
+                                                                                    {/* Input */}
+                                                                                    <div className="flex-1 px-3 flex items-center gap-2">
+                                                                                        <FileText className="w-4 h-4 text-gray-500" />
+                                                                                        <input 
+                                                                                            type="text"
+                                                                                            value={item.note || ""}
+                                                                                            onChange={(e) => handleUpdateNote(item.id, e.target.value)}
+                                                                                            onBlur={(e) => handleBlurNote(item.id, e.target.value)}
+                                                                                            placeholder="Add note"
+                                                                                            className="bg-transparent border-none outline-none text-[12px] text-black w-full placeholder:text-gray-400"
+                                                                                        />
                                                                                     </div>
-                                                                                    {item.item_type === 'place' && item.places && (
-                                                                                        <div className="w-[109px] h-[101px] relative border-l border-[#1E518C] bg-gray-200 flex-shrink-0">
-                                                                                            <Image
-                                                                                                src={getImageSrc(item.places.images)}
-                                                                                                alt={item.places.name}
-                                                                                                fill
-                                                                                                className="object-cover"
-                                                                                                unoptimized
-                                                                                            />
-                                                                                        </div>
-                                                                                    )}
                                                                                 </div>
-                                                                                <button
-                                                                                    onClick={() => handleDeleteItem(item.id, dayData?.id || "")}
-                                                                                    className="w-[28px] h-[28px] bg-[#F5F5F5] border border-[#EEEEEE] rounded-[30px] flex items-center justify-center flex-shrink-0 opacity-0 group-hover/card:opacity-100 transition-all shadow-sm hover:bg-red-50 hover:border-red-200 cursor-pointer"
-                                                                                >
-                                                                                    <Trash2 className="w-[14px] h-[14px] text-[#212121] hover:text-red-500" />
+
+                                                                                <button onClick={() => handleDeleteItem(item.id, dayData.id)} className="w-[28px] h-[28px] bg-[#F5F5F5] border border-[#EEEEEE] rounded-[30px] flex items-center justify-center hover:bg-red-50 cursor-pointer">
+                                                                                    <Trash2 className="w-3 h-3 text-[#212121] hover:text-red-500" />
                                                                                 </button>
                                                                             </div>
+                                                                        )}
+                                                                    </Draggable>
+                                                                );
+                                                            } else {
+                                                                // --- Place Item UI (Existing) ---
+                                                                // ✅ คำนวณลำดับที่แสดงผล (นับเฉพาะ Place)
+                                                                const displayIndex = items
+                                                                    .filter(i => i.item_type === 'place')
+                                                                    .findIndex(p => p.id === item.id) + 1;
 
-                                                                            {/* Row 2: Travel Info & Time Picker */}
-                                                                            <div className="flex flex-row items-center gap-[16px] pl-[34px] w-full animate-in fade-in slide-in-from-top-1 relative mt-1">
-                                                                                
-                                                                                {itemIndex > 0 && item.item_type === 'place' && (
-                                                                                    <>
-                                                                                        {stats ? (
-                                                                                            <>
-                                                                                                <div className="flex items-center gap-[6px] bg-blue-50 px-2 py-1 rounded-md">
-                                                                                                    <Clock className="w-[14px] h-[14px] text-blue-600" />
-                                                                                                    <span className="font-inter font-medium text-[11px] text-blue-700">
-                                                                                                        {stats.dur}
-                                                                                                    </span>
-                                                                                                </div>
-                                                                                                <div className="flex items-center gap-[6px] bg-gray-50 px-2 py-1 rounded-md">
-                                                                                                    <Car className="w-[14px] h-[14px] text-gray-600" />
-                                                                                                    <span className="font-inter font-medium text-[11px] text-gray-700">
-                                                                                                        {stats.dist}
-                                                                                                    </span>
-                                                                                                </div>
-                                                                                            </>
-                                                                                        ) : (
-                                                                                            <div className="flex items-center gap-[8px] opacity-40">
-                                                                                                <Loader2 className="w-[12px] h-[12px] animate-spin" />
-                                                                                                <span className="text-[10px]">Calculating...</span>
+                                                                return (
+                                                                    <Draggable key={item.id} draggableId={item.id} index={itemIndex}>
+                                                                        {(provided, snapshot) => (
+                                                                            <div
+                                                                                ref={provided.innerRef}
+                                                                                {...provided.draggableProps}
+                                                                                className={`flex flex-col gap-[8px] w-full relative group/card ${snapshot.isDragging ? 'opacity-80 z-50' : ''}`}
+                                                                            >
+                                                                                {/* Row 1: Place Card */}
+                                                                                <div className="flex flex-row items-center gap-[8px] w-full pr-[10px]">
+                                                                                    <div className="absolute -left-[34px] top-[51px] -translate-y-1/2 w-[36px] flex justify-center">
+                                                                                        <div className="w-[20px] h-[25px] bg-[#1E518C] rounded-[4px] flex items-center justify-center text-white text-xs z-10 border border-[#C2DCF3]">
+                                                                                            {/* ✅ แสดงลำดับที่คำนวณใหม่ (ไม่รวม Note) */}
+                                                                                            {displayIndex}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div className="flex flex-row flex-1 min-w-0 h-[101px] bg-white rounded-[8px] overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-transparent hover:border-[#1E518C]">
+                                                                                        <div 
+                                                                                            {...provided.dragHandleProps}
+                                                                                            className="w-[24px] bg-gray-50 flex items-center justify-center cursor-grab active:cursor-grabbing border-r border-gray-100 flex-shrink-0"
+                                                                                        >
+                                                                                            <GripVertical className="w-4 h-4 text-gray-400" />
+                                                                                        </div>
+                                                                                        <div className="flex-1 min-w-0 bg-[#F5F5F5] p-[8px] flex flex-col justify-start gap-[6px] h-full overflow-hidden">
+                                                                                            <h4 className="font-inter font-semibold text-[14px] text-black truncate w-full">
+                                                                                                {item.places?.name || "Note"}
+                                                                                            </h4>
+                                                                                            <p className="font-inter font-normal text-[12px] text-[#212121] leading-[15px] line-clamp-3">
+                                                                                                {item.places?.description_short || item.places?.description || "No description"}
+                                                                                            </p>
+                                                                                        </div>
+                                                                                        {item.places && (
+                                                                                            <div className="w-[109px] h-[101px] relative border-l border-[#1E518C] bg-gray-200 flex-shrink-0">
+                                                                                                <Image
+                                                                                                    src={getImageSrc(item.places.images)}
+                                                                                                    alt={item.places.name}
+                                                                                                    fill
+                                                                                                    className="object-cover"
+                                                                                                    unoptimized
+                                                                                                />
                                                                                             </div>
                                                                                         )}
-                                                                                    </>
-                                                                                )}
-                                                                                
-                                                                                <div className="relative">
-                                                                                    <button 
-                                                                                        onClick={() => setActiveTimePickerId(activeTimePickerId === item.id ? null : item.id)}
-                                                                                        className="flex items-center gap-[6px] text-[11px] text-gray-400 hover:text-blue-500 transition-colors"
+                                                                                    </div>
+                                                                                    <button
+                                                                                        onClick={() => handleDeleteItem(item.id, dayData?.id || "")}
+                                                                                        className="w-[28px] h-[28px] bg-[#F5F5F5] border border-[#EEEEEE] rounded-[30px] flex items-center justify-center flex-shrink-0 opacity-0 group-hover/card:opacity-100 transition-all shadow-sm hover:bg-red-50 hover:border-red-200 cursor-pointer"
                                                                                     >
-                                                                                        <Clock className="w-[14px] h-[14px]" />
-                                                                                        <span className="font-inter font-normal text-[12px] leading-[15px] text-black">
-                                                                                            {item.start_time 
-                                                                                                ? `${formatTimeDisplay(item.start_time || null)} - ${formatTimeDisplay(item.end_time || null)}`
-                                                                                                : "Add time"
-                                                                                            }
-                                                                                        </span>
+                                                                                        <Trash2 className="w-[14px] h-[14px] text-[#212121] hover:text-red-500" />
                                                                                     </button>
-
-                                                                                    {activeTimePickerId === item.id && (
-                                                                                        <TimePickerPopup 
-                                                                                            initialStartTime={item.start_time || null}
-                                                                                            initialEndTime={item.end_time || null}
-                                                                                            onSave={(s, e) => handleSaveTime(item.id, s, e)}
-                                                                                            onClose={() => setActiveTimePickerId(null)}
-                                                                                            onClear={() => handleClearTime(item.id)}
-                                                                                        />
-                                                                                    )}
                                                                                 </div>
 
+                                                                                {/* Row 2: Travel Info & Time Picker */}
+                                                                                <div className="flex flex-row items-center gap-[16px] pl-[34px] w-full animate-in fade-in slide-in-from-top-1 relative mt-1">
+                                                                                    {/* ✅ แสดง stats เฉพาะถ้าไม่ใช่สถานที่แรกของวัน */}
+                                                                                    {displayIndex > 1 && item.item_type === 'place' && (
+                                                                                        <>
+                                                                                            {stats ? (
+                                                                                                <>
+                                                                                                    <div className="flex items-center gap-[6px] bg-blue-50 px-2 py-1 rounded-md">
+                                                                                                        <Clock className="w-[14px] h-[14px] text-blue-600" />
+                                                                                                        <span className="font-inter font-medium text-[11px] text-blue-700">{stats.dur}</span>
+                                                                                                    </div>
+                                                                                                    <div className="flex items-center gap-[6px] bg-gray-50 px-2 py-1 rounded-md">
+                                                                                                        <Car className="w-[14px] h-[14px] text-gray-600" />
+                                                                                                        <span className="font-inter font-medium text-[11px] text-gray-700">{stats.dist}</span>
+                                                                                                    </div>
+                                                                                                </>
+                                                                                            ) : (
+                                                                                                <div className="flex items-center gap-[8px] opacity-40">
+                                                                                                    <Loader2 className="w-[12px] h-[12px] animate-spin" />
+                                                                                                    <span className="text-[10px]">Calculating...</span>
+                                                                                                </div>
+                                                                                            )}
+                                                                                        </>
+                                                                                    )}
+                                                                                    <div className="relative">
+                                                                                        <button 
+                                                                                            onClick={() => setActiveTimePickerId(activeTimePickerId === item.id ? null : item.id)}
+                                                                                            className="flex items-center gap-[6px] text-[11px] text-gray-400 hover:text-blue-500 transition-colors"
+                                                                                        >
+                                                                                            <Clock className="w-[14px] h-[14px]" />
+                                                                                            <span className="font-inter font-normal text-[12px] leading-[15px] text-black">
+                                                                                                {item.start_time 
+                                                                                                    ? `${formatTimeDisplay(item.start_time || null)} - ${formatTimeDisplay(item.end_time || null)}`
+                                                                                                    : "Add time"
+                                                                                                }
+                                                                                            </span>
+                                                                                        </button>
+                                                                                        {activeTimePickerId === item.id && (
+                                                                                            <TimePickerPopup 
+                                                                                                initialStartTime={item.start_time || null}
+                                                                                                initialEndTime={item.end_time || null}
+                                                                                                onSave={(s, e) => handleSaveTime(item.id, s, e)}
+                                                                                                onClose={() => setActiveTimePickerId(null)}
+                                                                                                onClear={() => handleClearTime(item.id)}
+                                                                                            />
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
                                                                             </div>
-
-                                                                        </div>
-                                                                    )}
-                                                                </Draggable>
-                                                            );
+                                                                        )}
+                                                                    </Draggable>
+                                                                );
+                                                            }
                                                         })}
                                                         {provided.placeholder}
                                                     </div>
                                                 )}
                                             </Droppable>
+                                        )}
+
+                                        {/* ✅ 7. Total Section (แสดงท้ายสุด) */}
+                                        {total && items.filter(i => i.item_type === 'place').length > 1 && (
+                                             <div className="flex justify-center items-center gap-4 py-4 mt-2">
+                                                 <span className="font-inter font-bold text-[12px] text-black">Total</span>
+                                                 <div className="flex items-center gap-1">
+                                                     <Clock className="w-[14px] h-[14px] text-[#616161]" />
+                                                     <span className="font-inter font-normal text-[12px] text-black">{total.totalDur}</span>
+                                                 </div>
+                                                 <div className="flex items-center gap-1">
+                                                     <Car className="w-[14px] h-[14px] text-[#616161]" />
+                                                     <span className="font-inter font-normal text-[12px] text-black">{total.totalDist}</span>
+                                                 </div>
+                                             </div>
                                         )}
 
                                         {/* Saved Places Suggestions */}
