@@ -6,6 +6,7 @@ import PlanNewTripForm from "@/components/PlanNewTripForm";
 import ItineraryCard from "@/components/ItineraryCard";
 import ItineraryDetailView from "@/components/ItineraryDetailView";
 import PlaceToVisit from "@/components/PlaceToVisit";
+import BudgetView from "@/components/BudgetView"; // ✅ 1. Import BudgetView
 import { createClient } from "@/utils/supabase/client";
 import { Loader2 } from "lucide-react";
 
@@ -16,7 +17,8 @@ interface Itinerary {
   end_date: string | null;
 }
 
-type ViewState = 'list' | 'create' | 'detail' | 'place_to_visit';
+// ✅ 2. เพิ่ม 'budget' ใน Type
+type ViewState = 'list' | 'create' | 'detail' | 'place_to_visit' | 'budget';
 
 export default function ItineraryPage() {
   const supabase = createClient();
@@ -24,8 +26,6 @@ export default function ItineraryPage() {
   // State
   const [viewState, setViewState] = useState<ViewState>('list');
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
-  
-  // ✅ State สำหรับระบุวันที่ต้องการให้ Scroll ไปหา
   const [targetDay, setTargetDay] = useState<number | null>(null);
   
   // Data
@@ -37,7 +37,6 @@ export default function ItineraryPage() {
   useEffect(() => {
     const fetchItineraries = async () => {
       if (itineraries.length === 0) setIsLoading(true);
-      
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
@@ -56,7 +55,6 @@ export default function ItineraryPage() {
         setIsLoading(false);
       }
     };
-
     fetchItineraries();
   }, [refreshKey]);
 
@@ -74,6 +72,11 @@ export default function ItineraryPage() {
         const { error } = await supabase.from('itineraries').delete().eq('id', id);
         if (error) throw error;
         setItineraries(prev => prev.filter(item => item.id !== id));
+        // ถ้าลบ Plan ที่กำลังดูอยู่ ให้กลับไปหน้า List
+        if (selectedTripId === id) {
+            setSelectedTripId(null);
+            setViewState('list');
+        }
     } catch (error) {
         console.error("Error deleting:", error);
         alert("Failed to delete plan");
@@ -93,17 +96,22 @@ export default function ItineraryPage() {
   const getSidebarViewMode = () => {
       if (viewState === 'detail') return 'detail';
       if (viewState === 'place_to_visit') return 'place_to_visit';
+      if (viewState === 'budget') return 'budget'; // ✅ เพิ่มเงื่อนไขนี้
       return 'default'; 
   };
 
-  // ✅ ฟังก์ชันรับ Event เมื่อกดวันที่ใน Sidebar
   const handleDateClick = (dayNumber: number) => {
-      // รีเซ็ตค่าก่อนเพื่อให้ useEffect ใน DetailView ทำงานได้แม้กดวันเดิมซ้ำ
       setTargetDay(null); 
       setTimeout(() => {
           setTargetDay(dayNumber);
-          setViewState('detail'); // บังคับให้กลับมาหน้า Detail ถ้าหลุดไปหน้าอื่น
+          setViewState('detail'); 
       }, 10);
+  };
+
+  // ✅ 3. Handler สำหรับปุ่ม Budget
+  const handleBudgetClick = () => {
+      setViewState('budget');
+      // หมายเหตุ: ไม่ต้อง clear selectedTripId เพราะ BudgetView รองรับทั้งแบบมีและไม่มี selectedTripId
   };
 
   return (
@@ -117,9 +125,10 @@ export default function ItineraryPage() {
                   onCreateNewPlan={() => setViewState('create')} 
                   onBackToList={() => setViewState('list')}
                   onPlaceToVisit={() => setViewState('place_to_visit')} 
-                  
-                  // ✅ ส่ง prop onDateClick
                   onDateClick={handleDateClick}
+                  
+                  // ✅ ส่ง prop onBudgetClick
+                  onBudgetClick={handleBudgetClick} 
 
                   viewMode={getSidebarViewMode()}
                   startDate={selectedTrip?.start_date}
@@ -135,37 +144,39 @@ export default function ItineraryPage() {
                    <ItineraryDetailView 
                         tripId={selectedTripId} 
                         onDataUpdate={handleDataRefresh}
-                        // ✅ ส่ง prop scrollToDay
                         scrollToDay={targetDay} 
                    />
                ) : viewState === 'place_to_visit' ? ( 
                    <PlaceToVisit />
+               ) : viewState === 'budget' ? ( 
+                   // ✅ 4. Render BudgetView
+                   <BudgetView /> 
                ) : (
                    // List Mode
                    <>
-                        {isLoading ? (
-                            <div className="w-full h-[400px] flex items-center justify-center">
-                                <Loader2 className="w-8 h-8 text-[#3A82CE] animate-spin" />
-                            </div>
-                        ) : itineraries.length > 0 ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[24px] pb-10">
-                                {itineraries.map((trip) => (
-                                    <div key={trip.id} onClick={() => handleCardClick(trip.id)} className="cursor-pointer">
-                                        <ItineraryCard 
-                                            id={trip.id}
-                                            name={trip.name}
-                                            startDate={trip.start_date}
-                                            endDate={trip.end_date}
-                                            onDelete={handleDelete}
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="w-[708px] h-[500px] border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center text-gray-400 gap-4 mt-[-47px]">
-                                <span>Select a plan or create a new one to get started</span>
-                            </div>
-                        )}
+                       {isLoading ? (
+                           <div className="w-full h-[400px] flex items-center justify-center">
+                               <Loader2 className="w-8 h-8 text-[#3A82CE] animate-spin" />
+                           </div>
+                       ) : itineraries.length > 0 ? (
+                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[24px] pb-10">
+                               {itineraries.map((trip) => (
+                                   <div key={trip.id} onClick={() => handleCardClick(trip.id)} className="cursor-pointer">
+                                       <ItineraryCard 
+                                           id={trip.id}
+                                           name={trip.name}
+                                           startDate={trip.start_date}
+                                           endDate={trip.end_date}
+                                           onDelete={handleDelete}
+                                       />
+                                   </div>
+                               ))}
+                           </div>
+                       ) : (
+                           <div className="w-[708px] h-[500px] border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center text-gray-400 gap-4 mt-[-47px]">
+                               <span>Select a plan or create a new one to get started</span>
+                           </div>
+                       )}
                    </>
                )}
             </div>

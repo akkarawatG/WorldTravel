@@ -62,3 +62,43 @@ const formatDuration = (seconds: number): string => {
     const remainingMins = minutes % 60;
     return remainingMins === 0 ? `${hours} hr` : `${hours} hr ${remainingMins} min`;
 };
+// utils/openRouteService.ts
+
+// ... (code เดิมของ getRouteData) ...
+
+// ✅ เพิ่มส่วนนี้ต่อท้ายไฟล์
+export interface GeocodeResult {
+    id: string; // ใช้ id จาก ORS หรือสร้างเอง
+    name: string;
+    label: string; // ที่อยู่เต็ม
+    coordinates: [number, number]; // [lon, lat]
+}
+
+// utils/openRouteService.ts
+// ... (โค้ดเดิม getRouteData) ...
+
+// ✅ เพิ่มส่วนนี้ต่อท้ายไฟล์เดิม
+export interface GeocodeResult {
+    id: string;
+    name: string;
+    label: string;
+    coordinates: [number, number]; // [lon, lat]
+}
+
+export const searchPlaces = async (query: string): Promise<GeocodeResult[]> => {
+    try {
+        const res = await fetch(`/api/ors/geocode?text=${encodeURIComponent(query)}`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        
+        return data.features.map((f: any) => ({
+            id: f.properties.id || Math.random().toString(36).substr(2, 9),
+            name: f.properties.name || f.properties.label.split(',')[0],
+            label: f.properties.label,
+            coordinates: f.geometry.coordinates 
+        }));
+    } catch (e) {
+        console.error("Geocode error:", e);
+        return [];
+    }
+}

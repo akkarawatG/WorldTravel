@@ -5,11 +5,12 @@ import { useMemo, useState } from "react";
 
 interface ItinerarySidebarProps {
   onCreateNewPlan?: () => void;
-  onBackToList?: () => void;
+  onBackToList?: () => void; // ปุ่ม My Plan
   onPlaceToVisit?: () => void;
-  // ✅ เพิ่ม Prop รับฟังก์ชันเมื่อกดวันที่
+  // ✅ เพิ่ม Prop รับฟังก์ชันเมื่อกดปุ่ม Budget
+  onBudgetClick?: () => void; 
   onDateClick?: (dayNumber: number) => void;
-  viewMode?: 'default' | 'detail' | 'place_to_visit' | 'budget';
+  viewMode?: 'default' | 'detail' | 'place_to_visit' | 'budget'; // ✅ เพิ่ม 'budget' ใน type (มีอยู่แล้ว)
   startDate?: string | null;
   endDate?: string | null;
 }
@@ -17,7 +18,8 @@ interface ItinerarySidebarProps {
 export default function ItinerarySidebar({ 
   onCreateNewPlan, 
   onBackToList,
-  onPlaceToVisit, 
+  onPlaceToVisit,
+  onBudgetClick, // ✅ รับมาใช้
   onDateClick, 
   viewMode = 'default',
   startDate,
@@ -46,13 +48,13 @@ export default function ItinerarySidebar({
       const end = new Date(endDate);
       const list = [];
       const current = new Date(start);
-      let dayCount = 1; // ✅ ตัวนับวันที่ (Day 1, Day 2...)
+      let dayCount = 1;
 
       while (current <= end) {
           const dayIndex = current.getDay();
           const colors = getDayColor(dayIndex);
           list.push({
-              dayNum: dayCount, // ✅ เก็บเลขวันไว้ใช้ส่งค่า
+              dayNum: dayCount,
               day: current.getDate(),
               month: current.toLocaleDateString('en-GB', { month: 'long' }),
               color: colors.bg,
@@ -110,14 +112,19 @@ export default function ItinerarySidebar({
                  >
                     <span className="text-[16px] leading-[19px] text-[#212121]">Place to visit</span>
                  </button>
-                 <button className={getButtonClass(viewMode === 'budget')}>
+                 
+                 {/* ✅ แก้ไขปุ่ม Budget ใส่ onClick */}
+                 <button 
+                    onClick={onBudgetClick} 
+                    className={getButtonClass(viewMode === 'budget')}
+                 >
                     <span className="text-[16px] leading-[19px] text-[#212121]">Budget</span>
                  </button>
              </div>
          )}
       </div>
 
-      {/* แสดง Itinerary เฉพาะหน้า Detail */}
+      {/* แสดง Itinerary เฉพาะหน้า Detail เท่านั้น */}
       {viewMode === 'detail' && (
         <div className="flex flex-col gap-[8px] w-full">
             <div 
@@ -137,7 +144,6 @@ export default function ItinerarySidebar({
                         itineraryDates.map((item, index) => (
                             <div 
                                 key={index} 
-                                // ✅ เมื่อคลิก ให้เรียก onDateClick พร้อมส่งเลขวันที่ (Day Number)
                                 onClick={() => onDateClick?.(item.dayNum)}
                                 className="flex items-center gap-[13px] h-[19px] cursor-pointer hover:opacity-70 transition-opacity"
                             >
