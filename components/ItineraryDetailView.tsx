@@ -223,7 +223,12 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
     const [activeTimePickerId, setActiveTimePickerId] = useState<string | null>(null);
 
     // Travel Stats State
-    const [travelStats, setTravelStats] = useState<Record<string, { dist: string, dur: string, geometry: any }>>({});
+    const [travelStats, setTravelStats] = useState<Record<string, { 
+    dist: string; 
+    dur: string; 
+    geometry: any; 
+    rawDist: number; 
+    rawDur: number; }>>({});
     const [dayTotals, setDayTotals] = useState<Record<number, { totalDist: string, totalDur: string }>>({});
 
     // ✅ Search States (เพิ่มใหม่)
@@ -368,7 +373,13 @@ useEffect(() => {
         const calculateRoutes = async () => {
             if (!schedules.length) return;
 
-            const newStats: Record<string, { dist: string, dur: string, geometry: any }> = {};
+            const newStats: Record<string, { 
+            dist: string; 
+            dur: string; 
+            geometry: any; 
+            rawDist: number; 
+            rawDur: number; 
+        }> = {};
             const newDayTotals: Record<number, { totalDist: string, totalDur: string }> = {};
 
             // 1. Identify tasks (กรองเอาเฉพาะ Place -> Place)
