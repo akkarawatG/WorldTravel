@@ -2,7 +2,6 @@
 
 import { LogOut, ChevronLeft, Search, MapPin, Globe, Map } from "lucide-react";
 import { useState, useEffect } from "react";
-// ✅ เพิ่ม useSearchParams
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Icon from '@mdi/react';
@@ -60,7 +59,7 @@ export default function Navbar({
   onLogout
 }: NavbarProps) {
   const router = useRouter();
-  const searchParams = useSearchParams(); // ✅ Hook สำหรับอ่าน Query Params
+  const searchParams = useSearchParams();
   const supabase = createClient();
 
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(user);
@@ -76,12 +75,9 @@ export default function Navbar({
     if (user) setCurrentUser(user);
   }, [user]);
 
-  // ✅ Effect: ตรวจสอบ URL เมื่อโหลดหน้าเสร็จ
   useEffect(() => {
     if (searchParams.get('action') === 'edit-profile') {
       setShowEditProfileModal(true);
-      
-      // (Optional) ลบ Query Params ออกจาก URL เพื่อความสวยงาม โดยไม่ Reload หน้า
       const newUrl = window.location.pathname;
       window.history.replaceState(null, '', newUrl);
     }
@@ -117,7 +113,6 @@ export default function Navbar({
 
         const isProfileIncomplete = !profile || !profile.username;
 
-        // ถ้า Profile ยังไม่สมบูรณ์ บังคับเปิด Modal (Logic เดิม)
         if (isProfileIncomplete) {
           setShowEditProfileModal(true);
         }
@@ -192,7 +187,6 @@ export default function Navbar({
       const tempResults: SearchResult[] = [];
       const addedKeys = new Set();
 
-      // --- Country ---
       places.forEach(place => {
         const country = place.country;
         if (country && country.toLowerCase().includes(lowerQuery) && !addedKeys.has(`country-${country}`)) {
@@ -201,7 +195,6 @@ export default function Navbar({
         }
       });
 
-      // --- Province ---
       places.forEach(place => {
         const province = place.province_state;
         if (province && province.toLowerCase().includes(lowerQuery) && !addedKeys.has(`province-${province}`)) {
@@ -215,7 +208,6 @@ export default function Navbar({
         }
       });
 
-      // --- Place ---
       places.forEach(place => {
         if (place.name.toLowerCase().includes(lowerQuery)) {
           tempResults.push({
@@ -266,6 +258,15 @@ export default function Navbar({
     setLocalQuery(val);
     if (setSearchQuery) setSearchQuery(val);
     setShowDropdown(true);
+  };
+
+  const handleProtectedLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, path: string) => {
+    e.preventDefault(); 
+    if (currentUser) {
+      router.push(path); 
+    } else {
+      handleLoginTrigger(); 
+    }
   };
 
   return (
@@ -352,19 +353,28 @@ export default function Navbar({
               )}
             </div>
           </div>
-{/* RIGHT: Menu */}
-          {/* ❌ ลบ w-[151px] และ justify-between ออก, ✅ ใช้ flex และ gap เพื่อจัดระยะห่างแทน */}
+
+          {/* RIGHT: Menu */}
           <div className="relative flex items-center gap-8 z-40">
             
             <div className="flex items-center gap-6">
-              <Link href="/mytrips" className="text-[20px] font-inter font-[400] text-[#000000] hover:text-[#1976D2] transition leading-none whitespace-nowrap">
+              {/* ✅ ปรับปรุง MyTrip ให้เป็นสีดำปกติ */}
+              <a 
+                href="/mytrips" 
+                onClick={(e) => handleProtectedLinkClick(e, '/mytrips')} 
+                className="text-[20px] font-inter font-[400] text-[#000000] hover:text-[#1976D2] transition leading-none whitespace-nowrap cursor-pointer"
+              >
                 MyTrip
-              </Link>
+              </a>
 
-              {/* ✅ เพิ่มปุ่ม Itinerary ตรงนี้ */}
-              <Link href="/itinerary" className="text-[20px] font-inter font-[400] text-[#000000] hover:text-[#1976D2] transition leading-none whitespace-nowrap">
+              {/* ✅ ปรับปรุง MyPlan ให้เป็นสีดำปกติ */}
+              <a 
+                href="/itinerary" 
+                onClick={(e) => handleProtectedLinkClick(e, '/itinerary')} 
+                className="text-[20px] font-inter font-[400] text-[#000000] hover:text-[#1976D2] transition leading-none whitespace-nowrap cursor-pointer"
+              >
                 MyPlan
-              </Link>
+              </a>
             </div>
 
             <div className="flex items-center justify-end">
@@ -395,7 +405,7 @@ export default function Navbar({
                 </button>
               )}
 
-              {/* Dropdown Menu (เหมือนเดิม ไม่เปลี่ยนแปลง) */}
+              {/* Dropdown Menu */}
               {showUserMenu && currentUser && (
                 <div className="absolute right-0 top-[35px] w-[190px] h-[202px] bg-white rounded-[8px] border border-[#EEEEEE] p-4 flex flex-col gap-4 z-50 shadow-[0px_4px_20px_rgba(0,0,0,0.1)] font-inter animate-in fade-in zoom-in-95 duration-200">
 
@@ -453,7 +463,6 @@ export default function Navbar({
         />
       )}
 
-      {/* ✅ EditProfileModal ถูกเรียกใช้งานผ่าน state ที่ useEffect ตั้งค่าไว้ */}
       {showEditProfileModal && currentUser && (
         <EditProfileModal
           user={currentUser}
