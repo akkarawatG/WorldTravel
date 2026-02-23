@@ -3,15 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
-import { Loader2, Calendar, MapPin, Copy, X, CheckCircle2 } from "lucide-react";
-import Navbar from "@/components/Navbar"; 
-
-// --- Helper: สำหรับแปลงรหัสประเทศเป็นชื่อเต็ม ---
-const COUNTRY_NAMES: Record<string, string> = {
-  cn: "China", th: "Thailand", my: "Malaysia", jp: "Japan", ae: "United Arab Emirates", sa: "Saudi Arabia", sg: "Singapore", vn: "Vietnam", in: "India", kr: "South Korea", id: "Indonesia", tw: "Taiwan",
-  fr: "France", es: "Spain", it: "Italy", pl: "Poland", hu: "Hungary", gb: "United Kingdom", de: "Germany",
-  us: "United States", au: "Australia", nz: "New Zealand", // (สามารถเติมเพิ่มได้)
-};
+import { Loader2, Calendar, MapPin, Copy, AlertCircle } from "lucide-react";
 
 export default function SharedTemplatePage() {
   const { id } = useParams();
@@ -21,12 +13,7 @@ export default function SharedTemplatePage() {
   const [template, setTemplate] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isCloning, setIsCloning] = useState(false);
-
-  // ✅ State สำหรับระบบเลือกทริป (Real System)
-  const [showSelectTripModal, setShowSelectTripModal] = useState(false);
-  const [myTrips, setMyTrips] = useState<any[]>([]);
-  const [loadingTrips, setLoadingTrips] = useState(false);
-  const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
+  const [debugError, setDebugError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchTemplate = async () => {
@@ -40,10 +27,23 @@ export default function SharedTemplatePage() {
             template_provinces ( province_code )
           `)
           .eq("id", id)
-          .eq("is_public", true)
-          .single();
+          .maybeSingle();
 
-        if (error) throw error;
+        if (error) {
+          setDebugError(`Supabase Error: ${error.message}`);
+          throw error;
+        }
+
+        if (!data) {
+           setDebugError("ไม่พบ Template นี้ (อาจถูกลบ หรือ Policy RLS บล็อกไว้)");
+           return;
+        }
+
+        if (!data.is_public) {
+           setDebugError("Template นี้ถูกตั้งค่าเป็นส่วนตัว (Private) ไม่สามารถโคลนได้");
+           return;
+        }
+
         setTemplate(data);
       } catch (err) {
         console.error("Error fetching template:", err);
@@ -55,54 +55,41 @@ export default function SharedTemplatePage() {
     fetchTemplate();
   }, [id]);
 
-  // ✅ 1. ฟังก์ชันเปิด Modal และดึงรายชื่อทริปของผู้ใช้
-  const openSelectTripModal = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
-      alert("Please login first to use this template.");
-      router.push('/'); // ส่งกลับไปหน้าแรกเพื่อให้ล็อกอิน
-      return;
-    }
-
-    setLoadingTrips(true);
-    setShowSelectTripModal(true);
-
-    try {
-      const { data, error } = await supabase
-        .from('trips')
-        .select('id, country, created_at')
-        .eq('profile_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setMyTrips(data || []);
-    } catch (err) {
-      console.error("Error fetching user trips:", err);
-    } finally {
-      setLoadingTrips(false);
-    }
-  };
-
-  // ✅ 2. ฟังก์ชัน Clone ของจริง (รับ ID จากที่เลือกใน Modal)
-  const handleConfirmClone = async () => {
-    if (!selectedTripId) return;
-
+  const handleCloneTemplate = async () => {
     setIsCloning(true);
     try {
-      // เรียกใช้ RPC function 'clone_template' 
-      const { data, error } = await supabase.rpc('clone_template', {
-        source_template_id: id,
-        new_trip_id: selectedTripId
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        alert("Please login first to use this template.");
+        // ตรงนี้คุณอาจจะเด้งไปหน้าแรก หรือเปิด Modal Login ได้
+        setIsCloning(false);
+        return;
+      }
+
+      // 1. สร้างทริปใหม่ให้ผู้ใช้งานอัตโนมัติ โดยอิงประเทศจากเทมเพลตต้นฉบับ
+      const countryCode = template.trips?.country || "th";
+      const { data: newTrip, error: tripError } = await supabase
+        .from('trips')
+        .insert({
+          profile_id: user.id,
+          country: countryCode,
+        })
+        .select()
+        .single();
+
+      if (tripError) throw tripError;
+
+      // 2. เรียกใช้ฟังก์ชันโคลนเข้าทริปที่เพิ่งสร้าง
+      const { error: cloneError } = await supabase.rpc('clone_template', {
+        source_template_id: template.id,
+        new_trip_id: newTrip.id
       });
 
-      if (error) throw error;
+      if (cloneError) throw cloneError;
 
       alert("Template cloned successfully!");
-      setShowSelectTripModal(false);
-      
-      // ส่งผู้ใช้กลับไปหน้าจัดการทริป
-      router.push('/mytrips'); 
+      // พาผู้ใช้ไปหน้าแก้ไขของทริปใหม่ทันที เพื่อให้เริ่มจัดแผนต่อได้เลย
+      router.push(`/mytrips/edit/${newTrip.id}`); 
 
     } catch (err: any) {
       console.error("Clone error:", err.message);
@@ -112,28 +99,33 @@ export default function SharedTemplatePage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
-      </div>
-    );
-  }
+  if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><Loader2 className="w-10 h-10 animate-spin text-blue-500" /></div>;
 
-  if (!template) {
+  if (debugError || !template) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center">
-        <h1 className="text-2xl font-bold text-gray-800 mb-2">Template Not Found</h1>
-        <p className="text-gray-500 mb-6">This template may be private or has been deleted.</p>
-        <button onClick={() => router.push('/')} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-          Go to Homepage
-        </button>
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">Template Not Found</h1>
+          <p className="text-gray-500 mb-6 text-center max-w-md">This template may be private or has been deleted.</p>
+          
+          {debugError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl mb-6 max-w-lg w-full flex gap-3 text-sm items-start shadow-sm">
+               <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+               <div>
+                  <span className="font-bold block mb-1">Developer Debug Info:</span>
+                  {debugError}
+               </div>
+            </div>
+          )}
+
+          <button onClick={() => router.push('/')} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition shadow-sm">
+              Go to Homepage
+          </button>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans relative">
+    <div className="min-h-screen bg-gray-50 font-sans">
       <div className="max-w-3xl mx-auto pt-20 px-6">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
           
@@ -141,7 +133,7 @@ export default function SharedTemplatePage() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">{template.template_name || 'Untitled Template'}</h1>
               <div className="flex items-center gap-4 text-gray-500 text-sm">
-                <span className="flex items-center gap-1"><MapPin size={16} /> {template.trips?.country || 'Unknown Country'}</span>
+                <span className="flex items-center gap-1 uppercase"><MapPin size={16} /> {template.trips?.country || 'N/A'}</span>
                 <span className="flex items-center gap-1">
                   <Calendar size={16} /> 
                   {new Date(template.travel_start_date).toLocaleDateString()} - {new Date(template.travel_end_date).toLocaleDateString()}
@@ -163,93 +155,17 @@ export default function SharedTemplatePage() {
 
           <div className="flex gap-4">
             <button 
-              onClick={openSelectTripModal} // ✅ เปลี่ยนมาเรียกฟังก์ชันเปิด Modal
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-xl flex justify-center items-center gap-2 transition"
+              onClick={handleCloneTemplate}
+              disabled={isCloning}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-xl flex justify-center items-center gap-2 transition disabled:opacity-70 shadow-sm cursor-pointer"
             >
-              <Copy className="w-5 h-5" />
-              Use this Template
+              {isCloning ? <Loader2 className="w-5 h-5 animate-spin" /> : <Copy className="w-5 h-5" />}
+              {isCloning ? 'Creating your trip & Cloning...' : 'Use this Template'}
             </button>
           </div>
 
         </div>
       </div>
-
-      {/* ========================================================= */}
-      {/* ✅ MODAL: Select Target Trip สำหรับระบบจริง */}
-      {/* ========================================================= */}
-      {showSelectTripModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-[450px] bg-white rounded-2xl p-6 shadow-2xl flex flex-col max-h-[80vh] transform scale-100 animate-in zoom-in-95 duration-200">
-            
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-gray-900">Select Destination Trip</h3>
-              <button onClick={() => setShowSelectTripModal(false)} className="p-1 hover:bg-gray-100 rounded-full transition">
-                <X size={20} className="text-gray-500" />
-              </button>
-            </div>
-            
-            <p className="text-sm text-gray-500 mb-4">
-              Choose an existing trip to add this template to.
-            </p>
-
-            <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-3 custom-blue-scrollbar2">
-              {loadingTrips ? (
-                <div className="flex justify-center py-10">
-                  <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                </div>
-              ) : myTrips.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-xl border border-dashed">
-                  <p>You don't have any trips yet.</p>
-                  <p className="text-sm mt-1">Please create a trip first.</p>
-                </div>
-              ) : (
-                myTrips.map(trip => {
-                  const countryName = COUNTRY_NAMES[trip.country?.toLowerCase()] || trip.country;
-                  const isSelected = selectedTripId === trip.id;
-                  
-                  return (
-                    <div 
-                      key={trip.id}
-                      onClick={() => setSelectedTripId(trip.id)}
-                      className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                        isSelected 
-                          ? 'border-blue-500 bg-blue-50 shadow-sm' 
-                          : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
-                      }`}
-                    >
-                      <div className="flex flex-col pr-8">
-                        <span className="font-semibold text-gray-900 text-[16px]">{countryName} Trip</span>
-                        <span className="text-xs text-gray-500 mt-1">Created: {new Date(trip.created_at).toLocaleDateString('en-GB')}</span>
-                      </div>
-                      {isSelected && (
-                        <CheckCircle2 className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-500" />
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            <div className="flex items-center gap-3 mt-6 pt-4 border-t border-gray-100">
-              <button 
-                onClick={() => setShowSelectTripModal(false)} 
-                className="flex-1 h-[44px] rounded-xl border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={handleConfirmClone} 
-                disabled={!selectedTripId || isCloning}
-                className="flex-1 h-[44px] rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition disabled:opacity-50 flex justify-center items-center gap-2"
-              >
-                {isCloning ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Confirm Clone'}
-              </button>
-            </div>
-
-          </div>
-        </div>
-      )}
-
     </div>
   );
 }

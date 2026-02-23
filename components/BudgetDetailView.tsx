@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { createClient } from "@/utils/supabase/client";
-import { 
-    Loader2, ArrowLeft, Plus, 
+import {
+    Loader2, ArrowLeft, Plus,
     ChevronDown, ArrowRightLeft, Calendar, Pencil,
-    Plane, BedDouble, Car, Ticket, Bus, Utensils, 
+    Plane, BedDouble, Car, Ticket, Bus, Utensils,
     MapPin, ShoppingBag, Fuel, ShieldAlert, FileText, MoreHorizontal,
     ChevronRight, ChevronLeft, Trash2
 } from "lucide-react";
@@ -38,7 +38,7 @@ interface Expense {
 }
 
 // --- API Config ---
-const EXCHANGE_API_KEY = "886bec30e754ffa5aae195e2"; 
+const EXCHANGE_API_KEY = "886bec30e754ffa5aae195e2";
 
 // --- Helper Functions ---
 const formatDateRange = (start: string | null, end: string | null) => {
@@ -99,7 +99,7 @@ function SingleDatePicker({
     const handleDayClick = (day: number) => {
         const clickedDate = new Date(Date.UTC(year, month, day));
         const dateStr = clickedDate.toISOString().split('T')[0];
-        onChange(dateStr); 
+        onChange(dateStr);
         onClose();
     };
 
@@ -128,10 +128,10 @@ function SingleDatePicker({
                     const isSelected = dStr === selectedDate;
 
                     return (
-                        <button 
-                            key={day} 
+                        <button
+                            key={day}
                             type="button"
-                            onClick={() => handleDayClick(day)} 
+                            onClick={() => handleDayClick(day)}
                             className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] transition mx-auto font-inter ${isSelected ? "bg-[#3A82CE] text-white font-bold shadow-sm" : "hover:bg-blue-50 text-gray-700"}`}
                         >
                             {day}
@@ -146,11 +146,11 @@ function SingleDatePicker({
 // --- Component ---
 export default function BudgetDetailView({ tripId, onBack }: { tripId: string, onBack: () => void }) {
     const supabase = createClient();
-    
+
     // Data State
     const [trip, setTrip] = useState<Itinerary | null>(null);
     const [schedulesData, setSchedulesData] = useState<any[]>([]);
-    const [expensesList, setExpensesList] = useState<Expense[]>([]); 
+    const [expensesList, setExpensesList] = useState<Expense[]>([]);
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
 
@@ -159,11 +159,11 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
     const routeCache = useRef(new Map<string, any>());
 
     // Currency State
-    const [currencies, setCurrencies] = useState<string[][]>([["THB", "Thai Baht"], ["USD", "United States Dollar"], ["EUR", "Euro"], ["JPY", "Japanese Yen"], ["GBP", "British Pound"]]); 
-    const [currency1, setCurrency1] = useState<string>("THB"); 
-    const [currency2, setCurrency2] = useState<string>("USD"); 
-    const [amount1, setAmount1] = useState<string>("100000"); 
-    const [amount2, setAmount2] = useState<string>("");        
+    const [currencies, setCurrencies] = useState<string[][]>([["THB", "Thai Baht"], ["USD", "United States Dollar"], ["EUR", "Euro"], ["JPY", "Japanese Yen"], ["GBP", "British Pound"]]);
+    const [currency1, setCurrency1] = useState<string>("THB");
+    const [currency2, setCurrency2] = useState<string>("USD");
+    const [amount1, setAmount1] = useState<string>("100000");
+    const [amount2, setAmount2] = useState<string>("");
     const [exchangeRate, setExchangeRate] = useState<number>(0);
 
     // Custom Dropdown State
@@ -174,17 +174,20 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
 
     // Add / Edit Expense Form State
     const [showExpenseForm, setShowExpenseForm] = useState(false);
-    const [expenseStep, setExpenseStep] = useState<0 | 1>(0); 
+    const [expenseStep, setExpenseStep] = useState<0 | 1>(0);
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-    
+
+    // ✅ เพิ่ม State สำหรับชื่อ Category ที่ผู้ใช้ตั้งเอง
+    const [customCategoryName, setCustomCategoryName] = useState("");
+
     const [expenseAmount, setExpenseAmount] = useState("");
     const [expenseCurrency, setExpenseCurrency] = useState("THB");
     const [expenseDesc, setExpenseDesc] = useState("");
     const [expenseDate, setExpenseDate] = useState("");
 
     const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
-    
-    const [isDatePickerOpen, setIsDatePickerOpen] = useState(false); 
+
+    const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
     const [datePickerPosition, setDatePickerPosition] = useState({ top: 0, left: 0 });
     const datePickerRef = useRef<HTMLDivElement>(null);
 
@@ -227,8 +230,8 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                 .from('expenses')
                 .select('*')
                 .eq('itinerary_id', tripId)
-                .order('created_at', { ascending: true }); // ✅ เปลี่ยนเป็น ascending: true ให้รายการใหม่ไปอยู่ด้านล่าง
-            
+                .order('created_at', { ascending: true });
+
             if (error) throw error;
             setExpensesList(data || []);
         } catch (error) {
@@ -281,7 +284,7 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                         console.warn(`Skipping route for ${task.id}`);
                     }
                 }));
-                if (i + BATCH_SIZE < tasks.length) await new Promise(resolve => setTimeout(resolve, 2500)); 
+                if (i + BATCH_SIZE < tasks.length) await new Promise(resolve => setTimeout(resolve, 2500));
             }
             setTravelStats(prev => ({ ...prev, ...newStats }));
         };
@@ -305,7 +308,7 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                         lat: item.places.lat,
                         lng: item.places.lon,
                         day_number: day.day_number,
-                        order_index: globalIndex++, 
+                        order_index: globalIndex++,
                         color: getDayColor(day.day_number),
                         geometry: stats?.geometry || null
                     });
@@ -368,7 +371,7 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
             if (dropdown1Ref.current && !dropdown1Ref.current.contains(event.target as Node)) setIsDropdown1Open(false);
             if (dropdown2Ref.current && !dropdown2Ref.current.contains(event.target as Node)) setIsDropdown2Open(false);
             if (expenseDropdownRef.current && !expenseDropdownRef.current.contains(event.target as Node)) setIsExpenseDropdownOpen(false);
-            
+
             const target = event.target as Element;
             if (!target.closest('#date-picker-container') && !target.closest('#date-input-box')) {
                 setIsDatePickerOpen(false);
@@ -381,11 +384,11 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
     const handleOpenDatePicker = (e: React.MouseEvent<HTMLDivElement>) => {
         if (!datePickerRef.current) return;
         const rect = datePickerRef.current.getBoundingClientRect();
-        const calendarWidth = 240; 
-        
+        const calendarWidth = 240;
+
         setDatePickerPosition({
             top: rect.bottom + window.scrollY + 4,
-            left: rect.right + window.scrollX - calendarWidth, 
+            left: rect.right + window.scrollX - calendarWidth,
         });
         setIsDatePickerOpen(!isDatePickerOpen);
     };
@@ -393,35 +396,52 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
     const handleEditExpense = (expense: Expense) => {
         setEditingExpenseId(expense.id);
         setSelectedCategory(expense.category);
+
+        // ✅ จัดการดึง customCategoryName ถ้าเป็นหมวด Others
+        if (expense.category === "others") {
+            setCustomCategoryName(expense.title);
+        } else {
+            setCustomCategoryName("");
+        }
+
         setExpenseAmount(expense.amount.toString());
         setExpenseCurrency(expense.currency);
         setExpenseDesc(expense.note || "");
         setExpenseDate(expense.expense_date || "");
-        
-        setExpenseStep(1); 
+
+        setExpenseStep(1);
         setShowExpenseForm(true);
     };
 
     const handleAddExpenseClick = () => {
         setEditingExpenseId(null);
         setSelectedCategory(null);
+        setCustomCategoryName(""); // ✅ รีเซ็ต customCategoryName
         setExpenseAmount("");
         setExpenseCurrency("THB");
         setExpenseDesc("");
         setExpenseDate(trip?.start_date || "");
-        
-        setExpenseStep(0); 
+
+        setExpenseStep(0);
         setShowExpenseForm(true);
     };
 
     const handleSaveExpense = async () => {
         if (!expenseAmount || isNaN(Number(expenseAmount))) {
-            return; // ✅ ลบ Alert ออก
+            return;
+        }
+
+        // ✅ ตรวจสอบว่าถ้าเลือก Others ต้องใส่ชื่อ
+        if (selectedCategory === "others" && !customCategoryName.trim()) {
+            return;
         }
 
         setIsSaving(true);
         try {
-            const catLabel = EXPENSE_CATEGORIES.find(c => c.id === selectedCategory)?.label || "Other";
+            // ✅ ใช้ customCategoryName ถ้าเลือก others
+            const catLabel = selectedCategory === "others"
+                ? customCategoryName
+                : EXPENSE_CATEGORIES.find(c => c.id === selectedCategory)?.label || "Other";
 
             if (editingExpenseId) {
                 const { error } = await supabase
@@ -491,11 +511,11 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
     };
 
     const summaryData = useMemo(() => {
-        const budgetMain = safeParseFloat(amount1); 
-        const budgetSub = safeParseFloat(amount2);  
+        const budgetMain = safeParseFloat(amount1);
+        const budgetSub = safeParseFloat(amount2);
 
-        let totalExpenseMain = 0; 
-        let totalExpenseSub = 0;  
+        let totalExpenseMain = 0;
+        let totalExpenseSub = 0;
 
         expensesList.forEach(exp => {
             if (exp.currency === currency1) {
@@ -544,7 +564,7 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
 
             {/* --- LEFT COLUMN: Expense List --- */}
             <div className="w-[433px] flex-shrink-0 flex flex-col gap-[24px] pt-[24px] h-full overflow-hidden">
-                
+
                 <div className="flex items-center gap-[12px] w-full shrink-0">
                     <button onClick={onBack} className="hover:bg-gray-100 rounded-full transition text-black shrink-0 p-1">
                         <ArrowLeft className="w-6 h-6" />
@@ -556,7 +576,7 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                 </div>
 
                 <div className="flex-1 overflow-y-auto hide-scrollbar flex flex-col gap-[24px] pb-[20px]">
-                    
+
                     {/* Top Budget Card */}
                     <div className="w-[433px] bg-[#FFFFFF] rounded-[16px] shadow-[4px_4px_4px_rgba(0,0,0,0.25)] flex flex-col items-center px-[13px] py-[20px] gap-[25px] shrink-0">
                         <div className="flex flex-row justify-between w-full px-[10px]">
@@ -569,7 +589,7 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                             <div className="flex flex-col gap-[12px] pt-[2px]">
                                 <div className="relative h-[24px] w-[186.47px] flex items-center shadow-sm">
                                     <div className="flex-1 h-full bg-[#FFFFFF] border border-[#2666B0] border-r-0 rounded-l-[8px] flex items-center justify-center overflow-hidden">
-                                        <input 
+                                        <input
                                             type="number"
                                             value={amount1}
                                             onChange={(e) => handleAmount1Change(e.target.value)}
@@ -577,20 +597,20 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                                             placeholder="0"
                                         />
                                     </div>
-                                    <div 
+                                    <div
                                         ref={dropdown1Ref}
                                         onClick={() => setIsDropdown1Open(!isDropdown1Open)}
                                         className="w-[84.47px] h-full bg-[#3A82CE] border border-[#2666B0] rounded-r-[8px] flex items-center justify-center relative px-2 cursor-pointer hover:bg-[#3272b5] transition-colors"
                                     >
                                         <span className="text-[#FFFFFF] text-[12px] font-medium w-full text-center pr-3 select-none">{currency1}</span>
                                         <ChevronDown className="w-[10px] h-[10px] text-white absolute right-2" />
-                                        
+
                                         {isDropdown1Open && (
                                             <div className="absolute top-[28px] right-0 w-[180px] h-[217px] bg-[#3A82CE] border border-[#1E518C] rounded-[8.5px] z-50 overflow-hidden shadow-xl flex flex-col cursor-default" onClick={e => e.stopPropagation()}>
                                                 <div className="flex-1 overflow-y-auto custom-blue-scrollbar p-1">
                                                     {currencies.map((c, index) => (
-                                                        <div 
-                                                            key={c[0]} 
+                                                        <div
+                                                            key={c[0]}
                                                             onClick={() => { setCurrency1(c[0]); setIsDropdown1Open(false); }}
                                                             className="flex flex-col justify-center px-3 py-2 cursor-pointer hover:bg-[#60A3DE] rounded transition-colors group relative"
                                                         >
@@ -608,7 +628,7 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                                 </div>
 
                                 <div className="flex justify-center -my-[8px] z-10 relative pointer-events-auto">
-                                    <div 
+                                    <div
                                         className="bg-white border border-[#2666B0] rounded-full p-[2px] shadow-sm cursor-pointer hover:bg-gray-100 transition-colors"
                                         onClick={handleSwapCurrencies}
                                     >
@@ -618,7 +638,7 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
 
                                 <div className="relative h-[24px] w-[186.47px] flex items-center shadow-sm">
                                     <div className="flex-1 h-full bg-[#FFFFFF] border border-[#2666B0] border-r-0 rounded-l-[8px] flex items-center justify-center overflow-hidden">
-                                        <input 
+                                        <input
                                             type="number"
                                             value={amount2}
                                             onChange={(e) => handleAmount2Change(e.target.value)}
@@ -626,20 +646,20 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                                             placeholder="0"
                                         />
                                     </div>
-                                    <div 
+                                    <div
                                         ref={dropdown2Ref}
                                         onClick={() => setIsDropdown2Open(!isDropdown2Open)}
                                         className="w-[84.47px] h-full bg-[#3A82CE] border border-[#2666B0] rounded-r-[8px] flex items-center justify-center relative px-2 cursor-pointer hover:bg-[#3272b5] transition-colors"
                                     >
                                         <span className="text-[#FFFFFF] text-[12px] font-medium w-full text-center pr-3 select-none">{currency2}</span>
                                         <ChevronDown className="w-[10px] h-[10px] text-white absolute right-2" />
-                                        
+
                                         {isDropdown2Open && (
                                             <div className="absolute top-[28px] right-0 w-[180px] h-[217px] bg-[#3A82CE] border border-[#1E518C] rounded-[8.5px] z-50 overflow-hidden shadow-xl flex flex-col cursor-default" onClick={e => e.stopPropagation()}>
                                                 <div className="flex-1 overflow-y-auto custom-blue-scrollbar p-1">
                                                     {currencies.map((c, index) => (
-                                                        <div 
-                                                            key={c[0]} 
+                                                        <div
+                                                            key={c[0]}
                                                             onClick={() => { setCurrency2(c[0]); setIsDropdown2Open(false); }}
                                                             className="flex flex-col justify-center px-3 py-2 cursor-pointer hover:bg-[#60A3DE] rounded transition-colors group relative"
                                                         >
@@ -658,7 +678,7 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                             </div>
                         </div>
 
-                        <button 
+                        <button
                             className="box-border flex flex-row justify-center items-center px-[16px] py-[8px] gap-[8px] w-[131px] h-[29px] bg-[#3A82CE] border border-[#2666B0] rounded-[8px] hover:bg-[#2c6cb0] transition-colors shadow-sm"
                             onClick={handleAddExpenseClick}
                         >
@@ -667,17 +687,17 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                         </button>
                     </div>
 
-                    {/* ✅ List ของ Expenses ที่ดึงมาจาก DB (เรียงจากเก่าไปใหม่ ทำให้อันใหม่มาต่อท้าย) */}
+                    {/* ✅ List ของ Expenses ที่ดึงมาจาก DB */}
                     {expensesList.map((exp) => (
-                        <div 
-                            key={exp.id} 
-                            onClick={() => handleEditExpense(exp)} 
+                        <div
+                            key={exp.id}
+                            onClick={() => handleEditExpense(exp)}
                             className="w-[433px] bg-white rounded-[16px] shadow-[0px_4px_4px_rgba(0,0,0,0.25)] p-4 flex flex-row items-center gap-4 shrink-0 cursor-pointer hover:bg-gray-50 transition-colors border border-transparent hover:border-[#C2DCF3]"
                         >
                             <div className="w-[45px] h-[45px] bg-[#DEECF9] rounded-full flex items-center justify-center shrink-0">
                                 {getCategoryIcon(exp.category)}
                             </div>
-                            
+
                             <div className="flex-1 min-w-0 flex flex-col gap-1">
                                 <div className="flex items-center gap-2">
                                     <span className="font-inter font-medium text-[12px] text-[#194473]">{exp.title}</span>
@@ -686,9 +706,12 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                                         {exp.expense_date ? new Date(exp.expense_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ""}
                                     </span>
                                 </div>
-                                <span className="font-inter font-medium text-[10px] text-black truncate w-full">
+
+                                {/* ✅ เปลี่ยนคลาสตรงนี้: ลบ truncate ออก และใส่ break-words whitespace-pre-wrap */}
+                                <span className="font-inter font-medium text-[10px] text-black w-full break-words whitespace-pre-wrap leading-[14px]">
                                     {exp.note || exp.title}
                                 </span>
+
                             </div>
 
                             <div className="shrink-0 text-right pr-2">
@@ -702,7 +725,7 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                     {/* Expenses Summary Card */}
                     <div className="w-[433px] bg-white rounded-[16px] shadow-[0px_4px_4px_rgba(0,0,0,0.25)] p-[17px_25px] flex flex-col gap-[10px] shrink-0">
                         <h3 className="font-inter font-medium text-[16px] leading-[19px] text-[#000000] mb-2">Expenses Summary</h3>
-                        
+
                         <div className="flex flex-col gap-[10px] w-full pl-[13px] pr-[13px]">
                             <div className="flex justify-between items-center w-full">
                                 <span className="font-inter font-normal text-[12px] text-[#000000] w-[60px]">Budget</span>
@@ -728,7 +751,10 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
             </div>
 
             {/* --- RIGHT COLUMN: Map --- */}
-            <div className="flex-1 relative w-full h-[900px] mt-[24px] mr-[24px] rounded-[16px] overflow-hidden border border-gray-300 shadow-sm shrink-0">
+            {/* ✅ 1. เพิ่ม flex flex-col และปรับความสูงเป็น h-[calc(100%-24px)] ให้พอดีกับ parent */}
+            <div className="w-[459px] bg-[#E5E5E5] overflow-hidden relative border border-gray-200 h-[928px] rounded-[16px] mt-[9px] sticky top-[20px] flex flex-col">
+
+                {/* Header (แถบวันที่) */}
                 <div className="w-full h-[52px] bg-white flex flex-row items-center justify-between px-[16px] border-b border-gray-200 flex-shrink-0 relative z-[1000]">
                     <div
                         onClick={handleOpenDatePicker}
@@ -739,29 +765,10 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                             {dateRangeStr}
                         </span>
                     </div>
-
-                    {/* <button
-                        onClick={handleViewAll}
-                        className={`box-border flex flex-row justify-center items-center px-[12px] py-[8px] gap-[8px] border-2 rounded-[16px] transition-colors ${isViewAll ? 'bg-[#154a85] border-[#1E518C] shadow-inner' : 'bg-[#2666B0] border-[#95C3EA] hover:bg-[#1e5594]'}`}
-                    >
-                        <span className="font-inter font-normal text-[14px] leading-[17px] text-white select-none">
-                            {isViewAll ? "Close All" : "View All"}
-                        </span>
-                    </button>
-
-                    {isDatePickerOpen && (
-                        <div className="absolute top-[60px] left-[16px] animate-in fade-in zoom-in-95 duration-200 z-[1100]">
-                            <CustomDateRangePicker
-                                startDate={tempDates.start}
-                                endDate={tempDates.end}
-                                onChange={handlePickerChange}
-                                onClose={() => setIsDatePickerOpen(false)}
-                            />
-                        </div>
-                    )} */}
                 </div>
 
-                <div className="absolute inset-0 z-0 w-full h-full bg-[#E5E5E5]">
+                {/* ✅ 2. เปลี่ยนจาก absolute inset-0 เป็น flex-1 เพื่อให้ดันแผนที่ลงมาต่อจาก Header แทนการซ้อนทับ */}
+                <div className="flex-1 relative w-full h-full">
                     <ItineraryMap locations={mapLocations} />
                 </div>
             </div>
@@ -774,9 +781,9 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                     <div className="fixed inset-0 z-[9999] flex items-center justify-center">
                         <div className="absolute inset-0 bg-[#616161] opacity-50" onClick={() => !isSaving && setShowExpenseForm(false)}></div>
 
-                        <div className="relative flex flex-col p-[16px_14px] w-[397px] bg-[#DEECF9] shadow-[0px_4px_4px_rgba(0,0,0,0.25)] rounded-[16px] animate-in zoom-in-95 duration-200" 
-                             style={{ height: expenseStep === 0 ? '378.17px' : '355.83px' }}>
-                            
+                        <div className="relative flex flex-col p-[16px_14px] w-[397px] bg-[#DEECF9] shadow-[0px_4px_4px_rgba(0,0,0,0.25)] rounded-[16px] animate-in zoom-in-95 duration-200"
+                            style={{ height: expenseStep === 0 ? '378.17px' : 'auto', minHeight: '355.83px' }}>
+
                             <div className="flex items-center w-full mb-[16px] shrink-0">
                                 {expenseStep === 1 && !isSaving && (
                                     <button onClick={() => setExpenseStep(0)} className="mr-2 p-1 hover:bg-[#C2DCF3] rounded-full transition-colors">
@@ -786,10 +793,10 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                                 <h2 className="flex-1 font-inter font-medium text-[12px] leading-[15px] text-[#000000]">
                                     {editingExpenseId ? "Edit Expense" : "Add Expense"}
                                 </h2>
-                                
+
                                 {editingExpenseId && (
-                                    <button 
-                                        onClick={handleDeleteExpense} 
+                                    <button
+                                        onClick={handleDeleteExpense}
                                         disabled={isSaving}
                                         className="p-1 hover:bg-red-100 rounded-full transition-colors text-red-500 disabled:opacity-50"
                                         title="Delete Expense"
@@ -798,7 +805,7 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                                     </button>
                                 )}
                             </div>
-                            
+
                             {/* STEP 0: Select Category */}
                             {expenseStep === 0 && (
                                 <div className="flex-1 flex flex-col w-full min-h-0">
@@ -807,11 +814,14 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                                     <div className="relative w-[369px] flex-1 overflow-y-auto custom-blue-scrollbar2 pr-2 pb-2">
                                         <div className="grid grid-cols-4 gap-[24px_24px] w-[356px] ml-[6px]">
                                             {EXPENSE_CATEGORIES.map((cat) => (
-                                                <div 
+                                                <div
                                                     key={cat.id}
                                                     onClick={() => {
                                                         setSelectedCategory(cat.id);
-                                                        setExpenseStep(1); 
+                                                        if (cat.id !== "others") {
+                                                            setCustomCategoryName("");
+                                                        }
+                                                        setExpenseStep(1);
                                                     }}
                                                     className={`w-[71px] h-[59px] bg-[#FFFFFF] border rounded-[2px] flex flex-col items-center justify-center gap-1 cursor-pointer transition-all shadow-[0px_2px_5px_rgba(0,0,0,0.25)] ${selectedCategory === cat.id ? 'border-[#3A82CE] ring-1 ring-[#3A82CE]' : 'hover:border-[#60A3DE]'}`}
                                                 >
@@ -830,13 +840,27 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
 
                             {/* STEP 1: Fill Detail Form */}
                             {expenseStep === 1 && (
-                                <div className="w-full flex-1 flex flex-col justify-between pt-2">
-                                    
+                                <div className="w-full flex-1 flex flex-col justify-between pt-2 gap-[16px]">
+
                                     <div>
+                                        {/* ✅ Input สำหรับ Category Name จะโชว์เฉพาะตอนเลือก Others */}
+                                        {selectedCategory === "others" && (
+                                            <div className="w-[356px] mb-[16px]">
+                                                <h3 className="font-inter font-normal text-[12px] leading-[15px] text-[#000000] mb-[4px]">Category Name</h3>
+                                                <input
+                                                    type="text"
+                                                    value={customCategoryName}
+                                                    onChange={(e) => setCustomCategoryName(e.target.value)}
+                                                    className={`w-full h-[25px] bg-[#F0F6FC] border ${!customCategoryName.trim() ? 'border-red-500' : 'border-[#2666B0]'} rounded-[4px] px-3 outline-none text-[12px] text-black`}
+                                                    placeholder="Enter category name..."
+                                                />
+                                            </div>
+                                        )}
+
                                         <div className="w-[356px] mb-[16px]">
                                             <h3 className="font-inter font-normal text-[12px] leading-[15px] text-[#000000] mb-[4px]">Amount</h3>
                                             <div className="flex flex-row h-[25px] w-full">
-                                                <div 
+                                                <div
                                                     ref={expenseDropdownRef}
                                                     onClick={() => setIsExpenseDropdownOpen(!isExpenseDropdownOpen)}
                                                     className="w-[63px] h-[25px] bg-[#3A82CE] border border-[#2666B0] rounded-l-[4px] flex items-center justify-center relative cursor-pointer hover:bg-[#3272b5] transition-colors"
@@ -845,13 +869,13 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                                                         {expenseCurrency}
                                                     </span>
                                                     <ChevronDown className="w-[8px] h-[8px] text-white absolute right-1" />
-                                                    
+
                                                     {isExpenseDropdownOpen && (
                                                         <div className="absolute top-[28px] left-0 w-[180px] h-[217px] bg-[#3A82CE] border border-[#1E518C] rounded-[8.5px] z-[100] overflow-hidden shadow-xl flex flex-col cursor-default" onClick={e => e.stopPropagation()}>
                                                             <div className="flex-1 overflow-y-auto custom-blue-scrollbar p-1">
                                                                 {currencies.map((c, index) => (
-                                                                    <div 
-                                                                        key={c[0]} 
+                                                                    <div
+                                                                        key={c[0]}
                                                                         onClick={() => { setExpenseCurrency(c[0]); setIsExpenseDropdownOpen(false); }}
                                                                         className="flex flex-col justify-center px-3 py-2 cursor-pointer hover:bg-[#60A3DE] rounded transition-colors group relative"
                                                                     >
@@ -866,11 +890,11 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                                                         </div>
                                                     )}
                                                 </div>
-                                                <input 
+                                                <input
                                                     type="number"
                                                     value={expenseAmount}
                                                     onChange={(e) => setExpenseAmount(e.target.value)}
-                                                    className="flex-1 bg-[#F0F6FC] border border-l-0 border-[#2666B0] rounded-r-[4px] px-3 outline-none text-[12px] text-black h-[25px]"
+                                                    className={`flex-1 bg-[#F0F6FC] border border-l-0 ${!expenseAmount ? 'border-red-500' : 'border-[#2666B0]'} rounded-r-[4px] px-3 outline-none text-[12px] text-black h-[25px]`}
                                                     placeholder="0.00"
                                                 />
                                             </div>
@@ -878,7 +902,7 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
 
                                         <div className="w-[356px] mb-[16px]">
                                             <h3 className="font-inter font-normal text-[12px] leading-[15px] text-[#000000] mb-[4px]">Description (Optional)</h3>
-                                            <textarea 
+                                            <textarea
                                                 value={expenseDesc}
                                                 onChange={(e) => setExpenseDesc(e.target.value)}
                                                 className="w-full h-[75px] bg-[#F0F6FC] border border-[#2666B0] rounded-[4px] p-2 outline-none text-[12px] text-black resize-none"
@@ -888,7 +912,7 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
 
                                         <div className="w-[356px] mb-[20px]">
                                             <h3 className="font-inter font-normal text-[12px] leading-[15px] text-[#000000] mb-[4px]">Date (Optional)</h3>
-                                            <div 
+                                            <div
                                                 id="date-input-box"
                                                 ref={datePickerRef}
                                                 className="w-full h-[25px] bg-[#F0F6FC] border border-[#2666B0] rounded-[4px] flex items-center px-3 cursor-pointer"
@@ -903,10 +927,11 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                                     </div>
 
                                     <div className="flex flex-row justify-center items-center gap-[23px] w-full mt-auto pb-4">
-                                        <button 
+                                        <button
                                             onClick={() => {
                                                 setExpenseAmount("");
                                                 setExpenseDesc("");
+                                                setCustomCategoryName("");
                                             }}
                                             disabled={isSaving}
                                             className="box-border flex flex-row justify-center items-center w-[52px] h-[25px] bg-[#C2DCF3] shadow-[0px_2px_4px_rgba(0,0,0,0.25)] rounded-[8px] hover:bg-[#a9cbed] transition-colors disabled:opacity-50"
@@ -914,9 +939,9 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                                             <span className="font-inter font-normal text-[16px] leading-[19px] text-center text-[#000000]">Clear</span>
                                         </button>
 
-                                        <button 
+                                        <button
                                             onClick={handleSaveExpense}
-                                            disabled={isSaving}
+                                            disabled={isSaving || !expenseAmount || (selectedCategory === "others" && !customCategoryName.trim())} // ✅ ปิดปุ่ม Save ถ้าข้อมูลไม่ครบ
                                             className="box-border flex flex-row justify-center items-center w-[52px] h-[25px] bg-[#60A3DE] shadow-[0px_2px_4px_rgba(0,0,0,0.25)] rounded-[8px] hover:bg-[#4b94d6] transition-colors disabled:opacity-50"
                                         >
                                             {isSaving ? <Loader2 className="w-4 h-4 text-white animate-spin" /> : <span className="font-inter font-normal text-[16px] leading-[19px] text-center text-[#000000]">Save</span>}
@@ -928,12 +953,12 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                     </div>
 
                     {isDatePickerOpen && (
-                        <div 
+                        <div
                             id="date-picker-container"
                             className="fixed z-[10000]"
                             style={{ top: `${datePickerPosition.top}px`, left: `${datePickerPosition.left}px` }}
                         >
-                            <SingleDatePicker 
+                            <SingleDatePicker
                                 selectedDate={expenseDate}
                                 onChange={(date) => {
                                     setExpenseDate(date);
@@ -945,7 +970,7 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                     )}
                 </>
             )}
-            
+
         </div>
     );
 }

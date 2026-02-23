@@ -7,7 +7,6 @@ import { Plus, Trash2, MapPin, Globe, Loader2, Backpack, Search, X, Copy, Check,
 import TripViewModal from "../../components/TripViewModal";
 import { COUNTRIES_DATA } from "@/data/mockData";
 
-// ✅ อัปเดต Interface เพื่อรองรับ is_public และ copied_count
 interface TripData {
   id: string;
   country: string;
@@ -56,7 +55,6 @@ export default function MyTripsPage() {
   const [viewTrip, setViewTrip] = useState<TripData | null>(null);
   const [tripToDelete, setTripToDelete] = useState<TripData | null>(null);
   
-  // ✅ State สำหรับ Share Modal
   const [shareTrip, setShareTrip] = useState<TripData | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -77,7 +75,6 @@ export default function MyTripsPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // ✅ อัปเดต Query: เพิ่ม is_public และ copied_count
       const { data, error } = await supabase
         .from('trips')
         .select(`
@@ -101,7 +98,7 @@ export default function MyTripsPage() {
       if (error) throw error;
 
       const formattedTrips: TripData[] = data.map((trip: any) => {
-        const allProvinces = trip.templates.flatMap((t: any) => t.template_provinces.map((p: any) => p.province_code));
+        const allProvinces = trip.templates?.flatMap((t: any) => t.template_provinces?.map((p: any) => p.province_code) || []) || [];
         const uniqueProvinces = new Set(allProvinces).size;
 
         return {
@@ -110,7 +107,7 @@ export default function MyTripsPage() {
           created_at: new Date(trip.created_at).toLocaleDateString(),
           templates: trip.templates || [],
           stats: {
-            regions: trip.templates.length,
+            regions: trip.templates?.length || 0,
             provinces: uniqueProvinces
           }
         };
@@ -158,12 +155,11 @@ export default function MyTripsPage() {
     }
   };
 
-  // ✅ ฟังก์ชันเปิด/ปิดการแชร์ Template (Public/Private)
+  // ✅ Toggle แชร์แบบ "ราย Template"
   const handleTogglePublic = async (tripId: string, templateId: string, currentStatus: boolean) => {
     try {
       const newStatus = !currentStatus;
       
-      // อัปเดต UI ทันที (Optimistic Update)
       setTrips(prev => prev.map(t => {
         if (t.id === tripId) {
           return {
@@ -188,7 +184,6 @@ export default function MyTripsPage() {
         });
       }
 
-      // ส่งคำสั่งอัปเดตลง Database
       const { error } = await supabase
         .from('templates')
         .update({ is_public: newStatus })
@@ -199,13 +194,12 @@ export default function MyTripsPage() {
     } catch (error) {
       console.error("Error toggling public status:", error);
       alert("Failed to update sharing status.");
-      fetchTrips(); // โหลดข้อมูลใหม่ถ้าเกิด Error
+      fetchTrips(); 
     }
   };
 
-  // ✅ ฟังก์ชัน Copy Link
   const handleCopyLink = (templateId: string) => {
-    // กำหนด URL ปลายทางที่ผู้อื่นจะใช้เข้ามาดู/โคลน
+    // ✅ ส่งไปหน้า /template/[id]
     const url = `${window.location.origin}/template/${templateId}`;
     navigator.clipboard.writeText(url);
     setCopiedId(templateId);
@@ -260,7 +254,7 @@ export default function MyTripsPage() {
                 </div>
 
                 {filteredTrips.map((trip) => {
-                  const countryCode = trip.country.toLowerCase();
+                  const countryCode = trip.country?.toLowerCase() || '';
                   const countryName = COUNTRY_NAMES[countryCode] || trip.country;
                   const coverImage = countryImageMap[countryName.toLowerCase()] || "https://placehold.co/800x600?text=No+Image";
 
@@ -301,7 +295,6 @@ export default function MyTripsPage() {
                             Edit
                           </button>
 
-                          {/* ✅ เปิด Share Modal */}
                           <button 
                             onClick={(e) => { e.stopPropagation(); setShareTrip(trip); }}
                             className="w-[60px] h-[29px] bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-[5px] text-[12px] flex items-center justify-center transition cursor-pointer"
@@ -327,7 +320,7 @@ export default function MyTripsPage() {
         />
       )}
 
-      {/* ✅ Share Settings Modal */}
+      {/* ✅ Share Settings Modal - แชร์ทีละเทมเพลต */}
       {shareTrip && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="w-[500px] bg-white rounded-[16px] p-6 shadow-2xl flex flex-col gap-4 transform scale-100 animate-in zoom-in-95 duration-200">
@@ -359,7 +352,6 @@ export default function MyTripsPage() {
                       </span>
                     </div>
 
-                    {/* ✅ Toggle Switch สำหรับ is_public */}
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input 
                         type="checkbox" 
@@ -371,7 +363,6 @@ export default function MyTripsPage() {
                     </label>
                   </div>
 
-                  {/* แสดงปุ่ม Copy Link เมื่อถูกเปิดเป็น Public */}
                   {template.is_public && (
                     <div className="flex items-center justify-between bg-blue-50/50 p-2 rounded-lg border border-blue-100">
                       <span className="text-[11px] text-blue-800 truncate flex-1 font-mono">
@@ -379,7 +370,7 @@ export default function MyTripsPage() {
                       </span>
                       <button 
                         onClick={() => handleCopyLink(template.id)}
-                        className="flex items-center gap-1 ml-3 px-3 py-1.5 bg-white border border-gray-200 rounded-md hover:bg-gray-50 transition-colors text-[11px] font-medium text-gray-700 shadow-sm"
+                        className="flex items-center gap-1 ml-3 px-3 py-1.5 bg-white border border-gray-200 rounded-md hover:bg-gray-50 transition-colors text-[11px] font-medium text-gray-700 shadow-sm cursor-pointer"
                       >
                         {copiedId === template.id ? (
                           <><Check className="w-3 h-3 text-green-500" /> Copied!</>
@@ -400,8 +391,8 @@ export default function MyTripsPage() {
               )}
             </div>
 
-            <div className="flex items-center gap-3 mt-2">
-              <button onClick={() => setShareTrip(null)} className="w-full h-[44px] rounded-[8px] bg-gray-100 text-gray-700 font-semibold text-[14px] hover:bg-gray-200 transition-colors">
+            <div className="flex items-center mt-2">
+              <button onClick={() => setShareTrip(null)} className="w-full h-[44px] rounded-[8px] bg-gray-100 text-gray-700 font-semibold text-[14px] hover:bg-gray-200 transition-colors cursor-pointer">
                 Done
               </button>
             </div>

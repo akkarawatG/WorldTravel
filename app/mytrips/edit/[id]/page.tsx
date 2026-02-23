@@ -46,8 +46,8 @@ const COUNTRY_NAMES: Record<string, string> = {
 };
 
 const DynamicMap = dynamic(
-    () => import('../../../../components/DynamicMap'), // ตรวจสอบ Path นี้ให้ถูกต้องตามโปรเจคของคุณ
-    { ssr: false, loading: () => <div className="p-10 text-gray-400 flex items-center justify-center h-full">Loading Map...</div> }
+    () => import('../../../../components/DynamicMap'), 
+    { ssr: false, loading: () => <div className="p-10 text-gray-400 flex items-center justify-center h-full"><Loader2 className="w-6 h-6 animate-spin mr-2"/>Loading Map...</div> }
 );
 
 interface PageProps { params: Promise<{ id: string }>; }
@@ -90,6 +90,9 @@ const DEFAULT_STATUSES: TripStatus[] = [
     { id: 'dream', label: 'Dream', color: '#9C27B0' },
 ];
 
+// ✅ ตัวแปร Cache เก็บข้อมูลจังหวัดเพื่อไม่ให้ยิง API ซ้ำ
+const regionCache: Record<string, string[]> = {};
+
 // --- Main Component ---
 
 export default function EditTripPage({ params }: PageProps) {
@@ -112,7 +115,7 @@ export default function EditTripPage({ params }: PageProps) {
     const [isLoadingRegions, setIsLoadingRegions] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [dbTripId, setDbTripId] = useState<string | null>(null);
-    const [isDataLoaded, setIsDataLoaded] = useState(false); // เพิ่ม State เช็คโหลดเสร็จ
+    const [isDataLoaded, setIsDataLoaded] = useState(false);
 
     const [tripGroups, setTripGroups] = useState<TripGroup[]>([]);
     const [tripStatuses, setTripStatuses] = useState<TripStatus[]>(DEFAULT_STATUSES);
@@ -144,7 +147,7 @@ export default function EditTripPage({ params }: PageProps) {
 
     const activeGroup = useMemo(() => tripGroups.find(g => g.id === activeGroupId), [tripGroups, activeGroupId]);
 
-    // --- INIT DATA (Fixed Rating & Color Sync) ---
+    // --- INIT DATA ---
     useEffect(() => {
         const initData = async () => {
             try {
@@ -156,18 +159,15 @@ export default function EditTripPage({ params }: PageProps) {
                 if (tripError || !trip) { router.push('/mytrips'); return; }
                 setCountryCode(trip.country);
 
-                // ✅ FIX 1: เพิ่ม rating ลงใน select query
                 const { data: templates, error: tempError } = await supabase
                     .from('templates')
                     .select(`id, template_name, notes, images, travel_start_date, travel_end_date, rating, template_provinces ( province_code, status, color )`)
                     .eq('trip_id', tripId)
-                    // .is('deleted_at', null)
                     .order('created_at', { ascending: true });
 
                 if (tempError) throw tempError;
 
                 if (templates) {
-                    // ✅ FIX 2: Color Sync Logic
                     const dbStatuses = new Map<string, string>();
                     templates.forEach((t: any) => {
                         t.template_provinces.forEach((p: any) => {
@@ -177,7 +177,6 @@ export default function EditTripPage({ params }: PageProps) {
                         });
                     });
 
-                    // Deep Copy เพื่อกัน Reference ผิด
                     let syncedStatuses = JSON.parse(JSON.stringify(DEFAULT_STATUSES));
                     
                     dbStatuses.forEach((color, label) => {
@@ -215,7 +214,7 @@ export default function EditTripPage({ params }: PageProps) {
                             regions: mappedRegions,
                             travel_start_date: t.travel_start_date,
                             travel_end_date: t.travel_end_date,
-                            rating: t.rating || 0 // รับค่า rating มาใช้
+                            rating: t.rating || 0 
                         };
                     });
 
@@ -230,7 +229,7 @@ export default function EditTripPage({ params }: PageProps) {
             }
         };
         initData();
-    }, [tripId]); // เอา router ออกจาก dependency
+    }, [tripId]); 
 
     // --- Active Group Effect ---
     useEffect(() => {
@@ -240,7 +239,7 @@ export default function EditTripPage({ params }: PageProps) {
             setGroupNote(activeGroup.notes || "");
             setStartDate(activeGroup.travel_start_date || "");
             setEndDate(activeGroup.travel_end_date || "");
-            setTripRating(activeGroup.rating || 0); // ✅ Set Rating เมื่อกด Edit
+            setTripRating(activeGroup.rating || 0); 
             const loadedImages = (activeGroup.images || []).map((url, idx) => ({ id: `existing-${idx}`, url: url }));
             setCurrentImages(loadedImages);
             setPreviewGroupId(null);
@@ -326,7 +325,37 @@ export default function EditTripPage({ params }: PageProps) {
     const handleUpdateStatus = (id: string, key: keyof TripStatus, value: string) => { setTripStatuses(prev => prev.map(s => s.id === id ? { ...s, [key]: value } : s)); };
     const handleDeleteStatus = (id: string) => { if (tripStatuses.length <= 1) return; setTripStatuses(prev => prev.filter(s => s.id !== id)); const firstAvailable = tripStatuses.find(s => s.id !== id)?.id || ""; setCurrentGroupRegions(prev => prev.map(r => r.statusId === id ? { ...r, statusId: firstAvailable } : r)); };
 
-    useEffect(() => { async function fetchHighchartsMapData() { if (!countryCode) return; setIsLoadingRegions(true); try { const mapUrl = `https://code.highcharts.com/mapdata/countries/${countryCode}/${countryCode}-all.geo.json`; const response = await fetch(mapUrl); if (!response.ok) throw new Error("Map data not found"); const data = await response.json(); if (data && data.features) { setRegionList(data.features.map((feature: any) => feature.properties.name).filter((name: any) => name).sort()); } } catch (error) { setRegionList([]); } finally { setIsLoadingRegions(false); } } fetchHighchartsMapData(); }, [countryCode]);
+    // ✅ ใช้ระบบ Cache เพื่อป้องกันการยิง API ซ้ำๆ ไปที่ Highcharts
+    useEffect(() => { 
+        async function fetchHighchartsMapData() { 
+            if (!countryCode || countryCode.trim() === "") return; 
+
+            // ดึงจาก Cache ถ้ามีอยู่แล้ว
+            if (regionCache[countryCode]) {
+                setRegionList(regionCache[countryCode]);
+                setIsLoadingRegions(false);
+                return;
+            }
+
+            setIsLoadingRegions(true); 
+            try { 
+                const mapUrl = `https://code.highcharts.com/mapdata/countries/${countryCode}/${countryCode}-all.geo.json`; 
+                const response = await fetch(mapUrl); 
+                if (!response.ok) throw new Error("Map data not found"); 
+                const data = await response.json(); 
+                if (data && data.features) { 
+                    const regions = data.features.map((feature: any) => feature.properties.name).filter((name: any) => name).sort();
+                    regionCache[countryCode] = regions; // เก็บลง Cache
+                    setRegionList(regions); 
+                } 
+            } catch (error) { 
+                setRegionList([]); 
+            } finally { 
+                setIsLoadingRegions(false); 
+            } 
+        } 
+        fetchHighchartsMapData(); 
+    }, [countryCode]);
 
     const startResizing = useCallback((e: React.MouseEvent) => { setIsResizing(true); e.preventDefault(); }, []);
     const stopResizing = useCallback(() => { setIsResizing(false); }, []);
