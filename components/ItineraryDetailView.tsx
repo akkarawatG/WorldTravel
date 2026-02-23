@@ -6,10 +6,10 @@ import dynamic from "next/dynamic";
 import {
     MapPin, Calendar, ChevronRight, ChevronDown, Plus,
     GripVertical, Trash2, Loader2, Pencil, Check, X, ChevronLeft,
-    Car, Clock, FileText, Search // ✅ เพิ่ม Search Icon
+    Car, Clock, FileText, Search 
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
-import { getRouteData, searchPlaces, GeocodeResult } from "@/utils/openRouteService"; // ✅ Import searchPlaces
+import { getRouteData, searchPlaces, GeocodeResult } from "@/utils/openRouteService"; 
 import TimePickerPopup from "./TimePickerPopup";
 import { formatTimeDisplay } from "@/utils/timeHelpers";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
@@ -151,26 +151,41 @@ function CustomDateRangePicker({
 
 // --- Types & Interfaces ---
 
+// สถานที่ระบบหลัก (จัดเต็ม)
 interface Place {
     id: string;
     name: string;
     description: string;
     description_short?: string;
     images: string[] | string | null;
-    latitude: number;
-    longitude: number;
+    lat: number;  
+    lon: number;  
     country?: string; 
 }
 
+// สถานที่จาก ORS (มินิมอล)
+interface Location {
+    id: string;
+    name: string;
+    full_address: string | null;
+    lat: number;
+    lon: number;
+}
+
+// โครงสร้าง Schedule Item ที่ Join มา
 interface ScheduleItem {
     id: string;
     place_id: string | null;
+    location_id: string | null; 
     item_type: 'place' | 'note';
-    note: string;
+    note: string | null;
     order_index: number;
-    places: Place | null;
     start_time?: string | null;
     end_time?: string | null;
+    
+    // Relation objects
+    places: Place | null; 
+    locations: Location | null; 
 }
 
 interface DailyScheduleData {
@@ -213,8 +228,10 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [editedTitle, setEditedTitle] = useState("");
 
+    // Date Picker States
     const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
     const [tempDates, setTempDates] = useState({ start: "", end: "" });
+    const datePickerRef = useRef<HTMLDivElement>(null); 
 
     // View All State
     const [isViewAll, setIsViewAll] = useState(false);
@@ -224,14 +241,15 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
 
     // Travel Stats State
     const [travelStats, setTravelStats] = useState<Record<string, { 
-    dist: string; 
-    dur: string; 
-    geometry: any; 
-    rawDist: number; 
-    rawDur: number; }>>({});
+        dist: string; 
+        dur: string; 
+        geometry: any; 
+        rawDist: number; 
+        rawDur: number; 
+    }>>({});
     const [dayTotals, setDayTotals] = useState<Record<number, { totalDist: string, totalDur: string }>>({});
 
-    // ✅ Search States (เพิ่มใหม่)
+    // Search States
     const [activeSearchDayId, setActiveSearchDayId] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
     const [searchResults, setSearchResults] = useState<GeocodeResult[]>([]);
@@ -241,20 +259,52 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
     // Cache for routes
     const routeCache = useRef(new Map<string, any>());
 
-    // ✅ Search Functions (เพิ่มใหม่)
+    // Click Outside Event สำหรับปฏิทิน
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            const target = event.target as Element;
+            if (datePickerRef.current && !datePickerRef.current.contains(target) && !target.closest('#date-picker-toggle')) {
+                setIsDatePickerOpen(false);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    // Search Functions
     const handleSearchInput = (e: React.ChangeEvent<HTMLInputElement>) => {
         const query = e.target.value;
         setSearchQuery(query);
-        
+
         if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-        
+
         if (query.trim().length > 2) {
             setIsSearching(true);
             searchTimeoutRef.current = setTimeout(async () => {
-                const results = await searchPlaces(query);
+                
+                let refLat: number | undefined;
+                let refLon: number | undefined;
+
+                if (activeSearchDayId) {
+                    const dayData = schedules.find(s => s.id === activeSearchDayId);
+                    if (dayData && dayData.daily_schedule_items.length > 0) {
+                        const placeItems = dayData.daily_schedule_items
+                            .filter(item => item.item_type === 'place' && (item.places || item.locations))
+                            .sort((a, b) => b.order_index - a.order_index); 
+
+                        if (placeItems.length > 0) {
+                            const lastPlace = placeItems[0];
+                            refLat = lastPlace.places?.lat || lastPlace.locations?.lat;
+                            refLon = lastPlace.places?.lon || lastPlace.locations?.lon;
+                        }
+                    }
+                }
+
+                const results = await searchPlaces(query, refLat, refLon);
+                
                 setSearchResults(results);
                 setIsSearching(false);
-            }, 500); // Debounce
+            }, 500); 
         } else {
             setSearchResults([]);
             setIsSearching(false);
@@ -263,47 +313,76 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
 
     const handleSelectResult = async (result: GeocodeResult, dayId: string) => {
         try {
-            // 1. Insert new place to 'places' table first
-            const { data: newPlace, error: placeError } = await supabase
-                .from('places')
+            const { data: { user } } = await supabase.auth.getUser();
+
+            const { data: newLocation, error: locationError } = await supabase
+                .from('locations')
                 .insert({
+                    profile_id: user?.id || null, 
                     name: result.name,
-                    description: result.label,
-                    description_short: result.label,
+                    full_address: result.label,
                     lat: result.coordinates[1],
                     lon: result.coordinates[0],
-                    images: null
                 })
                 .select()
                 .single();
 
-            if (placeError) throw placeError;
+            if (locationError) throw locationError;
 
-            const placeObj: Place = {
-                id: newPlace.id,
-                name: newPlace.name,
-                description: newPlace.description,
-                description_short: newPlace.description_short,
-                images: newPlace.images,
-                latitude: newPlace.lat,
-                longitude: newPlace.lon,
-                country: newPlace.country
-            };
+            const currentDay = schedules.find(s => s.id === dayId);
+            const newOrderIndex = (currentDay?.daily_schedule_items.length || 0) + 1;
 
-            // 2. Add to schedule
-            await handleAddSavedPlace(dayId, placeObj);
+            const { data: scheduleItem, error: scheduleError } = await supabase
+                .from('daily_schedule_items')
+                .insert({
+                    daily_schedule_id: dayId,
+                    place_id: null,               
+                    location_id: newLocation.id,  
+                    item_type: 'place',
+                    note: null,
+                    order_index: newOrderIndex
+                })
+                .select(`*, locations(id, name, lat, lon, full_address)`)
+                .single();
 
-            // 3. Reset UI
+            if (scheduleError) throw scheduleError;
+
+            setSchedules(prev => prev.map(day => {
+                if (day.id === dayId) {
+                    const newItem: ScheduleItem = {
+                        id: scheduleItem.id,
+                        place_id: null,
+                        location_id: scheduleItem.location_id,
+                        item_type: 'place',
+                        note: null,
+                        order_index: newOrderIndex,
+                        places: null,
+                        locations: {
+                            id: newLocation.id,
+                            name: newLocation.name,
+                            full_address: newLocation.full_address,
+                            lat: newLocation.lat,
+                            lon: newLocation.lon
+                        }
+                    };
+                    return {
+                        ...day,
+                        daily_schedule_items: [...day.daily_schedule_items, newItem]
+                    };
+                }
+                return day;
+            }));
+
             setActiveSearchDayId(null);
             setSearchQuery("");
             setSearchResults([]);
         } catch (err) {
             console.error("Error adding place from search:", err);
-            alert("Failed to add place");
+            alert("Failed to add location");
         }
     };
 
-    // Drag & Drop Logic
+    // --- Drag & Drop Logic ---
     const onDragEnd = async (result: DropResult) => {
         const { source, destination } = result;
 
@@ -369,56 +448,50 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
         }
     };
 
-useEffect(() => {
+    // --- Routing Calculate ---
+    useEffect(() => {
         const calculateRoutes = async () => {
             if (!schedules.length) return;
 
-            const newStats: Record<string, { 
-            dist: string; 
-            dur: string; 
-            geometry: any; 
-            rawDist: number; 
-            rawDur: number; 
-        }> = {};
+            const newStats: Record<string, { dist: string; dur: string; geometry: any; rawDist: number; rawDur: number; }> = {};
             const newDayTotals: Record<number, { totalDist: string, totalDur: string }> = {};
 
-            // 1. Identify tasks (กรองเอาเฉพาะ Place -> Place)
             const tasks: { id: string; start: { lat: number; lng: number }; end: { lat: number; lng: number } }[] = [];
 
             for (const day of schedules) {
-                // ... (Logic กรอง placeItems เหมือนเดิม) ...
                 const placeItems = day.daily_schedule_items
-                    .filter(item => item.item_type === 'place' && item.places)
+                    .filter(item => item.item_type === 'place' && (item.places || item.locations))
                     .sort((a, b) => a.order_index - b.order_index);
 
                 for (let i = 1; i < placeItems.length; i++) {
                     const prev = placeItems[i - 1];
                     const curr = placeItems[i];
 
-                    if (prev.places && curr.places) {
-                        const start = { lat: prev.places.latitude, lng: prev.places.longitude };
-                        const end = { lat: curr.places.latitude, lng: curr.places.longitude };
+                    const prevLat = prev.places?.lat || prev.locations?.lat;
+                    const prevLon = prev.places?.lon || prev.locations?.lon;
+                    const currLat = curr.places?.lat || curr.locations?.lat;
+                    const currLon = curr.places?.lon || curr.locations?.lon;
+
+                    if (prevLat && prevLon && currLat && currLon) {
+                        const start = { lat: prevLat, lng: prevLon };
+                        const end = { lat: currLat, lng: currLon };
                         const cacheKey = `${start.lat},${start.lng}-${end.lat},${end.lng}`;
 
                         if (routeCache.current.has(cacheKey)) {
-                            // ✅ ถ้ามีใน Cache ให้ใช้เลย ไม่ต้องยิง API
                             newStats[curr.id] = routeCache.current.get(cacheKey);
                         } else {
-                            // ⚠️ ถ้าไม่มี ค่อยเอาไปต่อคิว
                             tasks.push({ id: curr.id, start, end });
                         }
                     }
                 }
             }
 
-            // ✅ 2. Batch Processing (ปรับจูนตรงนี้!)
-            const BATCH_SIZE = 2; // 🔻 ลดลงเหลือ 2 (เดิม 3)
+            const BATCH_SIZE = 2; 
             
             for (let i = 0; i < tasks.length; i += BATCH_SIZE) {
                 const batch = tasks.slice(i, i + BATCH_SIZE);
                 
                 await Promise.all(batch.map(async (task) => {
-                    // เพิ่ม try-catch ย่อย เพื่อกันไม่ให้ตัวหนึ่งพังแล้วพังทั้ง batch
                     try {
                         const res = await getRouteData(task.start, task.end);
                         if (res) {
@@ -438,17 +511,14 @@ useEffect(() => {
                     }
                 }));
                 
-                // ⏳ เพิ่มเวลาหน่วงเป็น 2500ms (2.5 วินาที)
                 if (i + BATCH_SIZE < tasks.length) {
                     await new Promise(resolve => setTimeout(resolve, 2500)); 
                 }
             }
 
-            // ... (ส่วน 3. Calculate Totals เหมือนเดิม) ...
             for (const day of schedules) {
-                // ... logic คำนวณ total ...
                  const placeItems = day.daily_schedule_items
-                    .filter(item => item.item_type === 'place' && item.places)
+                    .filter(item => item.item_type === 'place' && (item.places || item.locations))
                     .sort((a, b) => a.order_index - b.order_index);
 
                 let dailyDistRaw = 0;
@@ -460,10 +530,17 @@ useEffect(() => {
                     
                     let cached = newStats[curr.id];
                     
-                    if (!cached && prev.places && curr.places) {
-                         const key = `${prev.places.latitude},${prev.places.longitude}-${curr.places.latitude},${curr.places.longitude}`;
-                         cached = routeCache.current.get(key);
-                         if (cached) newStats[curr.id] = cached;
+                    if (!cached) {
+                        const prevLat = prev.places?.lat || prev.locations?.lat;
+                        const prevLon = prev.places?.lon || prev.locations?.lon;
+                        const currLat = curr.places?.lat || curr.locations?.lat;
+                        const currLon = curr.places?.lon || curr.locations?.lon;
+
+                        if(prevLat && currLat) {
+                            const key = `${prevLat},${prevLon}-${currLat},${currLon}`;
+                            cached = routeCache.current.get(key);
+                            if (cached) newStats[curr.id] = cached;
+                        }
                     }
 
                     if (cached) {
@@ -484,7 +561,6 @@ useEffect(() => {
         calculateRoutes();
     }, [schedules]);
 
-    // Effect: Scrolling
     useEffect(() => {
         if (scrollToDay !== null && scrollToDay !== undefined && scrollToDay > 0) {
             setExpandedDayIndex(scrollToDay - 1);
@@ -499,7 +575,6 @@ useEffect(() => {
         }
     }, [scrollToDay]);
 
-    // Logic: Filter Saved Places
     const filteredSavedPlaces = useMemo(() => {
         if (!trip || !trip.name || savedPlaces.length === 0) return [];
         const tripCountry = trip.name.trim().toLowerCase();
@@ -514,15 +589,15 @@ useEffect(() => {
         });
     }, [savedPlaces, trip]);
 
-    // Fetching Logic
     const fetchSchedules = async (id: string) => {
         const { data, error } = await supabase
             .from('daily_schedules')
             .select(`
             id, day_number, 
             daily_schedule_items (
-                id, place_id, item_type, note, order_index, start_time, end_time,
-                places (id, name, description_short, images, lat, lon, country) 
+                id, place_id, location_id, item_type, note, order_index, start_time, end_time,
+                places (id, name, description_short, images, lat, lon, country),
+                locations (id, name, full_address, lat, lon)
             )
         `)
             .eq('itinerary_id', id)
@@ -534,17 +609,13 @@ useEffect(() => {
             const rawItems = day.daily_schedule_items || [];
             const items: ScheduleItem[] = rawItems.map((item: any) => {
                 const rawPlace = Array.isArray(item.places) ? item.places[0] : item.places;
-                const mappedPlace: Place | null = rawPlace ? {
-                    id: rawPlace.id,
-                    name: rawPlace.name,
-                    description: rawPlace.description,
-                    description_short: rawPlace.description_short,
-                    images: rawPlace.images,
-                    latitude: rawPlace.lat,
-                    longitude: rawPlace.lon,
-                    country: rawPlace.country
-                } : null;
-                return { ...item, places: mappedPlace };
+                const rawLocation = Array.isArray(item.locations) ? item.locations[0] : item.locations;
+
+                return { 
+                    ...item, 
+                    places: rawPlace || null,
+                    locations: rawLocation || null
+                };
             });
             items.sort((a, b) => a.order_index - b.order_index);
             return { ...day, daily_schedule_items: items };
@@ -589,8 +660,8 @@ useEffect(() => {
                                     name: rawPlace.name,
                                     description_short: rawPlace.description_short,
                                     images: rawPlace.images,
-                                    latitude: rawPlace.lat,
-                                    longitude: rawPlace.lon,
+                                    lat: rawPlace.lat,
+                                    lon: rawPlace.lon,
                                     country: rawPlace.country
                                 }
                             } as SavedPlace;
@@ -638,13 +709,13 @@ useEffect(() => {
                 const color = getDayColor(date);
 
                 daySchedule.daily_schedule_items.forEach((item) => {
-                    if (item.item_type === 'place' && item.places) {
+                    if (item.item_type === 'place' && (item.places || item.locations)) {
                         const stats = travelStats[item.id]; 
                         locations.push({
                             id: item.id,
-                            name: item.places.name,
-                            lat: item.places.latitude,
-                            lng: item.places.longitude,
+                            name: item.places?.name || item.locations?.name,
+                            lat: item.places?.lat || item.locations?.lat,
+                            lng: item.places?.lon || item.locations?.lon,
                             order_index: globalIndex++,
                             color: color, 
                             day_number: daySchedule.day_number,
@@ -666,13 +737,13 @@ useEffect(() => {
             const color = getDayColor(date);
 
             dbSchedule.daily_schedule_items.forEach((item) => {
-                if (item.item_type === 'place' && item.places) {
+                if (item.item_type === 'place' && (item.places || item.locations)) {
                     const stats = travelStats[item.id];
                     locations.push({
                         id: item.id,
-                        name: item.places.name,
-                        lat: item.places.latitude,
-                        lng: item.places.longitude,
+                        name: item.places?.name || item.locations?.name,
+                        lat: item.places?.lat || item.locations?.lat,
+                        lng: item.places?.lon || item.locations?.lon,
                         order_index: item.order_index,
                         color: color,
                         geometry: stats?.geometry || null 
@@ -722,11 +793,11 @@ useEffect(() => {
         }
     };
 
-    const handleOpenDatePicker = () => {
-        if (trip) {
+    const handleToggleDatePicker = () => {
+        if (!isDatePickerOpen && trip) {
             setTempDates({ start: trip.start_date, end: trip.end_date });
         }
-        setIsDatePickerOpen(true);
+        setIsDatePickerOpen(!isDatePickerOpen);
     };
 
     const handlePickerChange = (newStart: string, newEnd: string) => {
@@ -783,21 +854,25 @@ useEffect(() => {
                 .insert({
                     daily_schedule_id: dayId,
                     place_id: place.id,
+                    location_id: null,
                     item_type: 'place',
                     order_index: newOrderIndex
                 })
-                .select()
+                .select(`*, places(id, name, description_short, images, lat, lon, country)`)
                 .single();
             if (error) throw error;
+            
             setSchedules(prev => prev.map(day => {
                 if (day.id === dayId) {
                     const newItem: ScheduleItem = {
                         id: data.id,
                         place_id: place.id,
+                        location_id: null,
                         item_type: 'place',
-                        note: '',
+                        note: null,
                         order_index: newOrderIndex,
-                        places: place
+                        places: place,
+                        locations: null
                     };
                     return {
                         ...day,
@@ -837,6 +912,7 @@ useEffect(() => {
                 id: item.id,
                 daily_schedule_id: dayId,
                 place_id: item.place_id,
+                location_id: item.location_id,
                 item_type: item.item_type,
                 order_index: item.order_index,
                 note: item.note
@@ -917,7 +993,6 @@ useEffect(() => {
         }
     };
     
-    // ✅ Function: Add Note
     const handleAddNote = async (dayId: string | undefined) => {
         if (!dayId) return;
         try {
@@ -942,10 +1017,12 @@ useEffect(() => {
                     const newItem: ScheduleItem = {
                         id: data.id,
                         place_id: null,
+                        location_id: null,
                         item_type: 'note',
                         note: '',
                         order_index: newOrderIndex,
-                        places: null
+                        places: null,
+                        locations: null
                     };
                     return { ...day, daily_schedule_items: [...day.daily_schedule_items, newItem] };
                 }
@@ -956,7 +1033,6 @@ useEffect(() => {
         }
     };
 
-    // ✅ Function: Update Note Text
     const handleUpdateNote = async (itemId: string, text: string) => {
         setSchedules(prev => prev.map(day => ({
             ...day,
@@ -966,7 +1042,6 @@ useEffect(() => {
         })));
     };
     
-    // ✅ Function: Save Note on Blur
     const handleBlurNote = async (itemId: string, text: string) => {
         await supabase.from('daily_schedule_items').update({ note: text }).eq('id', itemId);
     };
@@ -1056,10 +1131,10 @@ useEffect(() => {
                                 {isExpanded && (
                                     <div className="flex flex-col gap-[16px] pb-6 ml-[15px] border-l-2 border-[#E0E0E0] pl-[15px] animate-in slide-in-from-top-2">
                                         
-                                        {/* ✅ Buttons Row: Add Place (Search) & Add Note */}
+                                        {/* Buttons Row */}
                                         <div className="flex flex-row gap-[8px] w-full relative z-[50]">
                                             
-                                            {/* ✅ Search Logic here */}
+                                            {/* Search Logic */}
                                             {activeSearchDayId === dayData?.id ? (
                                                 <div className="flex-1 relative">
                                                     <div className="h-[36px] bg-white border border-[#3A82CE] rounded-[8px] flex items-center px-3 gap-2 shadow-sm animate-in fade-in zoom-in-95 duration-200">
@@ -1093,7 +1168,6 @@ useEffect(() => {
                                                     )}
                                                 </div>
                                             ) : (
-                                                // ปุ่มปกติ
                                                 <div 
                                                     onClick={() => setActiveSearchDayId(dayData?.id || null)}
                                                     className="flex-1 h-[36px] bg-[#F5F5F5] border border-[#EEEEEE] rounded-[8px] flex items-center justify-center gap-[8px] text-[#616161] cursor-pointer hover:border-[#3A82CE] hover:text-[#3A82CE] transition"
@@ -1123,7 +1197,7 @@ useEffect(() => {
                                                         {items.map((item, itemIndex) => {
                                                             const stats = travelStats[item.id];
 
-                                                            // ✅ Render Condition: Check Type (Place vs Note)
+                                                            // ✅ Render Condition
                                                             if (item.item_type === 'note') {
                                                                 // --- Note Item UI ---
                                                                 return (
@@ -1134,19 +1208,15 @@ useEffect(() => {
                                                                                 {...provided.draggableProps}
                                                                                 className={`flex flex-row items-center gap-[8px] w-full pr-[10px] ${snapshot.isDragging ? 'opacity-80 z-50' : ''}`}
                                                                             >
-                                                                                 {/* Note ไม่มีเลขลำดับ ใส่ div ว่างไว้เพื่อให้ตรง grid */}
                                                                                  <div className="absolute -left-[34px] w-[36px]" /> 
 
-                                                                                {/* Box Note */}
                                                                                 <div className="flex flex-row flex-1 h-[36px] bg-[#F5F5F5] rounded-[8px] border border-[#EEEEEE] items-center overflow-hidden">
-                                                                                    {/* Drag Handle */}
                                                                                     <div 
                                                                                         {...provided.dragHandleProps}
                                                                                         className="w-[24px] h-full flex items-center justify-center cursor-grab active:cursor-grabbing border-r border-[#EEEEEE]"
                                                                                     >
                                                                                         <GripVertical className="w-4 h-4 text-gray-400" />
                                                                                     </div>
-                                                                                    {/* Input */}
                                                                                     <div className="flex-1 px-3 flex items-center gap-2">
                                                                                         <FileText className="w-4 h-4 text-gray-500" />
                                                                                         <input 
@@ -1168,11 +1238,18 @@ useEffect(() => {
                                                                     </Draggable>
                                                                 );
                                                             } else {
-                                                                // --- Place Item UI (Existing) ---
-                                                                // ✅ คำนวณลำดับที่แสดงผล (นับเฉพาะ Place)
+                                                                // --- Place / Location Item UI ---
                                                                 const displayIndex = items
                                                                     .filter(i => i.item_type === 'place')
                                                                     .findIndex(p => p.id === item.id) + 1;
+                                                                
+                                                                // เลือกว่าจะโชว์ข้อมูลจาก places หรือ locations
+                                                                const displayName = item.places?.name || item.locations?.name || "Unknown Place";
+                                                                const displayDesc = item.places?.description_short || item.places?.description || item.locations?.full_address || "No description";
+                                                                
+                                                                // ✅ ตรวจสอบว่ามีรูปภาพจริงๆ หรือไม่ (มีเฉพาะในตาราง places)
+                                                                const hasImage = item.places?.images && item.places?.images.length > 0;
+                                                                const displayImage = hasImage ? getImageSrc(item.places?.images) : null;
 
                                                                 return (
                                                                     <Draggable key={item.id} draggableId={item.id} index={itemIndex}>
@@ -1186,7 +1263,6 @@ useEffect(() => {
                                                                                 <div className="flex flex-row items-center gap-[8px] w-full pr-[10px]">
                                                                                     <div className="absolute -left-[34px] top-[51px] -translate-y-1/2 w-[36px] flex justify-center">
                                                                                         <div className="w-[20px] h-[25px] bg-[#1E518C] rounded-[4px] flex items-center justify-center text-white text-xs z-10 border border-[#C2DCF3]">
-                                                                                            {/* ✅ แสดงลำดับที่คำนวณใหม่ (ไม่รวม Note) */}
                                                                                             {displayIndex}
                                                                                         </div>
                                                                                     </div>
@@ -1199,23 +1275,26 @@ useEffect(() => {
                                                                                         </div>
                                                                                         <div className="flex-1 min-w-0 bg-[#F5F5F5] p-[8px] flex flex-col justify-start gap-[6px] h-full overflow-hidden">
                                                                                             <h4 className="font-inter font-semibold text-[14px] text-black truncate w-full">
-                                                                                                {item.places?.name || "Note"}
+                                                                                                {displayName}
                                                                                             </h4>
                                                                                             <p className="font-inter font-normal text-[12px] text-[#212121] leading-[15px] line-clamp-3">
-                                                                                                {item.places?.description_short || item.places?.description || "No description"}
+                                                                                                {displayDesc}
                                                                                             </p>
                                                                                         </div>
-                                                                                        {item.places && (
+                                                                                        
+                                                                                        {/* ✅ แสดงกล่องรูปภาพ เฉพาะเมื่อมีรูปจริงๆ เท่านั้น */}
+                                                                                        {displayImage && (
                                                                                             <div className="w-[109px] h-[101px] relative border-l border-[#1E518C] bg-gray-200 flex-shrink-0">
                                                                                                 <Image
-                                                                                                    src={getImageSrc(item.places.images)}
-                                                                                                    alt={item.places.name}
+                                                                                                    src={displayImage}
+                                                                                                    alt={displayName}
                                                                                                     fill
                                                                                                     className="object-cover"
                                                                                                     unoptimized
                                                                                                 />
                                                                                             </div>
                                                                                         )}
+
                                                                                     </div>
                                                                                     <button
                                                                                         onClick={() => handleDeleteItem(item.id, dayData?.id || "")}
@@ -1227,7 +1306,6 @@ useEffect(() => {
 
                                                                                 {/* Row 2: Travel Info & Time Picker */}
                                                                                 <div className="flex flex-row items-center gap-[16px] pl-[34px] w-full animate-in fade-in slide-in-from-top-1 relative mt-1">
-                                                                                    {/* ✅ แสดง stats เฉพาะถ้าไม่ใช่สถานที่แรกของวัน */}
                                                                                     {displayIndex > 1 && item.item_type === 'place' && (
                                                                                         <>
                                                                                             {stats ? (
@@ -1285,7 +1363,7 @@ useEffect(() => {
                                             </Droppable>
                                         )}
 
-                                        {/* ✅ 7. Total Section (แสดงท้ายสุด) */}
+                                        {/* Total Section */}
                                         {total && items.filter(i => i.item_type === 'place').length > 1 && (
                                              <div className="flex justify-center items-center gap-4 py-4 mt-2">
                                                  <span className="font-inter font-bold text-[12px] text-black">Total</span>
@@ -1340,8 +1418,10 @@ useEffect(() => {
             <div className="w-[459px] bg-[#E5E5E5] overflow-hidden relative border border-gray-200 h-[928px] rounded-[16px] mt-[9px] sticky top-[20px] flex flex-col">
 
                 <div className="w-full h-[52px] bg-white flex flex-row items-center justify-between px-[16px] border-b border-gray-200 flex-shrink-0 relative z-[1000]">
+                    {/* ✅ เพิ่ม id ให้ปุ่มเปิดปฏิทิน */}
                     <div
-                        onClick={handleOpenDatePicker}
+                        id="date-picker-toggle"
+                        onClick={handleToggleDatePicker}
                         className="box-border flex flex-row items-center px-[8px] py-[4px] gap-[8px] bg-white border border-black rounded-[8px] cursor-pointer hover:bg-gray-50 transition-colors"
                     >
                         <Calendar className="w-[16px] h-[16px] text-black" />
@@ -1350,7 +1430,7 @@ useEffect(() => {
                         </span>
                     </div>
 
-                    <button 
+                    <button
                         onClick={handleViewAll}
                         className={`box-border flex flex-row justify-center items-center px-[12px] py-[8px] gap-[8px] border-2 rounded-[16px] transition-colors ${isViewAll ? 'bg-[#154a85] border-[#1E518C] shadow-inner' : 'bg-[#2666B0] border-[#95C3EA] hover:bg-[#1e5594]'}`}
                     >
@@ -1359,8 +1439,9 @@ useEffect(() => {
                         </span>
                     </button>
 
+                    {/* ✅ เพิ่ม ref ให้ container ปฏิทิน */}
                     {isDatePickerOpen && (
-                        <div className="absolute top-[60px] left-[16px] animate-in fade-in zoom-in-95 duration-200 z-[1100]">
+                        <div ref={datePickerRef} className="absolute top-[60px] left-[16px] animate-in fade-in zoom-in-95 duration-200 z-[1100]">
                             <CustomDateRangePicker
                                 startDate={tempDates.start}
                                 endDate={tempDates.end}

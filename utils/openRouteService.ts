@@ -12,15 +12,14 @@ export const getRouteData = async (
     start: { lat: number; lng: number },
     end: { lat: number; lng: number }
 ): Promise<RouteResult | null> => {
-    
     try {
-        // ✅ เปลี่ยน URL มาเรียก API ของเราเอง
+        // ✅ เรียก API ของเราเอง (ซ่อน API Key ไว้ที่ฝั่ง Server)
         const response = await fetch('/api/ors', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ start, end }) // ส่งแค่ start/end ให้ Server จัดการต่อ
+            body: JSON.stringify({ start, end }) 
         });
 
         if (!response.ok) {
@@ -62,22 +61,11 @@ const formatDuration = (seconds: number): string => {
     const remainingMins = minutes % 60;
     return remainingMins === 0 ? `${hours} hr` : `${hours} hr ${remainingMins} min`;
 };
-// utils/openRouteService.ts
 
-// ... (code เดิมของ getRouteData) ...
+// ==========================================
+// ✅ ส่วนที่เพิ่มใหม่สำหรับระบบ Search
+// ==========================================
 
-// ✅ เพิ่มส่วนนี้ต่อท้ายไฟล์
-export interface GeocodeResult {
-    id: string; // ใช้ id จาก ORS หรือสร้างเอง
-    name: string;
-    label: string; // ที่อยู่เต็ม
-    coordinates: [number, number]; // [lon, lat]
-}
-
-// utils/openRouteService.ts
-// ... (โค้ดเดิม getRouteData) ...
-
-// ✅ เพิ่มส่วนนี้ต่อท้ายไฟล์เดิม
 export interface GeocodeResult {
     id: string;
     name: string;
@@ -85,20 +73,33 @@ export interface GeocodeResult {
     coordinates: [number, number]; // [lon, lat]
 }
 
-export const searchPlaces = async (query: string): Promise<GeocodeResult[]> => {
+export async function searchPlaces(query: string, lat?: number, lon?: number): Promise<GeocodeResult[]> {
     try {
-        const res = await fetch(`/api/ors/geocode?text=${encodeURIComponent(query)}`);
-        if (!res.ok) return [];
-        const data = await res.json();
+        // 🛑 นำ API KEY ของ OpenRouteService ของคุณมาใส่ตรงนี้แทนข้อความ "ใส่_API_KEY_ของคุณที่นี่"
+        // หรือถ้าคุณตั้งไว้ใน .env.local แล้ว มันจะดึงค่า NEXT_PUBLIC_ORS_API_KEY มาใช้ให้เอง
+        const API_KEY = process.env.NEXT_PUBLIC_ORS_API_KEY || "ใส่_API_KEY_ของคุณที่นี่"; 
         
-        return data.features.map((f: any) => ({
-            id: f.properties.id || Math.random().toString(36).substr(2, 9),
-            name: f.properties.name || f.properties.label.split(',')[0],
-            label: f.properties.label,
-            coordinates: f.geometry.coordinates 
+        let url = `https://api.openrouteservice.org/geocode/search?api_key=${API_KEY}&text=${encodeURIComponent(query)}`;
+        
+        // ถ้ามีการส่งพิกัดมาด้วย ให้เน้นผลลัพธ์ที่ใกล้พิกัดนี้ (focus.point)
+        if (lat !== undefined && lon !== undefined) {
+            url += `&focus.point.lat=${lat}&focus.point.lon=${lon}`;
+        }
+
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (!data.features) return [];
+
+        // ✅ แมปข้อมูลที่ได้จาก API ให้อยู่ในรูปแบบ GeocodeResult ที่เราสร้างไว้
+        return data.features.map((feature: any) => ({
+            id: feature.properties.id || feature.properties.osm_id?.toString() || Math.random().toString(),
+            name: feature.properties.name || feature.properties.label.split(',')[0],
+            label: feature.properties.label,
+            coordinates: feature.geometry.coordinates
         }));
-    } catch (e) {
-        console.error("Geocode error:", e);
+    } catch (error) {
+        console.error("Search error:", error);
         return [];
     }
 }
