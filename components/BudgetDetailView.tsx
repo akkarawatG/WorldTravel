@@ -722,27 +722,42 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                         </div>
                     ))}
 
-                    {/* Expenses Summary Card */}
-                    <div className="w-[433px] bg-white rounded-[16px] shadow-[0px_4px_4px_rgba(0,0,0,0.25)] p-[17px_25px] flex flex-col gap-[10px] shrink-0">
-                        <h3 className="font-inter font-medium text-[16px] leading-[19px] text-[#000000] mb-2">Expenses Summary</h3>
-
-                        <div className="flex flex-col gap-[10px] w-full pl-[13px] pr-[13px]">
-                            <div className="flex justify-between items-center w-full">
-                                <span className="font-inter font-normal text-[12px] text-[#000000] w-[60px]">Budget</span>
-                                <span className="font-inter font-medium text-[10px] text-[#000000] flex-1 text-center">{currency2} {summaryData.budgetSub.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                <span className="font-inter font-medium text-[10px] text-[#000000] flex-1 text-right">{currency1} {summaryData.budgetMain.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+ {/* Expenses Summary Card */}
+                    <div className="w-[433px] bg-white rounded-[16px] shadow-[0px_4px_4px_rgba(0,0,0,0.25)] p-[17px_25px] flex flex-col gap-[12px] shrink-0">
+                        <h3 className="font-inter font-medium text-[16px] leading-[19px] text-[#000000] mb-1">Expenses Summary</h3>
+                        
+                        <div className="flex flex-col gap-[12px] w-full">
+                            {/* Budget Row */}
+                            <div className="grid grid-cols-[70px_1fr_1fr] gap-4 items-center w-full px-[9px]">
+                                <span className="font-inter font-normal text-[12px] text-[#000000]">Budget</span>
+                                <span className="font-inter font-medium text-[11px] text-[#000000] text-right">
+                                    {currency2} {summaryData.budgetSub.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                                <span className="font-inter font-medium text-[11px] text-[#000000] text-right">
+                                    {currency1} {summaryData.budgetMain.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
                             </div>
 
-                            <div className="flex justify-between items-center w-full">
-                                <span className="font-inter font-normal text-[12px] text-[#000000] w-[60px]">Expenses</span>
-                                <span className="font-inter font-medium text-[10px] text-[#000000] flex-1 text-center">{currency2} {summaryData.totalExpenseSub.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                <span className="font-inter font-medium text-[10px] text-[#000000] flex-1 text-right">{currency1} {summaryData.totalExpenseMain.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            {/* Expenses Row */}
+                            <div className="grid grid-cols-[70px_1fr_1fr] gap-4 items-center w-full px-[9px]">
+                                <span className="font-inter font-normal text-[12px] text-[#000000]">Expenses</span>
+                                <span className="font-inter font-medium text-[11px] text-[#000000] text-right">
+                                    {currency2} {summaryData.totalExpenseSub.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                                <span className="font-inter font-medium text-[11px] text-[#000000] text-right">
+                                    {currency1} {summaryData.totalExpenseMain.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
                             </div>
 
-                            <div className="flex justify-between items-center w-full bg-[#F0F6FC] rounded-[2px] p-[10px_9px]">
-                                <span className="font-inter font-bold text-[11px] text-[#000000] w-[60px]">Balance</span>
-                                <span className="font-inter font-bold text-[11px] text-[#000000] flex-1 text-center">{currency2} {summaryData.balanceSub.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                <span className="font-inter font-bold text-[11px] text-[#000000] flex-1 text-right">{currency1} {summaryData.balanceMain.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            {/* Balance Row */}
+                            <div className="grid grid-cols-[70px_1fr_1fr] gap-4 items-center w-full bg-[#F0F6FC] rounded-[6px] p-[10px_9px]">
+                                <span className="font-inter font-bold text-[12px] text-[#000000]">Balance</span>
+                                <span className="font-inter font-bold text-[11px] text-[#000000] text-right">
+                                    {currency2} {summaryData.balanceSub.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                                <span className="font-inter font-bold text-[11px] text-[#000000] text-right">
+                                    {currency1} {summaryData.balanceMain.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
                             </div>
                         </div>
                     </div>
