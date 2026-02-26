@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { MapContainer, TileLayer, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -24,12 +24,13 @@ interface Location {
   lng: number;
   order_index: number;
   color?: string;
-  // ✅ เพิ่ม field นี้: รับ Array ของพิกัด [lng, lat] จาก ORS
   geometry?: number[][]; 
 }
 
-interface ItineraryMapProps {
+// ✅ 1. เพิ่ม onMapClick เข้ามาใน Props Interface
+export interface ItineraryMapProps {
   locations: Location[];
+  onMapClick?: (lat: number, lng: number) => void;
 }
 
 const MapController = ({ locations }: { locations: Location[] }) => {
@@ -40,7 +41,6 @@ const MapController = ({ locations }: { locations: Location[] }) => {
   useEffect(() => {
     if (!map) return;
 
-    // A. เคลียร์ Layer เก่า
     if (markersRef.current) markersRef.current.clearLayers();
     else markersRef.current = L.layerGroup().addTo(map);
 
@@ -58,7 +58,6 @@ const MapController = ({ locations }: { locations: Location[] }) => {
         allLatLngs.push(point);
         const markerColor = loc.color || '#1E518C';
 
-        // 1. สร้าง Marker (เหมือนเดิม)
         const numberedIcon = new L.DivIcon({
             className: "custom-map-icon",
             html: `
@@ -80,14 +79,11 @@ const MapController = ({ locations }: { locations: Location[] }) => {
                 .addTo(markersRef.current);
         }
 
-        // ✅ 2. วาดเส้นทาง (Polyline) จาก Geometry ของ ORS
-        // logic คือ: ถ้า location นี้มี geometry แปลว่าเป็นเส้นทางที่มาจากจุดก่อนหน้า -> มาจุดนี้
         if (loc.geometry && loc.geometry.length > 0 && routeLinesRef.current) {
-            // ORS ส่งมาเป็น [lng, lat] แต่ Leaflet ต้องการ [lat, lng] ต้องสลับค่า
             const leafletPath: L.LatLngExpression[] = loc.geometry.map((coord) => [coord[1], coord[0]]);
 
             L.polyline(leafletPath, {
-                color: markerColor, // ใช้สีเดียวกับหมุดปลายทาง
+                color: markerColor, 
                 weight: 5,
                 opacity: 0.7,
                 lineCap: 'round',
@@ -96,7 +92,6 @@ const MapController = ({ locations }: { locations: Location[] }) => {
         }
     });
 
-    // D. ปรับมุมกล้อง
     if (allLatLngs.length > 0) {
         const bounds = L.latLngBounds(allLatLngs);
         map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
@@ -107,18 +102,35 @@ const MapController = ({ locations }: { locations: Location[] }) => {
   return null;
 };
 
-export default function ItineraryMap({ locations }: ItineraryMapProps) {
+// ✅ 2. Component พิเศษเพื่อจับการคลิก
+function MapClickHandler({ onMapClick }: { onMapClick?: (lat: number, lng: number) => void }) {
+    useMapEvents({
+        click(e) {
+            if (onMapClick) {
+                onMapClick(e.latlng.lat, e.latlng.lng);
+            }
+        }
+    });
+    return null;
+}
+
+export default function ItineraryMap({ locations, onMapClick }: ItineraryMapProps) {
   return (
     <MapContainer 
       center={[13.7563, 100.5018]} 
       zoom={6} 
-      className="w-full h-full z-0"
+      // ✅ 3. บังคับ height/width 100%
+      style={{ height: '100%', width: '100%', zIndex: 0 }}
       zoomControl={false}
     >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
+      
+      {/* ✅ 4. เพิ่มตัวดักการคลิกลงไป */}
+      <MapClickHandler onMapClick={onMapClick} />
+      
       <MapController locations={locations} />
     </MapContainer>
   );

@@ -6,10 +6,10 @@ import dynamic from "next/dynamic";
 import {
     MapPin, Calendar, ChevronRight, ChevronDown, Plus,
     GripVertical, Trash2, Loader2, Pencil, Check, X, ChevronLeft,
-    Car, Clock, FileText, Search 
+    Car, Clock, FileText, Search, Map as MapIcon // ✅ เพิ่ม MapIcon
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
-import { getRouteData, searchPlaces, GeocodeResult } from "@/utils/openRouteService"; 
+import { getRouteData, searchPlaces, GeocodeResult } from "@/utils/openRouteService";
 import TimePickerPopup from "./TimePickerPopup";
 import { formatTimeDisplay } from "@/utils/timeHelpers";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
@@ -150,20 +150,17 @@ function CustomDateRangePicker({
 }
 
 // --- Types & Interfaces ---
-
-// สถานที่ระบบหลัก (จัดเต็ม)
 interface Place {
     id: string;
     name: string;
     description: string;
     description_short?: string;
     images: string[] | string | null;
-    lat: number;  
-    lon: number;  
-    country?: string; 
+    lat: number;
+    lon: number;
+    country?: string;
 }
 
-// สถานที่จาก ORS (มินิมอล)
 interface Location {
     id: string;
     name: string;
@@ -172,20 +169,17 @@ interface Location {
     lon: number;
 }
 
-// โครงสร้าง Schedule Item ที่ Join มา
 interface ScheduleItem {
     id: string;
     place_id: string | null;
-    location_id: string | null; 
+    location_id: string | null;
     item_type: 'place' | 'note';
     note: string | null;
     order_index: number;
     start_time?: string | null;
     end_time?: string | null;
-    
-    // Relation objects
-    places: Place | null; 
-    locations: Location | null; 
+    places: Place | null;
+    locations: Location | null;
 }
 
 interface DailyScheduleData {
@@ -210,10 +204,9 @@ interface SavedPlace {
 interface ItineraryDetailViewProps {
     tripId: string | null;
     onDataUpdate?: () => void;
-    scrollToDay?: number | null; 
+    scrollToDay?: number | null;
 }
 
-// --- MAIN COMPONENT ---
 export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay }: ItineraryDetailViewProps) {
     const supabase = createClient();
 
@@ -228,38 +221,28 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [editedTitle, setEditedTitle] = useState("");
 
-    // Date Picker States
     const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
     const [tempDates, setTempDates] = useState({ start: "", end: "" });
-    const datePickerRef = useRef<HTMLDivElement>(null); 
+    const datePickerRef = useRef<HTMLDivElement>(null);
 
-    // View All State
     const [isViewAll, setIsViewAll] = useState(false);
-
-    // Active TimePicker State
     const [activeTimePickerId, setActiveTimePickerId] = useState<string | null>(null);
 
-    // Travel Stats State
-    const [travelStats, setTravelStats] = useState<Record<string, { 
-        dist: string; 
-        dur: string; 
-        geometry: any; 
-        rawDist: number; 
-        rawDur: number; 
-    }>>({});
+    // Map & Route States
+    const [travelStats, setTravelStats] = useState<Record<string, { dist: string; dur: string; geometry: any; rawDist: number; rawDur: number; }>>({});
     const [dayTotals, setDayTotals] = useState<Record<number, { totalDist: string, totalDur: string }>>({});
+    const routeCache = useRef(new Map<string, any>());
 
-    // Search States
+    // Search & Map Pick States
     const [activeSearchDayId, setActiveSearchDayId] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
     const [searchResults, setSearchResults] = useState<GeocodeResult[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Cache for routes
-    const routeCache = useRef(new Map<string, any>());
+    // ✅ State ควบคุมโหมดการจิ้มแผนที่
+    const [isMapPickMode, setIsMapPickMode] = useState(false);
 
-    // Click Outside Event สำหรับปฏิทิน
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
             const target = event.target as Element;
@@ -271,7 +254,6 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    // Search Functions
     const handleSearchInput = (e: React.ChangeEvent<HTMLInputElement>) => {
         const query = e.target.value;
         setSearchQuery(query);
@@ -281,7 +263,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
         if (query.trim().length > 2) {
             setIsSearching(true);
             searchTimeoutRef.current = setTimeout(async () => {
-                
+
                 let refLat: number | undefined;
                 let refLon: number | undefined;
 
@@ -290,7 +272,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                     if (dayData && dayData.daily_schedule_items.length > 0) {
                         const placeItems = dayData.daily_schedule_items
                             .filter(item => item.item_type === 'place' && (item.places || item.locations))
-                            .sort((a, b) => b.order_index - a.order_index); 
+                            .sort((a, b) => b.order_index - a.order_index);
 
                         if (placeItems.length > 0) {
                             const lastPlace = placeItems[0];
@@ -301,10 +283,10 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                 }
 
                 const results = await searchPlaces(query, refLat, refLon);
-                
+
                 setSearchResults(results);
                 setIsSearching(false);
-            }, 500); 
+            }, 500);
         } else {
             setSearchResults([]);
             setIsSearching(false);
@@ -318,7 +300,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
             const { data: newLocation, error: locationError } = await supabase
                 .from('locations')
                 .insert({
-                    profile_id: user?.id || null, 
+                    profile_id: user?.id || null,
                     name: result.name,
                     full_address: result.label,
                     lat: result.coordinates[1],
@@ -336,8 +318,8 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                 .from('daily_schedule_items')
                 .insert({
                     daily_schedule_id: dayId,
-                    place_id: null,               
-                    location_id: newLocation.id,  
+                    place_id: null,
+                    location_id: newLocation.id,
                     item_type: 'place',
                     note: null,
                     order_index: newOrderIndex
@@ -382,10 +364,103 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
         }
     };
 
-    // --- Drag & Drop Logic ---
+    // ✅ ฟังก์ชัน: เพิ่มสถานที่จากการคลิกแผนที่
+    const handleMapClick = async (lat: number, lng: number) => {
+        if (!isMapPickMode || !activeSearchDayId) return;
+
+        try {
+            setIsSearching(true); // ปรับสถานะปุ่มค้นหาให้หมุนเพื่อบอกผู้ใช้ว่ากำลังโหลด
+
+            // 1. ดึงชื่อที่อยู่จากพิกัด (Reverse Geocoding)
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+            const data = await res.json();
+
+            let placeName = "Selected Map Location";
+            if (data.address) {
+                placeName = data.address.amenity || data.address.tourism || data.address.leisure || data.address.shop || data.address.building || data.address.road || data.name || placeName;
+            } else if (data.name) {
+                placeName = data.name;
+            }
+
+            const fullAddress = data.display_name || `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
+
+            // 2. เซฟลงตาราง locations
+            const { data: { user } } = await supabase.auth.getUser();
+            const { data: newLocation, error: locationError } = await supabase
+                .from('locations')
+                .insert({
+                    profile_id: user?.id || null,
+                    name: placeName,
+                    full_address: fullAddress,
+                    lat: lat,
+                    lon: lng,
+                })
+                .select()
+                .single();
+
+            if (locationError) throw locationError;
+
+            // 3. ผูกเข้ากับตาราง Schedule_items
+            const currentDay = schedules.find(s => s.id === activeSearchDayId);
+            const newOrderIndex = (currentDay?.daily_schedule_items.length || 0) + 1;
+
+            const { data: scheduleItem, error: scheduleError } = await supabase
+                .from('daily_schedule_items')
+                .insert({
+                    daily_schedule_id: activeSearchDayId,
+                    place_id: null,
+                    location_id: newLocation.id,
+                    item_type: 'place',
+                    note: null,
+                    order_index: newOrderIndex
+                })
+                .select(`*, locations(id, name, lat, lon, full_address)`)
+                .single();
+
+            if (scheduleError) throw scheduleError;
+
+            // 4. อัปเดตหน้าจอทันที
+            setSchedules(prev => prev.map(day => {
+                if (day.id === activeSearchDayId) {
+                    const newItem: ScheduleItem = {
+                        id: scheduleItem.id,
+                        place_id: null,
+                        location_id: scheduleItem.location_id,
+                        item_type: 'place',
+                        note: null,
+                        order_index: newOrderIndex,
+                        places: null,
+                        locations: {
+                            id: newLocation.id,
+                            name: newLocation.name,
+                            full_address: newLocation.full_address,
+                            lat: newLocation.lat,
+                            lon: newLocation.lon
+                        }
+                    };
+                    return {
+                        ...day,
+                        daily_schedule_items: [...day.daily_schedule_items, newItem]
+                    };
+                }
+                return day;
+            }));
+
+            // ปิดโหมดจิ้มแผนที่
+            setIsMapPickMode(false);
+            setActiveSearchDayId(null);
+            setSearchQuery("");
+
+        } catch (err) {
+            console.error("Error picking place from map:", err);
+            alert("Failed to add location from map");
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
     const onDragEnd = async (result: DropResult) => {
         const { source, destination } = result;
-
         if (!destination) return;
         if (source.droppableId === destination.droppableId && source.index === destination.index) return;
 
@@ -431,7 +506,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                     itemsToUpdate.push({
                         id: item.id,
                         order_index: item.order_index,
-                        daily_schedule_id: day.id 
+                        daily_schedule_id: day.id
                     });
                 });
             });
@@ -448,7 +523,6 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
         }
     };
 
-    // --- Routing Calculate ---
     useEffect(() => {
         const calculateRoutes = async () => {
             if (!schedules.length) return;
@@ -486,11 +560,11 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                 }
             }
 
-            const BATCH_SIZE = 2; 
-            
+            const BATCH_SIZE = 2;
+
             for (let i = 0; i < tasks.length; i += BATCH_SIZE) {
                 const batch = tasks.slice(i, i + BATCH_SIZE);
-                
+
                 await Promise.all(batch.map(async (task) => {
                     try {
                         const res = await getRouteData(task.start, task.end);
@@ -510,14 +584,14 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                         console.warn(`Skipping route for ${task.id} due to API limit`);
                     }
                 }));
-                
+
                 if (i + BATCH_SIZE < tasks.length) {
-                    await new Promise(resolve => setTimeout(resolve, 2500)); 
+                    await new Promise(resolve => setTimeout(resolve, 2500));
                 }
             }
 
             for (const day of schedules) {
-                 const placeItems = day.daily_schedule_items
+                const placeItems = day.daily_schedule_items
                     .filter(item => item.item_type === 'place' && (item.places || item.locations))
                     .sort((a, b) => a.order_index - b.order_index);
 
@@ -526,17 +600,17 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
 
                 for (let i = 1; i < placeItems.length; i++) {
                     const curr = placeItems[i];
-                    const prev = placeItems[i-1];
-                    
+                    const prev = placeItems[i - 1];
+
                     let cached = newStats[curr.id];
-                    
+
                     if (!cached) {
                         const prevLat = prev.places?.lat || prev.locations?.lat;
                         const prevLon = prev.places?.lon || prev.locations?.lon;
                         const currLat = curr.places?.lat || curr.locations?.lat;
                         const currLon = curr.places?.lon || curr.locations?.lon;
 
-                        if(prevLat && currLat) {
+                        if (prevLat && currLat) {
                             const key = `${prevLat},${prevLon}-${currLat},${currLon}`;
                             cached = routeCache.current.get(key);
                             if (cached) newStats[curr.id] = cached;
@@ -565,7 +639,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
         if (scrollToDay !== null && scrollToDay !== undefined && scrollToDay > 0) {
             setExpandedDayIndex(scrollToDay - 1);
             setIsViewAll(false);
-            
+
             setTimeout(() => {
                 const element = document.getElementById(`day-${scrollToDay}`);
                 if (element) {
@@ -578,11 +652,11 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
     const filteredSavedPlaces = useMemo(() => {
         if (!trip || !trip.name || savedPlaces.length === 0) return [];
         const tripCountry = trip.name.trim().toLowerCase();
-        
+
         return savedPlaces.filter(saved => {
             const placeCountry = saved.places?.country?.trim().toLowerCase();
             return (
-                placeCountry === tripCountry || 
+                placeCountry === tripCountry ||
                 tripCountry.includes(placeCountry || "") ||
                 placeCountry?.includes(tripCountry)
             );
@@ -611,8 +685,8 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                 const rawPlace = Array.isArray(item.places) ? item.places[0] : item.places;
                 const rawLocation = Array.isArray(item.locations) ? item.locations[0] : item.locations;
 
-                return { 
-                    ...item, 
+                return {
+                    ...item,
                     places: rawPlace || null,
                     locations: rawLocation || null
                 };
@@ -710,16 +784,16 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
 
                 daySchedule.daily_schedule_items.forEach((item) => {
                     if (item.item_type === 'place' && (item.places || item.locations)) {
-                        const stats = travelStats[item.id]; 
+                        const stats = travelStats[item.id];
                         locations.push({
                             id: item.id,
                             name: item.places?.name || item.locations?.name,
                             lat: item.places?.lat || item.locations?.lat,
                             lng: item.places?.lon || item.locations?.lon,
                             order_index: globalIndex++,
-                            color: color, 
+                            color: color,
                             day_number: daySchedule.day_number,
-                            geometry: stats?.geometry || null 
+                            geometry: stats?.geometry || null
                         });
                     }
                 });
@@ -730,7 +804,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
         if (expandedDayIndex === null) return [];
         const currentDayNum = expandedDayIndex + 1;
         const dbSchedule = schedules.find(s => s.day_number === currentDayNum);
-        
+
         if (dbSchedule) {
             const date = new Date(trip.start_date);
             date.setDate(date.getDate() + (currentDayNum - 1));
@@ -746,21 +820,21 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                         lng: item.places?.lon || item.locations?.lon,
                         order_index: item.order_index,
                         color: color,
-                        geometry: stats?.geometry || null 
+                        geometry: stats?.geometry || null
                     });
                 }
             });
         }
         return locations;
-    }, [expandedDayIndex, schedules, isViewAll, trip, travelStats]); 
+    }, [expandedDayIndex, schedules, isViewAll, trip, travelStats]);
 
     // --- Handlers ---
     const toggleDay = (index: number) => {
         if (expandedDayIndex === index) {
-            setExpandedDayIndex(null); 
+            setExpandedDayIndex(null);
         } else {
             setExpandedDayIndex(index);
-            setIsViewAll(false); 
+            setIsViewAll(false);
         }
     };
 
@@ -770,7 +844,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
             if (newState) {
                 setExpandedDayIndex(null);
             } else {
-                setExpandedDayIndex(0); 
+                setExpandedDayIndex(0);
             }
             return newState;
         });
@@ -861,7 +935,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                 .select(`*, places(id, name, description_short, images, lat, lon, country)`)
                 .single();
             if (error) throw error;
-            
+
             setSchedules(prev => prev.map(day => {
                 if (day.id === dayId) {
                     const newItem: ScheduleItem = {
@@ -946,9 +1020,9 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
         try {
             const { error } = await supabase
                 .from('daily_schedule_items')
-                .update({ 
-                    start_time: start, 
-                    end_time: end 
+                .update({
+                    start_time: start,
+                    end_time: end
                 })
                 .eq('id', itemId);
 
@@ -956,10 +1030,10 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
 
             setSchedules(prev => prev.map(day => ({
                 ...day,
-                daily_schedule_items: day.daily_schedule_items.map(item => 
-                    item.id === itemId 
-                    ? { ...item, start_time: start, end_time: end } 
-                    : item
+                daily_schedule_items: day.daily_schedule_items.map(item =>
+                    item.id === itemId
+                        ? { ...item, start_time: start, end_time: end }
+                        : item
                 )
             })));
 
@@ -980,10 +1054,10 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
 
             setSchedules(prev => prev.map(day => ({
                 ...day,
-                daily_schedule_items: day.daily_schedule_items.map(item => 
-                    item.id === itemId 
-                    ? { ...item, start_time: null, end_time: null } 
-                    : item
+                daily_schedule_items: day.daily_schedule_items.map(item =>
+                    item.id === itemId
+                        ? { ...item, start_time: null, end_time: null }
+                        : item
                 )
             })));
 
@@ -992,7 +1066,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
             console.error("Error clearing time:", err);
         }
     };
-    
+
     const handleAddNote = async (dayId: string | undefined) => {
         if (!dayId) return;
         try {
@@ -1041,7 +1115,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
             )
         })));
     };
-    
+
     const handleBlurNote = async (itemId: string, text: string) => {
         await supabase.from('daily_schedule_items').update({ note: text }).eq('id', itemId);
     };
@@ -1068,14 +1142,14 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
             <DragDropContext onDragEnd={onDragEnd}>
                 <div className="w-[433px] flex flex-col gap-[24px] overflow-y-auto pr-2 h-[900px] scrollbar-hide pb-20">
 
-                    <div className="flex flex-col gap-[24px] items-center">
+                    <div className="flex flex-col gap-[24px] ">
                         {isEditingTitle ? (
                             <div className="flex items-center gap-2 w-full justify-center">
                                 <input
                                     type="text"
                                     value={editedTitle}
                                     onChange={(e) => setEditedTitle(e.target.value)}
-                                    className="font-inter font-semibold text-[32px] leading-[39px] text-black text-center border-b-2 border-[#3A82CE] outline-none bg-transparent min-w-[200px]"
+                                    className="font-inter font-semibold text-[32px] leading-[39px] text-black border-b-2 border-[#3A82CE] outline-none bg-transparent min-w-[200px]"
                                     autoFocus
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter') handleUpdateTitle();
@@ -1130,32 +1204,42 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
 
                                 {isExpanded && (
                                     <div className="flex flex-col gap-[16px] pb-6 ml-[15px] border-l-2 border-[#E0E0E0] pl-[15px] animate-in slide-in-from-top-2">
-                                        
+
                                         {/* Buttons Row */}
                                         <div className="flex flex-row gap-[8px] w-full relative z-[50]">
-                                            
+
                                             {/* Search Logic */}
                                             {activeSearchDayId === dayData?.id ? (
                                                 <div className="flex-1 relative">
                                                     <div className="h-[36px] bg-white border border-[#3A82CE] rounded-[8px] flex items-center px-3 gap-2 shadow-sm animate-in fade-in zoom-in-95 duration-200">
                                                         <Search className="w-4 h-4 text-[#3A82CE]" />
-                                                        <input 
-                                                            type="text" 
+                                                        <input
+                                                            type="text"
                                                             value={searchQuery}
                                                             onChange={handleSearchInput}
                                                             autoFocus
                                                             placeholder="Search places..."
-                                                            className="flex-1 bg-transparent border-none outline-none text-[14px] text-black placeholder:text-gray-400"
+                                                            className="flex-1 bg-transparent border-none outline-none text-[14px] text-black placeholder:text-gray-400 min-w-0"
                                                         />
-                                                        {isSearching && <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />}
-                                                        <button onClick={() => { setActiveSearchDayId(null); setSearchQuery(""); }}><X className="w-4 h-4 text-gray-400 hover:text-red-500" /></button>
+
+                                                        {/* ✅ เพิ่มปุ่มหมุดสำหรับ Pick from map */}
+                                                        <button
+                                                            onClick={() => setIsMapPickMode(!isMapPickMode)}
+                                                            className={`w-[24px] h-[24px] flex items-center justify-center rounded-[4px] transition-colors shrink-0 ${isMapPickMode ? 'bg-[#3A82CE] text-white' : 'bg-[#F0F6FC] text-[#3A82CE] hover:bg-[#D9EAF9]'}`}
+                                                            title="Pick from map"
+                                                        >
+                                                            <MapIcon className="w-3 h-3" />
+                                                        </button>
+
+                                                        {isSearching ? <Loader2 className="w-4 h-4 text-gray-400 animate-spin shrink-0" /> : null}
+                                                        <button className="shrink-0" onClick={() => { setActiveSearchDayId(null); setSearchQuery(""); setIsMapPickMode(false); }}><X className="w-4 h-4 text-gray-400 hover:text-red-500" /></button>
                                                     </div>
-                                                    
+
                                                     {/* Dropdown Results */}
-                                                    {searchResults.length > 0 && (
+                                                    {searchResults.length > 0 && !isMapPickMode && (
                                                         <div className="absolute top-[42px] left-0 w-full bg-white border border-gray-200 rounded-lg shadow-xl max-h-[250px] overflow-y-auto z-[100] animate-in fade-in slide-in-from-top-2">
                                                             {searchResults.map((res) => (
-                                                                <div 
+                                                                <div
                                                                     key={res.id}
                                                                     onClick={() => handleSelectResult(res, dayData?.id || "")}
                                                                     className="px-3 py-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-0 transition-colors"
@@ -1168,7 +1252,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                                                     )}
                                                 </div>
                                             ) : (
-                                                <div 
+                                                <div
                                                     onClick={() => setActiveSearchDayId(dayData?.id || null)}
                                                     className="flex-1 h-[36px] bg-[#F5F5F5] border border-[#EEEEEE] rounded-[8px] flex items-center justify-center gap-[8px] text-[#616161] cursor-pointer hover:border-[#3A82CE] hover:text-[#3A82CE] transition"
                                                 >
@@ -1177,9 +1261,9 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                                                 </div>
                                             )}
 
-                                            <div 
+                                            <div
                                                 onClick={() => handleAddNote(dayData?.id)}
-                                                className="w-[36px] h-[36px] bg-[#F5F5F5] border border-[#EEEEEE] rounded-full flex items-center justify-center cursor-pointer hover:bg-[#FFF8E1] hover:border-[#FBC02D] transition group"
+                                                className="w-[36px] h-[36px] bg-[#F5F5F5] border border-[#EEEEEE] rounded-full flex items-center justify-center cursor-pointer hover:bg-[#FFF8E1] hover:border-[#FBC02D] transition group shrink-0"
                                                 title="Add Note"
                                             >
                                                 <FileText className="w-[16px] h-[16px] text-[#616161] group-hover:text-[#F57F17]" />
@@ -1208,10 +1292,10 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                                                                                 {...provided.draggableProps}
                                                                                 className={`flex flex-row items-center gap-[8px] w-full pr-[10px] ${snapshot.isDragging ? 'opacity-80 z-50' : ''}`}
                                                                             >
-                                                                                 <div className="absolute -left-[34px] w-[36px]" /> 
+                                                                                <div className="absolute -left-[34px] w-[36px]" />
 
                                                                                 <div className="flex flex-row flex-1 h-[36px] bg-[#F5F5F5] rounded-[8px] border border-[#EEEEEE] items-center overflow-hidden">
-                                                                                    <div 
+                                                                                    <div
                                                                                         {...provided.dragHandleProps}
                                                                                         className="w-[24px] h-full flex items-center justify-center cursor-grab active:cursor-grabbing border-r border-[#EEEEEE]"
                                                                                     >
@@ -1219,7 +1303,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                                                                                     </div>
                                                                                     <div className="flex-1 px-3 flex items-center gap-2">
                                                                                         <FileText className="w-4 h-4 text-gray-500" />
-                                                                                        <input 
+                                                                                        <input
                                                                                             type="text"
                                                                                             value={item.note || ""}
                                                                                             onChange={(e) => handleUpdateNote(item.id, e.target.value)}
@@ -1242,11 +1326,11 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                                                                 const displayIndex = items
                                                                     .filter(i => i.item_type === 'place')
                                                                     .findIndex(p => p.id === item.id) + 1;
-                                                                
+
                                                                 // เลือกว่าจะโชว์ข้อมูลจาก places หรือ locations
                                                                 const displayName = item.places?.name || item.locations?.name || "Unknown Place";
                                                                 const displayDesc = item.places?.description_short || item.places?.description || item.locations?.full_address || "No description";
-                                                                
+
                                                                 // ✅ ตรวจสอบว่ามีรูปภาพจริงๆ หรือไม่ (มีเฉพาะในตาราง places)
                                                                 const hasImage = item.places?.images && item.places?.images.length > 0;
                                                                 const displayImage = hasImage ? getImageSrc(item.places?.images) : null;
@@ -1267,7 +1351,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                                                                                         </div>
                                                                                     </div>
                                                                                     <div className="flex flex-row flex-1 min-w-0 h-[101px] bg-white rounded-[8px] overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-transparent hover:border-[#1E518C]">
-                                                                                        <div 
+                                                                                        <div
                                                                                             {...provided.dragHandleProps}
                                                                                             className="w-[24px] bg-gray-50 flex items-center justify-center cursor-grab active:cursor-grabbing border-r border-gray-100 flex-shrink-0"
                                                                                         >
@@ -1281,7 +1365,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                                                                                                 {displayDesc}
                                                                                             </p>
                                                                                         </div>
-                                                                                        
+
                                                                                         {/* ✅ แสดงกล่องรูปภาพ เฉพาะเมื่อมีรูปจริงๆ เท่านั้น */}
                                                                                         {displayImage && (
                                                                                             <div className="w-[109px] h-[101px] relative border-l border-[#1E518C] bg-gray-200 flex-shrink-0">
@@ -1328,20 +1412,20 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                                                                                         </>
                                                                                     )}
                                                                                     <div className="relative">
-                                                                                        <button 
+                                                                                        <button
                                                                                             onClick={() => setActiveTimePickerId(activeTimePickerId === item.id ? null : item.id)}
                                                                                             className="flex items-center gap-[6px] text-[11px] text-gray-400 hover:text-blue-500 transition-colors"
                                                                                         >
                                                                                             <Clock className="w-[14px] h-[14px]" />
                                                                                             <span className="font-inter font-normal text-[12px] leading-[15px] text-black">
-                                                                                                {item.start_time 
+                                                                                                {item.start_time
                                                                                                     ? `${formatTimeDisplay(item.start_time || null)} - ${formatTimeDisplay(item.end_time || null)}`
                                                                                                     : "Add time"
                                                                                                 }
                                                                                             </span>
                                                                                         </button>
                                                                                         {activeTimePickerId === item.id && (
-                                                                                            <TimePickerPopup 
+                                                                                            <TimePickerPopup
                                                                                                 initialStartTime={item.start_time || null}
                                                                                                 initialEndTime={item.end_time || null}
                                                                                                 onSave={(s, e) => handleSaveTime(item.id, s, e)}
@@ -1365,17 +1449,17 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
 
                                         {/* Total Section */}
                                         {total && items.filter(i => i.item_type === 'place').length > 1 && (
-                                             <div className="flex justify-center items-center gap-4 py-4 mt-2">
-                                                 <span className="font-inter font-bold text-[12px] text-black">Total</span>
-                                                 <div className="flex items-center gap-1">
-                                                     <Clock className="w-[14px] h-[14px] text-[#616161]" />
-                                                     <span className="font-inter font-normal text-[12px] text-black">{total.totalDur}</span>
-                                                 </div>
-                                                 <div className="flex items-center gap-1">
-                                                     <Car className="w-[14px] h-[14px] text-[#616161]" />
-                                                     <span className="font-inter font-normal text-[12px] text-black">{total.totalDist}</span>
-                                                 </div>
-                                             </div>
+                                            <div className="flex justify-center items-center gap-4 py-4 mt-2">
+                                                <span className="font-inter font-bold text-[12px] text-black">Total</span>
+                                                <div className="flex items-center gap-1">
+                                                    <Clock className="w-[14px] h-[14px] text-[#616161]" />
+                                                    <span className="font-inter font-normal text-[12px] text-black">{total.totalDur}</span>
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                    <Car className="w-[14px] h-[14px] text-[#616161]" />
+                                                    <span className="font-inter font-normal text-[12px] text-black">{total.totalDist}</span>
+                                                </div>
+                                            </div>
                                         )}
 
                                         {/* Saved Places Suggestions */}
@@ -1415,7 +1499,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
             </DragDropContext>
 
             {/* --- RIGHT COLUMN: Map --- */}
-            <div className="w-[459px] bg-[#E5E5E5] overflow-hidden relative border border-gray-200 h-[928px] rounded-[16px] mt-[9px] sticky top-[20px] flex flex-col">
+            <div className="w-[459px] bg-[#E5E5E5] overflow-hidden relative border border-gray-200 h-[calc(100vh-120px)] rounded-[16px] mt-[24px] sticky top-[20px] flex flex-col shrink-0">
 
                 <div className="w-full h-[52px] bg-white flex flex-row items-center justify-between px-[16px] border-b border-gray-200 flex-shrink-0 relative z-[1000]">
                     {/* ✅ เพิ่ม id ให้ปุ่มเปิดปฏิทิน */}
@@ -1452,8 +1536,16 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                     )}
                 </div>
 
-                <div className="flex-1 relative w-full h-full">
-                    <ItineraryMap locations={mapLocations} />
+                {/* ✅ เพิ่ม Overlay บอกสถานะเมื่อเปิดโหมดจิ้มแผนที่ */}
+                <div className="flex-1 relative w-full h-full z-0">
+                    {isMapPickMode && (
+                        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[2000] bg-[#3A82CE] text-white px-4 py-2 rounded-full shadow-lg font-inter text-[14px] flex items-center gap-2 animate-bounce pointer-events-none">
+                            <MapPin className="w-4 h-4" /> Click anywhere on the map to add location
+                        </div>
+                    )}
+
+                    {/* ส่ง Props onMapClick ไปให้ Component แผนที่ */}
+                    <ItineraryMap locations={mapLocations} onMapClick={handleMapClick} />
                 </div>
             </div>
         </div>
