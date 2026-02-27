@@ -287,7 +287,7 @@ export default function Navbar({
               </button>
             )}
             <Link href="/" className="transition flex items-center">
-              <img src="/Logo.png" alt="TripVibe Logo" className="w-[138px] h-[36px] object-contain" />
+              <img src="/Logo.png" alt="WorldTravel Logo" className="w-[138px] h-[36px] object-contain" />
             </Link>
           </div>
 
