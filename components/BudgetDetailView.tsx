@@ -49,9 +49,19 @@ const formatDateRange = (start: string | null, end: string | null) => {
     return `${s.toLocaleDateString('en-GB', options)} - ${e.toLocaleDateString('en-GB', options)}`;
 };
 
-const getDayColor = (dayNum: number) => {
-    const colors = ["#FFCF0F", "#FFCAD4", "#4CAF50", "#FF9800", "#3A82CE", "#8A38F5", "#F44336"];
-    return colors[(dayNum - 1) % colors.length] || "#E0E0E0";
+// ✅ เปลี่ยนฟังก์ชัน getDayColor ให้ใช้ Date Object เพื่อหาสีตามวันจันทร์-อาทิตย์
+const getDayColor = (date: Date) => {
+    const dayIndex = date.getDay();
+    switch (dayIndex) {
+        case 1: return "#FFCF0F"; // Mon
+        case 2: return "#FFCAD4"; // Tue
+        case 3: return "#4CAF50"; // Wed
+        case 4: return "#FF9800"; // Thu
+        case 5: return "#3A82CE"; // Fri
+        case 6: return "#8A38F5"; // Sat
+        case 0: return "#F44336"; // Sun
+        default: return "#E0E0E0";
+    }
 };
 
 // --- Categories Data ---
@@ -177,7 +187,6 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
     const [expenseStep, setExpenseStep] = useState<0 | 1>(0);
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
-    // ✅ เพิ่ม State สำหรับชื่อ Category ที่ผู้ใช้ตั้งเอง
     const [customCategoryName, setCustomCategoryName] = useState("");
 
     const [expenseAmount, setExpenseAmount] = useState("");
@@ -292,11 +301,16 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
     }, [schedulesData]);
 
     const mapLocations = useMemo(() => {
-        if (!schedulesData.length) return [];
+        if (!schedulesData.length || !trip) return [];
         const locations: any[] = [];
         let globalIndex = 1;
 
         schedulesData.forEach((day: any) => {
+            // ✅ หาวันที่จริง (Date Object) ของวันนี้ เพื่อเอาไปหาสี
+            const date = new Date(trip.start_date);
+            date.setDate(date.getDate() + (day.day_number - 1));
+            const color = getDayColor(date);
+
             const items = day.daily_schedule_items || [];
             items.sort((a: any, b: any) => a.order_index - b.order_index);
             items.forEach((item: any) => {
@@ -309,14 +323,14 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                         lng: item.places.lon,
                         day_number: day.day_number,
                         order_index: globalIndex++,
-                        color: getDayColor(day.day_number),
+                        color: color, // ✅ ใส่สีที่คำนวณจากวันที่จริง
                         geometry: stats?.geometry || null
                     });
                 }
             });
         });
         return locations;
-    }, [schedulesData, travelStats]);
+    }, [schedulesData, travelStats, trip]);
 
     // --- Currency API ---
     useEffect(() => {
@@ -397,7 +411,6 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
         setEditingExpenseId(expense.id);
         setSelectedCategory(expense.category);
 
-        // ✅ จัดการดึง customCategoryName ถ้าเป็นหมวด Others
         if (expense.category === "others") {
             setCustomCategoryName(expense.title);
         } else {
@@ -416,7 +429,7 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
     const handleAddExpenseClick = () => {
         setEditingExpenseId(null);
         setSelectedCategory(null);
-        setCustomCategoryName(""); // ✅ รีเซ็ต customCategoryName
+        setCustomCategoryName("");
         setExpenseAmount("");
         setExpenseCurrency("THB");
         setExpenseDesc("");
@@ -431,14 +444,12 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
             return;
         }
 
-        // ✅ ตรวจสอบว่าถ้าเลือก Others ต้องใส่ชื่อ
         if (selectedCategory === "others" && !customCategoryName.trim()) {
             return;
         }
 
         setIsSaving(true);
         try {
-            // ✅ ใช้ customCategoryName ถ้าเลือก others
             const catLabel = selectedCategory === "others"
                 ? customCategoryName
                 : EXPENSE_CATEGORIES.find(c => c.id === selectedCategory)?.label || "Other";
@@ -563,7 +574,7 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
             <style>{customScrollbarStyle}</style>
 
             {/* --- LEFT COLUMN: Expense List --- */}
-            <div className="w-[433px] flex-shrink-0 flex flex-col gap-[24px] pt-[24px] h-full overflow-hidden">
+            <div className="w-[433px] flex-shrink-0 flex flex-col gap-[24px] h-full overflow-hidden">
 
                 <div className="flex items-center gap-[12px] w-full shrink-0">
                     <button onClick={onBack} className="hover:bg-gray-100 rounded-full transition text-black shrink-0 p-1">
@@ -687,7 +698,6 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                         </button>
                     </div>
 
-                    {/* ✅ List ของ Expenses ที่ดึงมาจาก DB */}
                     {expensesList.map((exp) => (
                         <div
                             key={exp.id}
@@ -707,7 +717,6 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                                     </span>
                                 </div>
 
-                                {/* ✅ เปลี่ยนคลาสตรงนี้: ลบ truncate ออก และใส่ break-words whitespace-pre-wrap */}
                                 <span className="font-inter font-medium text-[10px] text-black w-full break-words whitespace-pre-wrap leading-[14px]">
                                     {exp.note || exp.title}
                                 </span>
@@ -722,12 +731,11 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                         </div>
                     ))}
 
- {/* Expenses Summary Card */}
+                    {/* Expenses Summary Card */}
                     <div className="w-[433px] bg-white rounded-[16px] shadow-[0px_4px_4px_rgba(0,0,0,0.25)] p-[17px_25px] flex flex-col gap-[12px] shrink-0">
                         <h3 className="font-inter font-medium text-[16px] leading-[19px] text-[#000000] mb-1">Expenses Summary</h3>
                         
                         <div className="flex flex-col gap-[12px] w-full">
-                            {/* Budget Row */}
                             <div className="grid grid-cols-[70px_1fr_1fr] gap-4 items-center w-full px-[9px]">
                                 <span className="font-inter font-normal text-[12px] text-[#000000]">Budget</span>
                                 <span className="font-inter font-medium text-[11px] text-[#000000] text-right">
@@ -738,7 +746,6 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                                 </span>
                             </div>
 
-                            {/* Expenses Row */}
                             <div className="grid grid-cols-[70px_1fr_1fr] gap-4 items-center w-full px-[9px]">
                                 <span className="font-inter font-normal text-[12px] text-[#000000]">Expenses</span>
                                 <span className="font-inter font-medium text-[11px] text-[#000000] text-right">
@@ -749,7 +756,6 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                                 </span>
                             </div>
 
-                            {/* Balance Row */}
                             <div className="grid grid-cols-[70px_1fr_1fr] gap-4 items-center w-full bg-[#F0F6FC] rounded-[6px] p-[10px_9px]">
                                 <span className="font-inter font-bold text-[12px] text-[#000000]">Balance</span>
                                 <span className="font-inter font-bold text-[11px] text-[#000000] text-right">
@@ -766,9 +772,8 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
             </div>
 
             {/* --- RIGHT COLUMN: Map --- */}
-            {/* ✅ 1. เพิ่ม flex flex-col และปรับความสูงเป็น h-[calc(100%-24px)] ให้พอดีกับ parent */}
-            <div className="w-[459px] bg-[#E5E5E5] overflow-hidden relative border border-gray-200 h-[928px] rounded-[16px] mt-[9px] sticky top-[20px] flex flex-col">
-
+            <div className="w-[459px] bg-[#E5E5E5] overflow-hidden relative border border-gray-200 h-[calc(100vh-120px)] rounded-[16px]  sticky top-[20px] flex flex-col shrink-0">
+                
                 {/* Header (แถบวันที่) */}
                 <div className="w-full h-[52px] bg-white flex flex-row items-center justify-between px-[16px] border-b border-gray-200 flex-shrink-0 relative z-[1000]">
                     <div
@@ -782,8 +787,8 @@ export default function BudgetDetailView({ tripId, onBack }: { tripId: string, o
                     </div>
                 </div>
 
-                {/* ✅ 2. เปลี่ยนจาก absolute inset-0 เป็น flex-1 เพื่อให้ดันแผนที่ลงมาต่อจาก Header แทนการซ้อนทับ */}
-                <div className="flex-1 relative w-full h-full">
+                {/* Map Area */}
+                <div className="flex-1 relative w-full h-full z-0">
                     <ItineraryMap locations={mapLocations} />
                 </div>
             </div>

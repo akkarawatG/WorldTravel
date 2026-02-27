@@ -8,12 +8,15 @@ interface RouteResult {
     rawDuration: number;
 }
 
+// ฟังก์ชันช่วยหน่วงเวลา (Sleep)
+const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+
 export const getRouteData = async (
     start: { lat: number; lng: number },
-    end: { lat: number; lng: number }
+    end: { lat: number; lng: number },
+    retries = 2 // อนุญาตให้ลองใหม่ได้ 2 ครั้งถ้าติด 429
 ): Promise<RouteResult | null> => {
     try {
-        // ✅ เรียก API ของเราเอง (ซ่อน API Key ไว้ที่ฝั่ง Server)
         const response = await fetch('/api/ors', {
             method: 'POST',
             headers: {
@@ -23,8 +26,15 @@ export const getRouteData = async (
         });
 
         if (!response.ok) {
+            // ถ้าติด 429 (Too Many Requests) และยังมีโควต้าให้ลองใหม่
+            if (response.status === 429 && retries > 0) {
+                console.warn("API Rate Limit Hit (429). Retrying in 3 seconds...");
+                await delay(3000); // รอ 3 วินาที
+                return getRouteData(start, end, retries - 1); // ลองยิงใหม่
+            }
+            
             console.error(`Route API Error (${response.status})`);
-            return null;
+            return null; // ถ้าพังถาวร คืนค่า null ไปให้ข้ามได้เลย
         }
 
         const data = await response.json();
@@ -75,23 +85,26 @@ export interface GeocodeResult {
 
 export async function searchPlaces(query: string, lat?: number, lon?: number): Promise<GeocodeResult[]> {
     try {
-        // 🛑 นำ API KEY ของ OpenRouteService ของคุณมาใส่ตรงนี้แทนข้อความ "ใส่_API_KEY_ของคุณที่นี่"
-        // หรือถ้าคุณตั้งไว้ใน .env.local แล้ว มันจะดึงค่า NEXT_PUBLIC_ORS_API_KEY มาใช้ให้เอง
         const API_KEY = process.env.NEXT_PUBLIC_ORS_API_KEY || "ใส่_API_KEY_ของคุณที่นี่"; 
         
         let url = `https://api.openrouteservice.org/geocode/search?api_key=${API_KEY}&text=${encodeURIComponent(query)}`;
         
-        // ถ้ามีการส่งพิกัดมาด้วย ให้เน้นผลลัพธ์ที่ใกล้พิกัดนี้ (focus.point)
         if (lat !== undefined && lon !== undefined) {
             url += `&focus.point.lat=${lat}&focus.point.lon=${lon}`;
         }
 
         const response = await fetch(url);
+        
+        // จัดการถ้ายิง Search รัวๆ แล้วติด 429
+        if (response.status === 429) {
+             console.warn("Search API Rate Limit. Please wait.");
+             return [];
+        }
+
         const data = await response.json();
         
         if (!data.features) return [];
 
-        // ✅ แมปข้อมูลที่ได้จาก API ให้อยู่ในรูปแบบ GeocodeResult ที่เราสร้างไว้
         return data.features.map((feature: any) => ({
             id: feature.properties.id || feature.properties.osm_id?.toString() || Math.random().toString(),
             name: feature.properties.name || feature.properties.label.split(',')[0],

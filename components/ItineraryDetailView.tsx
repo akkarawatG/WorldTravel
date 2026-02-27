@@ -560,7 +560,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                 }
             }
 
-            const BATCH_SIZE = 2;
+            const BATCH_SIZE = 1;
 
             for (let i = 0; i < tasks.length; i += BATCH_SIZE) {
                 const batch = tasks.slice(i, i + BATCH_SIZE);
@@ -1167,7 +1167,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                                 </button>
                             </div>
                         ) : (
-                            <div className="group flex items-center gap-3 cursor-pointer p-2 hover:bg-gray-50 rounded-lg transition-colors" onClick={() => {
+                            <div className="group flex items-center gap-3 cursor-pointer  hover:bg-gray-50 rounded-lg transition-colors" onClick={() => {
                                 setEditedTitle(trip.name);
                                 setIsEditingTitle(true);
                             }}>
@@ -1499,7 +1499,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
             </DragDropContext>
 
             {/* --- RIGHT COLUMN: Map --- */}
-            <div className="w-[459px] bg-[#E5E5E5] overflow-hidden relative border border-gray-200 h-[calc(100vh-120px)] rounded-[16px] mt-[24px] sticky top-[20px] flex flex-col shrink-0">
+            <div className="w-[459px] bg-[#E5E5E5] overflow-hidden relative border border-gray-200 h-[calc(100vh-120px)] rounded-[16px]  sticky top-[20px] flex flex-col shrink-0">
 
                 <div className="w-full h-[52px] bg-white flex flex-row items-center justify-between px-[16px] border-b border-gray-200 flex-shrink-0 relative z-[1000]">
                     {/* ✅ เพิ่ม id ให้ปุ่มเปิดปฏิทิน */}

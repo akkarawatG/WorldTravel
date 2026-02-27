@@ -58,7 +58,7 @@ export default function BudgetPlanSelection({ onSelect }: { onSelect: (id: strin
     if (loading) return <div className="flex h-full items-center justify-center"><Loader2 className="animate-spin text-[#3A82CE]" /></div>;
 
     return (
-        <div className="p-8 w-full max-w-[1440px] mx-auto">
+        <div className=" w-full max-w-[1440px] mx-auto">
             <h1 className="text-[32px] font-bold mb-8 font-inter text-[#212121]">Select Plan to Manage Budget</h1>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[24px]">
                 {trips.map(trip => (
