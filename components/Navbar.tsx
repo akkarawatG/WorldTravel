@@ -63,7 +63,7 @@ export default function Navbar({
   const supabase = createClient();
 
   // ✅ 1. ประกาศตัวแปร basePath ตามคำแนะนำของ DevOps
-  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
 
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(user);
   const [localQuery, setLocalQuery] = useState(searchQuery);
