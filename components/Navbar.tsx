@@ -202,7 +202,7 @@ export default function Navbar({
             type: 'province',
             name: province,
             subText: place.country,
-            country: place.country 
+            country: place.country
           });
           addedKeys.add(`province-${province}`);
         }
@@ -239,7 +239,7 @@ export default function Navbar({
     if (result.type === 'country') {
       router.push(`/explore?country=${encodeURIComponent(result.name)}`);
     } else if (result.type === 'province') {
-      const targetCountry = result.country || "Thailand"; 
+      const targetCountry = result.country || "Thailand";
       router.push(`/explore?country=${encodeURIComponent(targetCountry)}&search=${encodeURIComponent(result.name)}`);
     } else if (result.type === 'place' && result.id) {
       router.push(`/detail?id=${result.id}`);
@@ -261,11 +261,11 @@ export default function Navbar({
   };
 
   const handleProtectedLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, path: string) => {
-    e.preventDefault(); 
+    e.preventDefault();
     if (currentUser) {
-      router.push(path); 
+      router.push(path);
     } else {
-      handleLoginTrigger(); 
+      handleLoginTrigger();
     }
   };
 
@@ -286,8 +286,13 @@ export default function Navbar({
                 <ChevronLeft className="w-6 h-6" />
               </button>
             )}
-            <Link href="/" className="transition flex items-center">
-              <img src="/Logo.png" alt="WorldTravel Logo" className="w-[138px] h-[36px] object-contain" />
+            <Link href="/" className="transition flex items-center relative w-[138px] h-[36px]">
+              {/* ✅ กลับมาใช้ img tag ธรรมดา แต่เอาค่า basePath มาต่อให้ถูกต้อง */}
+              <img
+                src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/Logo.png`}
+                alt="WorldTravel Logo"
+                className="w-full h-full object-contain"
+              />
             </Link>
           </div>
 
@@ -356,21 +361,21 @@ export default function Navbar({
 
           {/* RIGHT: Menu */}
           <div className="relative flex items-center gap-8 z-40">
-            
+
             <div className="flex items-center gap-6">
               {/* ✅ ปรับปรุง MyTrip ให้เป็นสีดำปกติ */}
-              <a 
-                href="/mytrips" 
-                onClick={(e) => handleProtectedLinkClick(e, '/mytrips')} 
+              <a
+                href="/mytrips"
+                onClick={(e) => handleProtectedLinkClick(e, '/mytrips')}
                 className="text-[20px] font-inter font-[400] text-[#000000] hover:text-[#1976D2] transition leading-none whitespace-nowrap cursor-pointer"
               >
                 MyTrip
               </a>
 
               {/* ✅ ปรับปรุง MyPlan ให้เป็นสีดำปกติ */}
-              <a 
-                href="/itinerary" 
-                onClick={(e) => handleProtectedLinkClick(e, '/itinerary')} 
+              <a
+                href="/itinerary"
+                onClick={(e) => handleProtectedLinkClick(e, '/itinerary')}
                 className="text-[20px] font-inter font-[400] text-[#000000] hover:text-[#1976D2] transition leading-none whitespace-nowrap cursor-pointer"
               >
                 MyPlan

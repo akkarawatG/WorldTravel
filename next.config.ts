@@ -1,5 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  basePath: '/wordtravel',
+  env: {
+    NEXT_PUBLIC_BASE_PATH: '/wordtravel',
+  },
+  reactStrictMode: false,
   images: {
     remotePatterns: [
       {
