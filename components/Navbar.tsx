@@ -62,6 +62,9 @@ export default function Navbar({
   const searchParams = useSearchParams();
   const supabase = createClient();
 
+  // ✅ 1. ประกาศตัวแปร basePath ตามคำแนะนำของ DevOps
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(user);
   const [localQuery, setLocalQuery] = useState(searchQuery);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -286,12 +289,12 @@ export default function Navbar({
                 <ChevronLeft className="w-6 h-6" />
               </button>
             )}
-            <Link href="/" className="transition flex items-center relative w-[138px] h-[36px]">
-              {/* ✅ กลับมาใช้ img tag ธรรมดา แต่เอาค่า basePath มาต่อให้ถูกต้อง */}
+            <Link href="/" className="transition flex items-center">
+              {/* ✅ 2. นำ basePath มาประกอบกับ URL ของรูป Logo */}
               <img
-                src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/Logo.png`}
+                src={`${basePath}/Logo.png`}
                 alt="WorldTravel Logo"
-                className="w-full h-full object-contain"
+                className="w-[138px] h-[36px] object-contain"
               />
             </Link>
           </div>
@@ -327,6 +330,7 @@ export default function Navbar({
                         <div className="text-gray-400 group-hover:text-blue-500 flex-shrink-0 w-[20px] flex justify-center">
                           {item.type === 'country' ? (
                             countryCode ? (
+                              // @ts-ignore
                               <ReactCountryFlag
                                 countryCode={countryCode}
                                 svg
@@ -363,18 +367,16 @@ export default function Navbar({
           <div className="relative flex items-center gap-8 z-40">
 
             <div className="flex items-center gap-6">
-              {/* ✅ ปรับปรุง MyTrip ให้เป็นสีดำปกติ */}
               <a
-                href="/mytrips"
+                href={`${basePath}/mytrips`}
                 onClick={(e) => handleProtectedLinkClick(e, '/mytrips')}
                 className="text-[20px] font-inter font-[400] text-[#000000] hover:text-[#1976D2] transition leading-none whitespace-nowrap cursor-pointer"
               >
                 MyTrip
               </a>
 
-              {/* ✅ ปรับปรุง MyPlan ให้เป็นสีดำปกติ */}
               <a
-                href="/itinerary"
+                href={`${basePath}/itinerary`}
                 onClick={(e) => handleProtectedLinkClick(e, '/itinerary')}
                 className="text-[20px] font-inter font-[400] text-[#000000] hover:text-[#1976D2] transition leading-none whitespace-nowrap cursor-pointer"
               >
@@ -405,6 +407,7 @@ export default function Navbar({
                   onClick={handleLoginTrigger}
                   className="flex w-[68px] h-[24px] items-center justify-center gap-[8px] px-[8px] py-[4px] rounded-[8px] bg-[#1976D2] hover:bg-[#1565C0] text-white text-[12px] leading-none font-inter font-[400] transition border border-[#90CAF9] shadow-sm cursor-pointer"
                 >
+                  {/* @ts-ignore */}
                   <Icon path={mdiLockOutline} size={0.5} />
                   <span>Login</span>
                 </button>
