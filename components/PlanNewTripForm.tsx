@@ -333,26 +333,6 @@ export default function PlanNewTripForm({ onSuccess }: PlanNewTripFormProps) {
 
       {/* Footer Actions */}
       <div className="flex flex-col items-center gap-[24px] w-full self-stretch mt-4">
-          <div className="flex flex-row justify-between items-center w-full h-[24px]">
-              <button type="button" className="flex flex-row items-center gap-[8px] hover:opacity-70 transition-opacity">
-                  <div className="w-[16px] h-[16px] flex items-center justify-center">
-                      <UserPlus className="w-[16px] h-[16px] text-[#9E9E9E]" />
-                  </div>
-                  <span className="font-inter font-normal text-[12px] leading-[15px] text-[#9E9E9E]">
-                      Invite tripmates
-                  </span>
-              </button>
-
-              <button type="button" className="flex flex-row justify-between items-center px-[8px] py-[4px] gap-[8px] w-[125px] h-[24px] rounded-[8px] hover:bg-gray-100 transition-colors">
-                  <div className="flex flex-row items-start gap-[6px]">
-                      <Users className="w-[16px] h-[16px] text-[#212121]" />
-                      <span className="font-inter font-normal text-[12px] leading-[15px] text-[#212121]">
-                          Friends
-                      </span>
-                  </div>
-                  <ChevronDown className="w-[16px] h-[16px] text-[#212121]" />
-              </button>
-          </div>
 
           <button 
             onClick={handleStartPlanning}

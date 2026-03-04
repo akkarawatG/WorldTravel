@@ -39,12 +39,16 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
 
-  // ✅ Helper: หา URL ที่ถูกต้อง โดยรวม basePath เข้าไปด้วย
+// ✅ Helper: หา URL ที่ถูกต้อง แบบกันเหนียว 100%
   const getURL = () => {
-    const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+    let basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
     
-    // ถ้ารันบนเบราว์เซอร์ ให้ใช้ window.location.origin ชัวร์ที่สุด
+    // ถ้ารันบนเบราว์เซอร์
     if (typeof window !== 'undefined') {
+      // ✅ เช็คกันเหนียว: ถ้า env ว่าง แต่ URL ปัจจุบันอยู่ในโฟลเดอร์ wordtravel ให้เติมให้อัตโนมัติ
+      if (!basePath && window.location.pathname.startsWith('/wordtravel')) {
+        basePath = '/wordtravel';
+      }
       return `${window.location.origin}${basePath}`;
     }
 

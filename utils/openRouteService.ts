@@ -8,16 +8,16 @@ interface RouteResult {
     rawDuration: number;
 }
 
-// ฟังก์ชันช่วยหน่วงเวลา (Sleep)
-const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
-
 export const getRouteData = async (
     start: { lat: number; lng: number },
-    end: { lat: number; lng: number },
-    retries = 2 // อนุญาตให้ลองใหม่ได้ 2 ครั้งถ้าติด 429
+    end: { lat: number; lng: number }
 ): Promise<RouteResult | null> => {
     try {
-        const response = await fetch('/api/ors', {
+        // ✅ 1. ดึง basePath จาก Environment
+        const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+
+        // ✅ 2. นำ basePath มาต่อหน้า /api/ors
+        const response = await fetch(`${basePath}/api/ors`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -26,15 +26,8 @@ export const getRouteData = async (
         });
 
         if (!response.ok) {
-            // ถ้าติด 429 (Too Many Requests) และยังมีโควต้าให้ลองใหม่
-            if (response.status === 429 && retries > 0) {
-                console.warn("API Rate Limit Hit (429). Retrying in 3 seconds...");
-                await delay(3000); // รอ 3 วินาที
-                return getRouteData(start, end, retries - 1); // ลองยิงใหม่
-            }
-            
             console.error(`Route API Error (${response.status})`);
-            return null; // ถ้าพังถาวร คืนค่า null ไปให้ข้ามได้เลย
+            return null;
         }
 
         const data = await response.json();
@@ -73,7 +66,7 @@ const formatDuration = (seconds: number): string => {
 };
 
 // ==========================================
-// ✅ ส่วนที่เพิ่มใหม่สำหรับระบบ Search
+// ✅ ส่วนระบบ Search (คงเดิม)
 // ==========================================
 
 export interface GeocodeResult {
@@ -94,13 +87,6 @@ export async function searchPlaces(query: string, lat?: number, lon?: number): P
         }
 
         const response = await fetch(url);
-        
-        // จัดการถ้ายิง Search รัวๆ แล้วติด 429
-        if (response.status === 429) {
-             console.warn("Search API Rate Limit. Please wait.");
-             return [];
-        }
-
         const data = await response.json();
         
         if (!data.features) return [];
