@@ -39,18 +39,24 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
 
-  // Helper: หา URL ที่ถูกต้อง (Local vs Production)
+  // ✅ Helper: หา URL ที่ถูกต้อง โดยรวม basePath เข้าไปด้วย
   const getURL = () => {
+    const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+    
+    // ถ้ารันบนเบราว์เซอร์ ให้ใช้ window.location.origin ชัวร์ที่สุด
+    if (typeof window !== 'undefined') {
+      return `${window.location.origin}${basePath}`;
+    }
+
+    // Fallback สำหรับ Server Side
     let url =
-      process.env.NEXT_PUBLIC_SITE_URL ?? // ตั้งค่าใน Vercel
-      process.env.NEXT_PUBLIC_VERCEL_URL ?? // Vercel สร้างให้อัตโนมัติ
+      process.env.NEXT_PUBLIC_SITE_URL ?? 
+      process.env.NEXT_PUBLIC_VERCEL_URL ?? 
       "http://localhost:3000";
 
-    // รวม http:// ถ้ายังไม่มี
     url = url.includes("http") ? url : `https://${url}`;
-    // เอา / ตัวท้ายออกถ้ามี
-    url = url.charAt(url.length - 1) === "/" ? url.slice(0, -1) : url;
-    return url;
+    url = url.endsWith("/") ? url.slice(0, -1) : url;
+    return `${url}${basePath}`;
   };
 
   // --- 1. Login with Google ---
@@ -62,7 +68,7 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
 
     setLoading(true);
 
-    // ✅ สร้าง Redirect URL ที่ถูกต้อง
+    // ✅ สร้าง Redirect URL ที่ถูกต้อง (จะกลายเป็น https://ideatrade1.com/wordtravel/auth/callback)
     const redirectUrl = `${getURL()}/auth/callback`;
     console.log("🔐 Authenticating with redirect to:", redirectUrl);
 
@@ -82,8 +88,6 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
       setLoading(false);
     }
   };
-
-  // ... (ส่วนอื่นๆ ของ handlePaste, useEffect, handleEmailSubmit คงเดิม) ...
 
   const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
@@ -135,7 +139,16 @@ export default function AuthModal({ onClose, onSuccess }: AuthModalProps) {
     e.preventDefault();
     if (!email) return;
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOtp({ email });
+    
+    // ✅ เพิ่ม redirectTo ให้ Email OTP ด้วย
+    const redirectUrl = `${getURL()}/auth/callback`;
+    const { error } = await supabase.auth.signInWithOtp({ 
+      email,
+      options: {
+        emailRedirectTo: redirectUrl
+      }
+    });
+    
     setLoading(false);
     if (error) {
       alert(error.message);
