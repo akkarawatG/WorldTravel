@@ -1136,7 +1136,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
     const dateRangeStr = `${new Date(trip.start_date).getDate()}/${new Date(trip.start_date).toLocaleDateString('en-GB', { month: 'short' })} - ${new Date(trip.end_date).getDate()}/${new Date(trip.end_date).toLocaleDateString('en-GB', { month: 'short' })}`;
 
     return (
-        <div className="w-full flex flex-row gap-[24px] relative h-full min-h-[900px]">
+        <div className="w-full flex flex-row gap-[24px] relative h-full min-h-[900px] bg-white">
 
             {/* --- LEFT COLUMN: Timeline --- */}
             <DragDropContext onDragEnd={onDragEnd}>
