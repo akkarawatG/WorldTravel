@@ -292,7 +292,7 @@ const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
             <Link href="/" className="transition flex items-center">
               {/* ✅ 2. นำ basePath มาประกอบกับ URL ของรูป Logo */}
               <img
-                src={`${basePath}/Logo.png`}
+                src={`url('${basePath}//Logo.png`}
                 alt="WorldTravel Logo"
                 className="w-[138px] h-[36px] object-contain"
               />
