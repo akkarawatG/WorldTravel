@@ -1,5 +1,6 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+import type { NextConfig } from 'next';
+
+const nextConfig: NextConfig = {
   basePath: '/wordtravel',
   env: {
     NEXT_PUBLIC_BASE_PATH: '/wordtravel',
@@ -27,7 +28,6 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'd1bv4heaa2n05k.cloudfront.net',
       },
-      // ✅ เพิ่มอันนี้เข้าไปครับ เพื่อแก้ Error ล่าสุด
       {
         protocol: 'https',
         hostname: 'placehold.co',
