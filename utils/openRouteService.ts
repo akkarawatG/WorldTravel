@@ -13,10 +13,15 @@ export const getRouteData = async (
     end: { lat: number; lng: number }
 ): Promise<RouteResult | null> => {
     try {
-        // ✅ 1. ดึง basePath จาก Environment
-        const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+        // 1. หา Base Path อัตโนมัติ ป้องกันเซิร์ฟเวอร์ไม่รู้จัก env
+        let basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+        if (typeof window !== 'undefined') {
+            if (!basePath && window.location.pathname.startsWith('/wordtravel')) {
+                basePath = '/wordtravel';
+            }
+        }
 
-        // ✅ 2. นำ basePath มาต่อหน้า /api/ors
+        // 2. ยิง API ไปที่ /wordtravel/api/ors
         const response = await fetch(`${basePath}/api/ors`, {
             method: 'POST',
             headers: {
@@ -24,6 +29,13 @@ export const getRouteData = async (
             },
             body: JSON.stringify({ start, end }) 
         });
+
+        // ✅ 3. เช็คก่อนว่าสิ่งที่ตอบกลับมาใช่ JSON หรือไม่ ป้องกัน Error "<!doctype"
+        const contentType = response.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+            console.error("API /ors ไม่ได้ส่ง JSON กลับมา (อาจจะเป็นหน้า 404)");
+            return null; // ข้ามการวาดเส้นไปเลย แผนที่จะได้ไม่พัง
+        }
 
         if (!response.ok) {
             console.error(`Route API Error (${response.status})`);
@@ -47,11 +59,10 @@ export const getRouteData = async (
             rawDuration: durationSeconds
         };
     } catch (error) {
-        console.error("Fetch error:", error);
+        console.error("Fetch Route error:", error);
         return null;
     }
 };
-
 const formatDistance = (meters: number): string => {
     if (meters < 1000) return `${Math.round(meters)} m`;
     return `${(meters / 1000).toFixed(1)} km`;

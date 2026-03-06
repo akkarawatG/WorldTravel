@@ -1,7 +1,7 @@
 "use client";
 
-import { LogOut, ChevronLeft, Search, MapPin, Globe, Map } from "lucide-react";
-import { useState, useEffect } from "react";
+import { LogOut, ChevronLeft, Search, MapPin, Globe, Map, Menu, X as CloseIcon, ArrowLeft } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Icon from '@mdi/react';
@@ -62,7 +62,6 @@ export default function Navbar({
   const searchParams = useSearchParams();
   const supabase = createClient();
 
-  // ✅ 1. ประกาศตัวแปร basePath ตามคำแนะนำของ DevOps
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
 
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(user);
@@ -73,6 +72,13 @@ export default function Navbar({
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
   const [imageError, setImageError] = useState(false);
+
+  // ควบคุมเมนูมือถือ
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
+  // ✅ ควบคุมหน้าจอค้นหาแบบ Full-screen ในมือถือ
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
+  const mobileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (user) setCurrentUser(user);
@@ -131,12 +137,21 @@ export default function Navbar({
     });
 
     return () => subscription.unsubscribe();
-
   }, []);
 
   useEffect(() => {
     setImageError(false);
   }, [currentUser]);
+
+  // เมื่อเปิดหน้าค้นหามือถือ ให้ Auto focus ไปที่ Input
+  useEffect(() => {
+    if (isMobileSearchOpen && mobileInputRef.current) {
+      // setTimeout เล็กน้อยเพื่อให้ Slide animation ทำงานเสร็จก่อน focus
+      setTimeout(() => {
+        mobileInputRef.current?.focus();
+      }, 100);
+    }
+  }, [isMobileSearchOpen]);
 
   const handleLoginTrigger = () => {
     if (onLoginClick) {
@@ -144,6 +159,7 @@ export default function Navbar({
     } else {
       setShowAuthModal(true);
     }
+    setIsMobileMenuOpen(false);
   };
 
   const handleAuthSuccess = (u: AuthUserProfile) => {
@@ -155,6 +171,7 @@ export default function Navbar({
     if (onLogout) {
       onLogout();
       setShowUserMenu(false);
+      setIsMobileMenuOpen(false);
       return;
     }
 
@@ -231,11 +248,11 @@ export default function Navbar({
     }, 300);
 
     return () => clearTimeout(timeoutId);
-
   }, [localQuery]);
 
   const handleSelectResult = (result: SearchResult) => {
     setShowDropdown(false);
+    setIsMobileSearchOpen(false); // ✅ ปิดหน้าค้นหามือถือเมื่อเลือกผลลัพธ์
     setLocalQuery(result.name);
     if (setSearchQuery) setSearchQuery(result.name);
 
@@ -252,6 +269,7 @@ export default function Navbar({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       setShowDropdown(false);
+      setIsMobileSearchOpen(false); // ✅ ปิดหน้าค้นหามือถือเมื่อกด Enter
       router.push(`/explore?search=${encodeURIComponent(localQuery)}`);
     }
   };
@@ -265,6 +283,7 @@ export default function Navbar({
 
   const handleProtectedLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, path: string) => {
     e.preventDefault();
+    setIsMobileMenuOpen(false);
     if (currentUser) {
       router.push(path);
     } else {
@@ -272,39 +291,58 @@ export default function Navbar({
     }
   };
 
+  const toggleMobileMenu = () => {
+    setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+
   return (
     <>
-      <header className="w-full min-w-[1024px] h-[65px] bg-[#F5F5F5] relative z-[50]">
-
+      <header className="w-full lg:min-w-[1024px] h-[65px] bg-[#F5F5F5] relative z-[50] shadow-sm">
+        
+        {/* Backdrop for Dropdowns */}
         {(showUserMenu || showDropdown) && (
           <div className="fixed inset-0 z-30 bg-transparent" onClick={() => { setShowUserMenu(false); setShowDropdown(false); }}></div>
         )}
+        
+        {/* Backdrop for Mobile Menu */}
+        {isMobileMenuOpen && (
+           <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={() => setIsMobileMenuOpen(false)}></div>
+        )}
 
-        <div className="w-full max-w-[1440px] h-full mx-auto flex justify-between items-center px-[156px]">
+        <div className="w-full max-w-[1440px] h-full mx-auto flex justify-between items-center px-4 lg:px-[156px]">
 
-          {/* LEFT: Logo */}
-          <div className="flex items-center gap-4 relative z-40">
+          {/* LEFT: Logo & Hamburger */}
+          <div className="flex items-center gap-3 relative z-50">
+            <button 
+              className="lg:hidden p-1 -ml-1 text-[#072A4F] hover:bg-gray-200 rounded-md transition"
+              onClick={toggleMobileMenu}
+            >
+              <Menu size={26} />
+            </button>
+
             {showBack && (
-              <button onClick={() => router.back()} className="text-gray-500 hover:text-gray-900 transition p-1 hover:bg-gray-200 rounded-full">
+              <button onClick={() => router.back()} className="text-gray-500 hover:text-gray-900 transition p-1 hover:bg-gray-200 rounded-full hidden sm:block">
                 <ChevronLeft className="w-6 h-6" />
               </button>
             )}
-            <Link href="/" className="transition flex items-center">
-              {/* ✅ 2. นำ basePath มาประกอบกับ URL ของรูป Logo */}
-              <img
-                src={`${basePath}/Logo.png`}
-                alt="WorldTravel Logo"
-                className="w-[138px] h-[36px] object-contain"
-              />
+
+            <Link href="/" className="transition flex items-center shrink-0">
+              <div className="relative w-[110px] h-[28px] sm:w-[138px] sm:h-[36px]">
+                 <img
+                  src={`${basePath}/Logo.png`}
+                  alt="WorldTravel Logo"
+                  className="w-full h-full object-contain"
+                />
+              </div>
             </Link>
           </div>
 
-          {/* CENTER: Search Box */}
-          <div className="flex items-center justify-center flex-1 mx-4 relative z-50">
-            <div className="relative">
-              <div className="flex items-center w-[268px] h-[31px] gap-[8px] px-[8px] py-[4px] bg-[#194473] border border-[#E0E0E0] rounded-[8px] transition">
-                <Search className="w-[24px] h-[24px] p-[4px] text-white flex-shrink-0" />
-                <div className="flex items-center w-[220px] h-[23px] bg-[#FFFFFF] rounded-[4px] px-[8px]">
+          {/* CENTER: Desktop Search Box (ซ่อนในมือถือ) */}
+          <div className="hidden lg:flex items-center justify-center flex-1 mx-4 relative z-50">
+            <div className="relative w-full max-w-[268px]">
+              <div className="flex items-center w-full h-[31px] gap-[8px] px-[8px] py-[4px] bg-[#194473] border border-[#E0E0E0] rounded-[8px] transition">
+                <Search className="w-[18px] h-[18px] lg:w-[24px] lg:h-[24px] p-[2px] lg:p-[4px] text-white flex-shrink-0" />
+                <div className="flex items-center flex-1 h-[23px] bg-[#FFFFFF] rounded-[4px] px-[8px]">
                   <input
                     type="text"
                     placeholder="Search"
@@ -316,9 +354,9 @@ export default function Navbar({
                   />
                 </div>
               </div>
-              {/* Dropdown Results */}
+              {/* Dropdown Results (Desktop) */}
               {showDropdown && localQuery && results.length > 0 && (
-                <div className="absolute top-[40px] left-0 w-[268px] bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden py-2 animate-in fade-in zoom-in-95 duration-200">
+                <div className="absolute top-[40px] left-0 w-full bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden py-2 animate-in fade-in zoom-in-95 duration-200">
                   {results.map((item, index) => {
                     const countryCode = item.type === 'country' ? getCountryCode(item.name) : "";
                     return (
@@ -331,27 +369,16 @@ export default function Navbar({
                           {item.type === 'country' ? (
                             countryCode ? (
                               // @ts-ignore
-                              <ReactCountryFlag
-                                countryCode={countryCode}
-                                svg
-                                style={{ width: '1.2em', height: '1.2em' }}
-                                title={item.name}
-                              />
-                            ) : (
-                              <Globe size={14} />
-                            )
-                          ) : item.type === 'province' ? (
-                            <Map size={14} />
-                          ) : (
-                            <MapPin size={14} />
-                          )}
+                              <ReactCountryFlag countryCode={countryCode} svg style={{ width: '1.2em', height: '1.2em' }} title={item.name} />
+                            ) : ( <Globe size={14} /> )
+                          ) : item.type === 'province' ? ( <Map size={14} /> ) : ( <MapPin size={14} /> )}
                         </div>
 
-                        <div className="flex flex-col">
-                          <span className="text-[12px] font-inter font-medium text-gray-800 line-clamp-1">
+                        <div className="flex flex-col overflow-hidden">
+                          <span className="text-[12px] font-inter font-medium text-gray-800 truncate">
                             {item.name}
                           </span>
-                          <span className="text-[10px] text-gray-400 capitalize">
+                          <span className="text-[10px] text-gray-400 capitalize truncate">
                             {item.type === 'place' ? item.subText : item.type === 'province' ? item.subText : item.type}
                           </span>
                         </div>
@@ -363,9 +390,18 @@ export default function Navbar({
             </div>
           </div>
 
-          {/* RIGHT: Menu */}
-          <div className="relative flex items-center gap-8 z-40">
+          {/* RIGHT: Mobile Search Icon (แสดงเฉพาะมือถือ) */}
+          <div className="flex lg:hidden items-center relative z-50">
+            <button 
+              onClick={() => setIsMobileSearchOpen(true)}
+              className="p-2 text-[#072A4F] hover:bg-gray-200 rounded-full transition"
+            >
+              <Search size={24} />
+            </button>
+          </div>
 
+          {/* RIGHT: Desktop Menu (ซ่อนในมือถือ) */}
+          <div className="hidden lg:flex relative items-center gap-8 z-40">
             <div className="flex items-center gap-6">
               <a
                 href={`${basePath}/mytrips`}
@@ -374,7 +410,6 @@ export default function Navbar({
               >
                 MyTrip
               </a>
-
               <a
                 href={`${basePath}/itinerary`}
                 onClick={(e) => handleProtectedLinkClick(e, '/itinerary')}
@@ -387,14 +422,9 @@ export default function Navbar({
             <div className="flex items-center justify-end">
               {currentUser ? (
                 <div className="flex items-center gap-2 cursor-pointer group" onClick={() => setShowUserMenu(!showUserMenu)}>
-                  <div className="w-[24px] h-[24px] flex-shrink-0 rounded-full bg-[#D9D9D9] flex items-center justify-center text-white text-[12px] font-bold border border-white shadow-sm overflow-hidden">
+                  <div className="w-[32px] h-[32px] flex-shrink-0 rounded-full bg-[#D9D9D9] flex items-center justify-center text-white text-[14px] font-bold border border-white shadow-sm overflow-hidden">
                     {currentUser.image && !imageError ? (
-                      <img
-                        src={currentUser.image}
-                        alt={currentUser.name || "Profile"}
-                        className="w-full h-full object-cover"
-                        onError={() => setImageError(true)}
-                      />
+                      <img src={currentUser.image} alt={currentUser.name || "Profile"} className="w-full h-full object-cover" onError={() => setImageError(true)} />
                     ) : (
                       <div className="w-full h-full bg-[#1976D2] flex items-center justify-center">
                         {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : "U"}
@@ -405,46 +435,36 @@ export default function Navbar({
               ) : (
                 <button
                   onClick={handleLoginTrigger}
-                  className="flex w-[68px] h-[24px] items-center justify-center gap-[8px] px-[8px] py-[4px] rounded-[8px] bg-[#1976D2] hover:bg-[#1565C0] text-white text-[12px] leading-none font-inter font-[400] transition border border-[#90CAF9] shadow-sm cursor-pointer"
+                  className="flex h-[32px] items-center justify-center gap-[8px] px-[12px] rounded-[8px] bg-[#1976D2] hover:bg-[#1565C0] text-white text-[14px] font-inter font-[500] transition shadow-sm cursor-pointer"
                 >
                   {/* @ts-ignore */}
-                  <Icon path={mdiLockOutline} size={0.5} />
+                  <Icon path={mdiLockOutline} size={0.6} />
                   <span>Login</span>
                 </button>
               )}
 
-              {/* Dropdown Menu */}
+              {/* Desktop User Dropdown Menu */}
               {showUserMenu && currentUser && (
-                <div className="absolute right-0 top-[35px] w-[190px] h-[202px] bg-white rounded-[8px] border border-[#EEEEEE] p-4 flex flex-col gap-4 z-50 shadow-[0px_4px_20px_rgba(0,0,0,0.1)] font-inter animate-in fade-in zoom-in-95 duration-200">
-
-                  <div className="w-[158px] h-[49px] flex flex-col gap-2 justify-center">
-                    <p className="font-inter font-bold text-[20px] leading-none text-[#212121] truncate">
+                <div className="absolute right-0 top-[45px] w-[190px] bg-white rounded-[8px] border border-[#EEEEEE] p-4 flex flex-col gap-4 z-50 shadow-[0px_4px_20px_rgba(0,0,0,0.1)] font-inter animate-in fade-in zoom-in-95 duration-200">
+                  <div className="flex flex-col gap-1 justify-center border-b border-gray-100 pb-3">
+                    <p className="font-inter font-bold text-[16px] text-[#212121] truncate">
                       {currentUser.name || "User"}
                     </p>
-                    <p className="font-inter font-normal text-[14px] leading-none text-[#757575] truncate">
+                    <p className="font-inter font-normal text-[12px] text-[#757575] truncate">
                       {currentUser.email || ""}
                     </p>
                   </div>
 
-                  <div className="w-[158px] h-[62px] flex flex-col gap-2">
+                  <div className="flex flex-col gap-1">
                     <button
-                      onClick={() => {
-                        router.push('/review-history?action=edit-profile');
-                        setShowUserMenu(false);
-                      }}
-                      className="w-[158px] h-[27px] rounded-[8px] flex items-center gap-4 px-[8px] py-[4px] text-left hover:text-[#194473] transition-colors
-             font-inter font-normal text-[16px] leading-none tracking-normal text-[#212121]"
+                      onClick={() => { router.push('/review-history?action=edit-profile'); setShowUserMenu(false); }}
+                      className="w-full rounded-[8px] flex items-center px-2 py-2 text-left hover:text-[#194473] hover:bg-blue-50 transition-colors font-inter font-normal text-[14px] text-[#212121]"
                     >
                       Edit profile
                     </button>
-
                     <button
-                      onClick={() => {
-                        setShowUserMenu(false);
-                        router.push('/review-history');
-                      }}
-                      className="w-[158px] h-[27px] rounded-[8px] flex items-center gap-4 px-[8px] py-[4px] text-left hover:text-[#194473] transition-colors
-             font-inter font-normal text-[16px] leading-none tracking-normal text-[#212121]"
+                      onClick={() => { setShowUserMenu(false); router.push('/review-history'); }}
+                      className="w-full rounded-[8px] flex items-center px-2 py-2 text-left hover:text-[#194473] hover:bg-blue-50 transition-colors font-inter font-normal text-[14px] text-[#212121]"
                     >
                       Review
                     </button>
@@ -452,18 +472,191 @@ export default function Navbar({
 
                   <button
                     onClick={handleLogoutTrigger}
-                    className="w-[158px] h-[32px] rounded-[8px] flex items-center justify-center gap-2 px-[8px] py-[4px] border border-[#EF9A9A] bg-[#F44336] hover:bg-[#d32f2f] transition-colors mt-auto
-                        font-inter font-normal text-[16px] leading-none text-white"
+                    className="w-full rounded-[8px] flex items-center justify-center gap-2 px-2 py-2 border border-[#EF9A9A] bg-[#F44336] hover:bg-[#d32f2f] transition-colors font-inter font-normal text-[14px] text-white"
                   >
-                    <LogOut className="w-[16px] h-[16px]" /> Logout
+                    <LogOut className="w-[14px] h-[14px]" /> Logout
                   </button>
                 </div>
               )}
             </div>
           </div>
+          
         </div>
       </header>
 
+      {/* ====================================================
+          📱 MOBILE FULL-SCREEN SEARCH OVERLAY (คล้าย Facebook)
+      ==================================================== */}
+      {isMobileSearchOpen && (
+        <div className="fixed inset-0 z-[200] bg-white flex flex-col lg:hidden animate-in slide-in-from-right-full duration-200">
+          
+          {/* Header ค้นหา */}
+          <div className="flex items-center gap-3 p-3 border-b border-gray-200 shadow-sm bg-white">
+            <button 
+              onClick={() => setIsMobileSearchOpen(false)} 
+              className="p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-full transition"
+            >
+              <ArrowLeft size={24} />
+            </button>
+            <div className="flex-1 flex items-center bg-[#F0F2F5] h-[40px] rounded-full px-4 gap-2">
+               <input
+                  ref={mobileInputRef}
+                  type="text"
+                  placeholder="ค้นหาสถานที่, ประเทศ..."
+                  className="w-full bg-transparent border-none outline-none text-[15px] font-inter text-gray-900 placeholder-gray-500"
+                  value={localQuery}
+                  onChange={handleInputChange}
+                  onKeyDown={handleKeyDown}
+                />
+                {localQuery && (
+                  <button onClick={() => { setLocalQuery(""); if(setSearchQuery) setSearchQuery(""); }} className="p-1 text-gray-400">
+                    <CloseIcon size={16} />
+                  </button>
+                )}
+            </div>
+          </div>
+
+          {/* รายการผลลัพธ์ (List) */}
+          <div className="flex-1 overflow-y-auto bg-white">
+            {results.length > 0 ? (
+               <div className="flex flex-col pb-4">
+                 {results.map((item, index) => {
+                    const countryCode = item.type === 'country' ? getCountryCode(item.name) : "";
+                    return (
+                      <div
+                        key={`mobile-${item.type}-${index}`}
+                        onClick={() => handleSelectResult(item)}
+                        className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50 border-b border-gray-100 active:bg-gray-100 transition-colors"
+                      >
+                        <div className="w-[40px] h-[40px] rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                          {item.type === 'country' ? (
+                            countryCode ? (
+                              // @ts-ignore
+                              <ReactCountryFlag countryCode={countryCode} svg style={{ width: '1.5em', height: '1.5em', borderRadius: '50%' }} title={item.name} />
+                            ) : ( <Globe size={20} className="text-gray-500" /> )
+                          ) : item.type === 'province' ? ( <Map size={20} className="text-gray-500" /> ) : ( <MapPin size={20} className="text-gray-500" /> )}
+                        </div>
+
+                        <div className="flex flex-col overflow-hidden">
+                          <span className="text-[15px] font-medium text-gray-900 truncate">
+                            {item.name}
+                          </span>
+                          <span className="text-[13px] text-gray-500 capitalize truncate">
+                            {item.type === 'place' ? item.subText : item.type === 'province' ? item.subText : item.type}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+               </div>
+            ) : localQuery.trim() !== "" ? (
+               <div className="flex flex-col items-center justify-center pt-10 text-gray-500">
+                 <Search size={40} className="text-gray-300 mb-3" />
+                 <p className="text-[15px]">ไม่พบผลลัพธ์สำหรับ "{localQuery}"</p>
+               </div>
+            ) : (
+               <div className="p-4 text-center text-gray-400 text-[14px]">
+                  พิมพ์เพื่อค้นหาสถานที่ หรือจังหวัด...
+               </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ====================================================
+          📱 MOBILE SLIDE-IN MENU
+      ==================================================== */}
+      <div 
+        className={`fixed top-0 left-0 h-[100dvh] w-[258px] bg-[#DEECF9] shadow-[2px_0px_10px_rgba(0,0,0,0.2)] z-[100] transform transition-transform duration-300 ease-in-out flex flex-col lg:hidden ${
+          isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <button 
+          onClick={() => setIsMobileMenuOpen(false)} 
+          className="absolute top-4 right-4 p-1 text-[#072A4F] hover:bg-[#cde0f5] rounded-full transition z-10"
+        >
+          <CloseIcon size={24} />
+        </button>
+
+        {currentUser ? (
+          <div className="pt-8 pb-4 px-4 border-b border-[#000000]/10 flex items-center gap-3">
+             <div className="w-[40px] h-[40px] flex-shrink-0 rounded-full bg-[#D9D9D9] flex items-center justify-center text-white text-[16px] font-bold overflow-hidden border border-white">
+                {currentUser.image && !imageError ? (
+                  <img src={currentUser.image} alt={currentUser.name || "Profile"} className="w-full h-full object-cover" onError={() => setImageError(true)} />
+                ) : (
+                  <div className="w-full h-full bg-[#1976D2] flex items-center justify-center">
+                    {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : "U"}
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-col overflow-hidden pr-6">
+                <span className="font-bold text-[14px] text-[#072A4F] truncate">{currentUser.name}</span>
+                <span className="text-[10px] text-[#616161] truncate">{currentUser.email}</span>
+              </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-start p-4 pt-6 border-b border-[#000000]/10">
+            <img src={`${basePath}/Logo.png`} alt="WorldTravel Logo" className="h-[24px] object-contain" />
+          </div>
+        )}
+
+        <div className="flex-1 flex flex-col overflow-y-auto">
+           <a
+            href={`${basePath}/mytrips`}
+            onClick={(e) => handleProtectedLinkClick(e, '/mytrips')}
+            className="w-full px-[24px] py-[16px] text-[16px] font-inter font-[700] text-[#072A4F] hover:bg-[#cde0f5] border-b border-[#000000]/5 transition text-left"
+          >
+            MyTrip
+          </a>
+          <a
+            href={`${basePath}/itinerary`}
+            onClick={(e) => handleProtectedLinkClick(e, '/itinerary')}
+            className="w-full px-[24px] py-[16px] text-[16px] font-inter font-[700] text-[#072A4F] hover:bg-[#cde0f5] border-b border-[#000000]/5 transition text-left"
+          >
+            MyPlan
+          </a>
+          
+          {currentUser && (
+            <>
+              <button
+                onClick={() => { router.push('/review-history?action=edit-profile'); setIsMobileMenuOpen(false); }}
+                className="w-full px-[24px] py-[16px] text-[14px] font-inter font-[400] text-[#072A4F] hover:bg-[#cde0f5] border-b border-[#000000]/5 transition text-left"
+              >
+                Edit Profile
+              </button>
+              <button
+                onClick={() => { router.push('/review-history'); setIsMobileMenuOpen(false); }}
+                className="w-full px-[24px] py-[16px] text-[14px] font-inter font-[400] text-[#072A4F] hover:bg-[#cde0f5] border-b border-[#000000]/5 transition text-left"
+              >
+                Review
+              </button>
+            </>
+          )}
+        </div>
+
+        <div className="p-4 mt-auto">
+          {currentUser ? (
+             <button
+             onClick={handleLogoutTrigger}
+             className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-[8px] bg-white border border-[#072A4F] text-[#072A4F] font-bold text-[14px] hover:bg-red-50 hover:text-red-600 hover:border-red-600 transition shadow-sm"
+           >
+             <LogOut size={16} /> Logout
+           </button>
+          ) : (
+            <button
+             onClick={handleLoginTrigger}
+             className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-[8px] bg-[#072A4F] text-white font-bold text-[14px] hover:bg-[#051E3A] transition shadow-md"
+           >
+             {/* @ts-ignore */}
+             <Icon path={mdiLockOutline} size={0.8} /> Login
+           </button>
+          )}
+        </div>
+      </div>
+
+      {/* ====================================================
+          MODALS
+      ==================================================== */}
       {showAuthModal && (
         <AuthModal
           onClose={() => setShowAuthModal(false)}

@@ -373,6 +373,11 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
 
             // 1. ดึงชื่อที่อยู่จากพิกัด (Reverse Geocoding)
             const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+            // ✅ ดักจับ Error ตรงนี้ก่อนแปลงเป็น JSON
+            const contentType = res.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+                throw new Error("Nominatim API blocked the request or returned HTML");
+            }
             const data = await res.json();
 
             let placeName = "Selected Map Location";
