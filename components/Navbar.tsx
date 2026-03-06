@@ -73,10 +73,7 @@ export default function Navbar({
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
   const [imageError, setImageError] = useState(false);
 
-  // ควบคุมเมนูมือถือ
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  
-  // ✅ ควบคุมหน้าจอค้นหาแบบ Full-screen ในมือถือ
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const mobileInputRef = useRef<HTMLInputElement>(null);
 
@@ -143,10 +140,8 @@ export default function Navbar({
     setImageError(false);
   }, [currentUser]);
 
-  // เมื่อเปิดหน้าค้นหามือถือ ให้ Auto focus ไปที่ Input
   useEffect(() => {
     if (isMobileSearchOpen && mobileInputRef.current) {
-      // setTimeout เล็กน้อยเพื่อให้ Slide animation ทำงานเสร็จก่อน focus
       setTimeout(() => {
         mobileInputRef.current?.focus();
       }, 100);
@@ -252,7 +247,7 @@ export default function Navbar({
 
   const handleSelectResult = (result: SearchResult) => {
     setShowDropdown(false);
-    setIsMobileSearchOpen(false); // ✅ ปิดหน้าค้นหามือถือเมื่อเลือกผลลัพธ์
+    setIsMobileSearchOpen(false);
     setLocalQuery(result.name);
     if (setSearchQuery) setSearchQuery(result.name);
 
@@ -269,7 +264,7 @@ export default function Navbar({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       setShowDropdown(false);
-      setIsMobileSearchOpen(false); // ✅ ปิดหน้าค้นหามือถือเมื่อกด Enter
+      setIsMobileSearchOpen(false);
       router.push(`/explore?search=${encodeURIComponent(localQuery)}`);
     }
   };
@@ -297,7 +292,7 @@ export default function Navbar({
 
   return (
     <>
-      <header className="w-full lg:min-w-[1024px] h-[65px] bg-[#F5F5F5] relative z-[50] shadow-sm">
+      <header className="w-full h-[65px] bg-[#F5F5F5] relative z-[50] shadow-sm">
         
         {/* Backdrop for Dropdowns */}
         {(showUserMenu || showDropdown) && (
@@ -309,10 +304,10 @@ export default function Navbar({
            <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={() => setIsMobileMenuOpen(false)}></div>
         )}
 
-        <div className="w-full max-w-[1440px] h-full mx-auto flex justify-between items-center px-4 lg:px-[156px]">
+        <div className="w-full max-w-[1440px] h-full mx-auto flex justify-between items-center px-4 md:px-8 xl:px-[156px] gap-2 md:gap-4">
 
           {/* LEFT: Logo & Hamburger */}
-          <div className="flex items-center gap-3 relative z-50">
+          <div className="flex items-center gap-2 md:gap-3 relative z-50 shrink-0">
             <button 
               className="lg:hidden p-1 -ml-1 text-[#072A4F] hover:bg-gray-200 rounded-md transition"
               onClick={toggleMobileMenu}
@@ -337,16 +332,16 @@ export default function Navbar({
             </Link>
           </div>
 
-          {/* CENTER: Desktop Search Box (ซ่อนในมือถือ) */}
-          <div className="hidden lg:flex items-center justify-center flex-1 mx-4 relative z-50">
-            <div className="relative w-full max-w-[268px]">
-              <div className="flex items-center w-full h-[31px] gap-[8px] px-[8px] py-[4px] bg-[#194473] border border-[#E0E0E0] rounded-[8px] transition">
-                <Search className="w-[18px] h-[18px] lg:w-[24px] lg:h-[24px] p-[2px] lg:p-[4px] text-white flex-shrink-0" />
-                <div className="flex items-center flex-1 h-[23px] bg-[#FFFFFF] rounded-[4px] px-[8px]">
+          {/* CENTER: Desktop & Tablet Search Box (ซ่อนในมือถือ) */}
+          <div className="hidden md:flex items-center justify-center flex-1 max-w-xl mx-4 relative z-50">
+            <div className="relative w-full">
+              <div className="flex items-center w-full h-[36px] gap-[8px] px-2 py-1 bg-[#194473] border border-[#E0E0E0] rounded-[8px] transition">
+                <Search className="w-4 h-4 md:w-5 md:h-5 text-white flex-shrink-0 ml-1" />
+                <div className="flex items-center flex-1 h-full bg-[#FFFFFF] rounded-[4px] px-2">
                   <input
                     type="text"
                     placeholder="Search"
-                    className="w-full h-full bg-transparent border-none outline-none text-[12px] font-inter font-[400] text-[#9E9E9E] leading-none placeholder-[#9E9E9E]"
+                    className="w-full h-full bg-transparent border-none outline-none text-[13px] font-inter font-[400] text-gray-900 leading-none placeholder-gray-400"
                     value={localQuery}
                     onChange={handleInputChange}
                     onFocus={() => setShowDropdown(true)}
@@ -354,31 +349,31 @@ export default function Navbar({
                   />
                 </div>
               </div>
-              {/* Dropdown Results (Desktop) */}
+              {/* Dropdown Results (Desktop/Tablet) */}
               {showDropdown && localQuery && results.length > 0 && (
-                <div className="absolute top-[40px] left-0 w-full bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden py-2 animate-in fade-in zoom-in-95 duration-200">
+                <div className="absolute top-[42px] left-0 w-full bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden py-2 animate-in fade-in zoom-in-95 duration-200">
                   {results.map((item, index) => {
                     const countryCode = item.type === 'country' ? getCountryCode(item.name) : "";
                     return (
                       <div
                         key={`${item.type}-${index}`}
                         onClick={() => handleSelectResult(item)}
-                        className="px-4 py-2 hover:bg-blue-50 cursor-pointer flex items-center gap-3 transition-colors group"
+                        className="px-4 py-2.5 hover:bg-blue-50 cursor-pointer flex items-center gap-3 transition-colors group"
                       >
                         <div className="text-gray-400 group-hover:text-blue-500 flex-shrink-0 w-[20px] flex justify-center">
                           {item.type === 'country' ? (
                             countryCode ? (
                               // @ts-ignore
                               <ReactCountryFlag countryCode={countryCode} svg style={{ width: '1.2em', height: '1.2em' }} title={item.name} />
-                            ) : ( <Globe size={14} /> )
-                          ) : item.type === 'province' ? ( <Map size={14} /> ) : ( <MapPin size={14} /> )}
+                            ) : ( <Globe size={16} /> )
+                          ) : item.type === 'province' ? ( <Map size={16} /> ) : ( <MapPin size={16} /> )}
                         </div>
 
                         <div className="flex flex-col overflow-hidden">
-                          <span className="text-[12px] font-inter font-medium text-gray-800 truncate">
+                          <span className="text-[13px] font-inter font-medium text-gray-800 truncate">
                             {item.name}
                           </span>
-                          <span className="text-[10px] text-gray-400 capitalize truncate">
+                          <span className="text-[11px] text-gray-400 capitalize truncate">
                             {item.type === 'place' ? item.subText : item.type === 'province' ? item.subText : item.type}
                           </span>
                         </div>
@@ -391,7 +386,7 @@ export default function Navbar({
           </div>
 
           {/* RIGHT: Mobile Search Icon (แสดงเฉพาะมือถือ) */}
-          <div className="flex lg:hidden items-center relative z-50">
+          <div className="flex md:hidden items-center relative z-50 shrink-0">
             <button 
               onClick={() => setIsMobileSearchOpen(true)}
               className="p-2 text-[#072A4F] hover:bg-gray-200 rounded-full transition"
@@ -400,20 +395,20 @@ export default function Navbar({
             </button>
           </div>
 
-          {/* RIGHT: Desktop Menu (ซ่อนในมือถือ) */}
-          <div className="hidden lg:flex relative items-center gap-8 z-40">
+          {/* RIGHT: Desktop Menu (ซ่อนในแท็บเล็ต/มือถือ) */}
+          <div className="hidden lg:flex relative items-center gap-8 z-40 shrink-0">
             <div className="flex items-center gap-6">
               <a
                 href={`${basePath}/mytrips`}
                 onClick={(e) => handleProtectedLinkClick(e, '/mytrips')}
-                className="text-[20px] font-inter font-[400] text-[#000000] hover:text-[#1976D2] transition leading-none whitespace-nowrap cursor-pointer"
+                className="text-[18px] xl:text-[20px] font-inter font-[400] text-[#000000] hover:text-[#1976D2] transition leading-none whitespace-nowrap cursor-pointer"
               >
                 MyTrip
               </a>
               <a
                 href={`${basePath}/itinerary`}
                 onClick={(e) => handleProtectedLinkClick(e, '/itinerary')}
-                className="text-[20px] font-inter font-[400] text-[#000000] hover:text-[#1976D2] transition leading-none whitespace-nowrap cursor-pointer"
+                className="text-[18px] xl:text-[20px] font-inter font-[400] text-[#000000] hover:text-[#1976D2] transition leading-none whitespace-nowrap cursor-pointer"
               >
                 MyPlan
               </a>
@@ -485,31 +480,31 @@ export default function Navbar({
       </header>
 
       {/* ====================================================
-          📱 MOBILE FULL-SCREEN SEARCH OVERLAY (คล้าย Facebook)
+          📱 MOBILE FULL-SCREEN SEARCH OVERLAY (แก้ปัญหาล้นจอ 100%)
       ==================================================== */}
       {isMobileSearchOpen && (
-        <div className="fixed inset-0 z-[200] bg-white flex flex-col lg:hidden animate-in slide-in-from-right-full duration-200">
+        <div className="fixed inset-0 z-[200] bg-white flex flex-col md:hidden animate-in fade-in slide-in-from-bottom-4 duration-200">
           
           {/* Header ค้นหา */}
-          <div className="flex items-center gap-3 p-3 border-b border-gray-200 shadow-sm bg-white">
+          <div className="flex items-center gap-2 p-3 border-b border-gray-200 shadow-sm bg-white shrink-0">
             <button 
               onClick={() => setIsMobileSearchOpen(false)} 
-              className="p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-full transition"
+              className="p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-full transition shrink-0"
             >
               <ArrowLeft size={24} />
             </button>
-            <div className="flex-1 flex items-center bg-[#F0F2F5] h-[40px] rounded-full px-4 gap-2">
+            <div className="flex-1 flex items-center bg-[#F0F2F5] h-[40px] rounded-full px-3 gap-2 overflow-hidden">
                <input
                   ref={mobileInputRef}
                   type="text"
                   placeholder="ค้นหาสถานที่, ประเทศ..."
-                  className="w-full bg-transparent border-none outline-none text-[15px] font-inter text-gray-900 placeholder-gray-500"
+                  className="w-full h-full bg-transparent border-none outline-none text-[16px] font-inter text-gray-900 placeholder-gray-500"
                   value={localQuery}
                   onChange={handleInputChange}
                   onKeyDown={handleKeyDown}
                 />
                 {localQuery && (
-                  <button onClick={() => { setLocalQuery(""); if(setSearchQuery) setSearchQuery(""); }} className="p-1 text-gray-400">
+                  <button onClick={() => { setLocalQuery(""); if(setSearchQuery) setSearchQuery(""); }} className="p-1 text-gray-400 shrink-0">
                     <CloseIcon size={16} />
                   </button>
                 )}
@@ -526,7 +521,7 @@ export default function Navbar({
                       <div
                         key={`mobile-${item.type}-${index}`}
                         onClick={() => handleSelectResult(item)}
-                        className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50 border-b border-gray-100 active:bg-gray-100 transition-colors"
+                        className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50 border-b border-gray-100 active:bg-gray-100 transition-colors cursor-pointer"
                       >
                         <div className="w-[40px] h-[40px] rounded-full bg-gray-100 flex items-center justify-center shrink-0">
                           {item.type === 'country' ? (
@@ -550,9 +545,9 @@ export default function Navbar({
                   })}
                </div>
             ) : localQuery.trim() !== "" ? (
-               <div className="flex flex-col items-center justify-center pt-10 text-gray-500">
+               <div className="flex flex-col items-center justify-center pt-10 text-gray-500 px-4">
                  <Search size={40} className="text-gray-300 mb-3" />
-                 <p className="text-[15px]">ไม่พบผลลัพธ์สำหรับ "{localQuery}"</p>
+                 <p className="text-[15px] text-center">ไม่พบผลลัพธ์สำหรับ "{localQuery}"</p>
                </div>
             ) : (
                <div className="p-4 text-center text-gray-400 text-[14px]">
@@ -571,15 +566,15 @@ export default function Navbar({
           isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <button 
-          onClick={() => setIsMobileMenuOpen(false)} 
-          className="absolute top-4 right-4 p-1 text-[#072A4F] hover:bg-[#cde0f5] rounded-full transition z-10"
-        >
-          <CloseIcon size={24} />
-        </button>
-
+        {/* Profile Header Section & Close Button */}
         {currentUser ? (
-          <div className="pt-8 pb-4 px-4 border-b border-[#000000]/10 flex items-center gap-3">
+          <div className="relative pt-12 pb-4 px-4 border-b border-[#072A4F]/20 flex items-center gap-3">
+             <button 
+               onClick={() => setIsMobileMenuOpen(false)} 
+               className="absolute top-4 right-4 p-1 text-[#072A4F] hover:bg-[#cde0f5] rounded-full transition z-10"
+             >
+               <CloseIcon size={20} />
+             </button>
              <div className="w-[40px] h-[40px] flex-shrink-0 rounded-full bg-[#D9D9D9] flex items-center justify-center text-white text-[16px] font-bold overflow-hidden border border-white">
                 {currentUser.image && !imageError ? (
                   <img src={currentUser.image} alt={currentUser.name || "Profile"} className="w-full h-full object-cover" onError={() => setImageError(true)} />
@@ -591,27 +586,45 @@ export default function Navbar({
               </div>
               <div className="flex flex-col overflow-hidden pr-6">
                 <span className="font-bold text-[14px] text-[#072A4F] truncate">{currentUser.name}</span>
-                <span className="text-[10px] text-[#616161] truncate">{currentUser.email}</span>
+                <span className="text-[10px] text-[#072A4F]/70 truncate">{currentUser.email}</span>
               </div>
           </div>
         ) : (
-          <div className="flex items-center justify-start p-4 pt-6 border-b border-[#000000]/10">
+          <div className="relative flex items-center justify-start p-4 pt-12 border-b border-[#072A4F]/20">
+            <button 
+               onClick={() => setIsMobileMenuOpen(false)} 
+               className="absolute top-4 right-4 p-1 text-[#072A4F] hover:bg-[#cde0f5] rounded-full transition z-10"
+             >
+               <CloseIcon size={20} />
+             </button>
             <img src={`${basePath}/Logo.png`} alt="WorldTravel Logo" className="h-[24px] object-contain" />
           </div>
         )}
 
+        {/* Menu Links */}
         <div className="flex-1 flex flex-col overflow-y-auto">
+          <a
+            href={`${basePath}/`}
+            onClick={(e) => {
+              e.preventDefault();
+              setIsMobileMenuOpen(false);
+              router.push('/');
+            }}
+            className="w-full px-[24px] py-[16px] text-[16px] font-inter font-[700] text-[#072A4F] hover:bg-[#cde0f5] border-b border-[#072A4F]/20 transition text-left"
+          >
+            Home
+          </a>
            <a
             href={`${basePath}/mytrips`}
             onClick={(e) => handleProtectedLinkClick(e, '/mytrips')}
-            className="w-full px-[24px] py-[16px] text-[16px] font-inter font-[700] text-[#072A4F] hover:bg-[#cde0f5] border-b border-[#000000]/5 transition text-left"
+            className="w-full px-[24px] py-[16px] text-[16px] font-inter font-[700] text-[#072A4F] hover:bg-[#cde0f5] border-b border-[#072A4F]/20 transition text-left"
           >
             MyTrip
           </a>
           <a
             href={`${basePath}/itinerary`}
             onClick={(e) => handleProtectedLinkClick(e, '/itinerary')}
-            className="w-full px-[24px] py-[16px] text-[16px] font-inter font-[700] text-[#072A4F] hover:bg-[#cde0f5] border-b border-[#000000]/5 transition text-left"
+            className="w-full px-[24px] py-[16px] text-[16px] font-inter font-[700] text-[#072A4F] hover:bg-[#cde0f5] border-b border-[#072A4F]/20 transition text-left"
           >
             MyPlan
           </a>
@@ -620,13 +633,13 @@ export default function Navbar({
             <>
               <button
                 onClick={() => { router.push('/review-history?action=edit-profile'); setIsMobileMenuOpen(false); }}
-                className="w-full px-[24px] py-[16px] text-[14px] font-inter font-[400] text-[#072A4F] hover:bg-[#cde0f5] border-b border-[#000000]/5 transition text-left"
+                className="w-full px-[24px] py-[16px] text-[15px] font-inter font-[500] text-[#072A4F] hover:bg-[#cde0f5] border-b border-[#072A4F]/20 transition text-left"
               >
                 Edit Profile
               </button>
               <button
                 onClick={() => { router.push('/review-history'); setIsMobileMenuOpen(false); }}
-                className="w-full px-[24px] py-[16px] text-[14px] font-inter font-[400] text-[#072A4F] hover:bg-[#cde0f5] border-b border-[#000000]/5 transition text-left"
+                className="w-full px-[24px] py-[16px] text-[15px] font-inter font-[500] text-[#072A4F] hover:bg-[#cde0f5] border-b border-[#072A4F]/20 transition text-left"
               >
                 Review
               </button>
@@ -634,18 +647,19 @@ export default function Navbar({
           )}
         </div>
 
-        <div className="p-4 mt-auto">
+        {/* Bottom Actions (Logout / Login) */}
+        <div className="p-4 pb-8 mt-auto flex justify-center">
           {currentUser ? (
              <button
              onClick={handleLogoutTrigger}
-             className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-[8px] bg-white border border-[#072A4F] text-[#072A4F] font-bold text-[14px] hover:bg-red-50 hover:text-red-600 hover:border-red-600 transition shadow-sm"
+             className="w-[140px] flex items-center justify-center gap-2 px-4 py-2.5 rounded-[8px] bg-[#F44336] text-white font-bold text-[14px] hover:bg-[#d32f2f] transition shadow-sm"
            >
              <LogOut size={16} /> Logout
            </button>
           ) : (
             <button
              onClick={handleLoginTrigger}
-             className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-[8px] bg-[#072A4F] text-white font-bold text-[14px] hover:bg-[#051E3A] transition shadow-md"
+             className="w-[140px] flex items-center justify-center gap-2 px-4 py-2.5 rounded-[8px] bg-[#072A4F] text-white font-bold text-[14px] hover:bg-[#051E3A] transition shadow-md"
            >
              {/* @ts-ignore */}
              <Icon path={mdiLockOutline} size={0.8} /> Login
