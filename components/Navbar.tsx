@@ -292,7 +292,8 @@ export default function Navbar({
 
   return (
     <>
-      <header className="w-full h-[65px] bg-[#F5F5F5] relative z-[50] shadow-sm">
+      {/* ป้องกัน Header ล้นจอในกรณีที่มี component อื่นดัน */}
+      <header className="w-full max-w-[100vw] h-[65px] bg-[#F5F5F5] relative z-[50] shadow-sm">
         
         {/* Backdrop for Dropdowns */}
         {(showUserMenu || showDropdown) && (
@@ -309,20 +310,20 @@ export default function Navbar({
           {/* LEFT: Logo & Hamburger */}
           <div className="flex items-center gap-2 md:gap-3 relative z-50 shrink-0">
             <button 
-              className="lg:hidden p-1 -ml-1 text-[#072A4F] hover:bg-gray-200 rounded-md transition"
+              className="lg:hidden p-1 -ml-1 text-[#072A4F] hover:bg-gray-200 rounded-md transition shrink-0"
               onClick={toggleMobileMenu}
             >
               <Menu size={26} />
             </button>
 
             {showBack && (
-              <button onClick={() => router.back()} className="text-gray-500 hover:text-gray-900 transition p-1 hover:bg-gray-200 rounded-full hidden sm:block">
+              <button onClick={() => router.back()} className="text-gray-500 hover:text-gray-900 transition p-1 hover:bg-gray-200 rounded-full hidden sm:block shrink-0">
                 <ChevronLeft className="w-6 h-6" />
               </button>
             )}
 
             <Link href="/" className="transition flex items-center shrink-0">
-              <div className="relative w-[110px] h-[28px] sm:w-[138px] sm:h-[36px]">
+              <div className="relative w-[110px] h-[28px] sm:w-[138px] sm:h-[36px] shrink-0">
                  <img
                   src={`${basePath}/Logo.png`}
                   alt="WorldTravel Logo"
@@ -333,15 +334,15 @@ export default function Navbar({
           </div>
 
           {/* CENTER: Desktop & Tablet Search Box (ซ่อนในมือถือ) */}
-          <div className="hidden md:flex items-center justify-center flex-1 max-w-xl mx-4 relative z-50">
-            <div className="relative w-full">
-              <div className="flex items-center w-full h-[36px] gap-[8px] px-2 py-1 bg-[#194473] border border-[#E0E0E0] rounded-[8px] transition">
+          <div className="hidden md:flex items-center justify-center flex-1 max-w-xl mx-4 relative z-50 min-w-0">
+            <div className="relative w-full min-w-0">
+              <div className="flex items-center w-full h-[36px] gap-[8px] px-2 py-1 bg-[#194473] border border-[#E0E0E0] rounded-[8px] transition overflow-hidden">
                 <Search className="w-4 h-4 md:w-5 md:h-5 text-white flex-shrink-0 ml-1" />
-                <div className="flex items-center flex-1 h-full bg-[#FFFFFF] rounded-[4px] px-2">
+                <div className="flex items-center flex-1 min-w-0 h-full bg-[#FFFFFF] rounded-[4px] px-2">
                   <input
                     type="text"
                     placeholder="Search"
-                    className="w-full h-full bg-transparent border-none outline-none text-[13px] font-inter font-[400] text-gray-900 leading-none placeholder-gray-400"
+                    className="w-full h-full bg-transparent border-none outline-none text-[13px] font-inter font-[400] text-gray-900 leading-none placeholder-gray-400 min-w-0"
                     value={localQuery}
                     onChange={handleInputChange}
                     onFocus={() => setShowDropdown(true)}
@@ -369,11 +370,12 @@ export default function Navbar({
                           ) : item.type === 'province' ? ( <Map size={16} /> ) : ( <MapPin size={16} /> )}
                         </div>
 
-                        <div className="flex flex-col overflow-hidden">
-                          <span className="text-[13px] font-inter font-medium text-gray-800 truncate">
+                        {/* ✅ แก้ปัญหาข้อความทะลุจอใน Desktop Dropdown */}
+                        <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+                          <span className="text-[13px] font-inter font-medium text-gray-800 truncate block w-full">
                             {item.name}
                           </span>
-                          <span className="text-[11px] text-gray-400 capitalize truncate">
+                          <span className="text-[11px] text-gray-400 capitalize truncate block w-full">
                             {item.type === 'place' ? item.subText : item.type === 'province' ? item.subText : item.type}
                           </span>
                         </div>
@@ -483,22 +485,23 @@ export default function Navbar({
           📱 MOBILE FULL-SCREEN SEARCH OVERLAY (แก้ปัญหาล้นจอ 100%)
       ==================================================== */}
       {isMobileSearchOpen && (
-        <div className="fixed inset-0 z-[200] bg-white flex flex-col md:hidden animate-in fade-in slide-in-from-bottom-4 duration-200">
+        <div className="fixed top-0 left-0 w-screen h-[100dvh] max-w-[100vw] z-[200] bg-white flex flex-col md:hidden animate-in fade-in duration-200 overflow-x-hidden">
           
           {/* Header ค้นหา */}
-          <div className="flex items-center gap-2 p-3 border-b border-gray-200 shadow-sm bg-white shrink-0">
+          <div className="flex items-center gap-2 p-3 border-b border-gray-200 shadow-sm bg-white shrink-0 w-full box-border">
             <button 
               onClick={() => setIsMobileSearchOpen(false)} 
               className="p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-full transition shrink-0"
             >
               <ArrowLeft size={24} />
             </button>
-            <div className="flex-1 flex items-center bg-[#F0F2F5] h-[40px] rounded-full px-3 gap-2 overflow-hidden">
+            {/* ✅ บังคับ Flexbox ให้หดตัวได้ด้วย min-w-0 */}
+            <div className="flex-1 flex items-center bg-[#F0F2F5] h-[40px] rounded-full px-3 gap-2 overflow-hidden min-w-0">
                <input
                   ref={mobileInputRef}
                   type="text"
                   placeholder="ค้นหาสถานที่, ประเทศ..."
-                  className="w-full h-full bg-transparent border-none outline-none text-[16px] font-inter text-gray-900 placeholder-gray-500"
+                  className="flex-1 min-w-0 w-full h-full bg-transparent border-none outline-none text-[16px] font-inter text-gray-900 placeholder-gray-500"
                   value={localQuery}
                   onChange={handleInputChange}
                   onKeyDown={handleKeyDown}
@@ -512,16 +515,16 @@ export default function Navbar({
           </div>
 
           {/* รายการผลลัพธ์ (List) */}
-          <div className="flex-1 overflow-y-auto bg-white">
+          <div className="flex-1 overflow-y-auto bg-white w-full box-border">
             {results.length > 0 ? (
-               <div className="flex flex-col pb-4">
+               <div className="flex flex-col pb-4 w-full">
                  {results.map((item, index) => {
                     const countryCode = item.type === 'country' ? getCountryCode(item.name) : "";
                     return (
                       <div
                         key={`mobile-${item.type}-${index}`}
                         onClick={() => handleSelectResult(item)}
-                        className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50 border-b border-gray-100 active:bg-gray-100 transition-colors cursor-pointer"
+                        className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50 border-b border-gray-100 active:bg-gray-100 transition-colors cursor-pointer w-full box-border"
                       >
                         <div className="w-[40px] h-[40px] rounded-full bg-gray-100 flex items-center justify-center shrink-0">
                           {item.type === 'country' ? (
@@ -532,11 +535,12 @@ export default function Navbar({
                           ) : item.type === 'province' ? ( <Map size={20} className="text-gray-500" /> ) : ( <MapPin size={20} className="text-gray-500" /> )}
                         </div>
 
-                        <div className="flex flex-col overflow-hidden">
-                          <span className="text-[15px] font-medium text-gray-900 truncate">
+                        {/* ✅ จุดสำคัญ: ถ้าไม่มี flex-1 min-w-0 ข้อความยาวๆ จะดันจอทะลุ 100vw ทันที */}
+                        <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+                          <span className="text-[15px] font-medium text-gray-900 truncate block w-full">
                             {item.name}
                           </span>
-                          <span className="text-[13px] text-gray-500 capitalize truncate">
+                          <span className="text-[13px] text-gray-500 capitalize truncate block w-full">
                             {item.type === 'place' ? item.subText : item.type === 'province' ? item.subText : item.type}
                           </span>
                         </div>
@@ -545,12 +549,12 @@ export default function Navbar({
                   })}
                </div>
             ) : localQuery.trim() !== "" ? (
-               <div className="flex flex-col items-center justify-center pt-10 text-gray-500 px-4">
+               <div className="flex flex-col items-center justify-center pt-10 text-gray-500 px-4 w-full box-border">
                  <Search size={40} className="text-gray-300 mb-3" />
-                 <p className="text-[15px] text-center">ไม่พบผลลัพธ์สำหรับ "{localQuery}"</p>
+                 <p className="text-[15px] text-center w-full truncate">ไม่พบผลลัพธ์สำหรับ "{localQuery}"</p>
                </div>
             ) : (
-               <div className="p-4 text-center text-gray-400 text-[14px]">
+               <div className="p-4 text-center text-gray-400 text-[14px] w-full box-border">
                   พิมพ์เพื่อค้นหาสถานที่ หรือจังหวัด...
                </div>
             )}
