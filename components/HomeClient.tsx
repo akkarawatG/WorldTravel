@@ -1,4 +1,3 @@
-// components/HomeClient.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -21,6 +20,9 @@ import { createClient } from "@/utils/supabase/client";
 
 import { CONTINENTS, COUNTRIES_DATA } from "@/data/mockData";
 import { ATTRACTIONS_DATA as MOCK_ATTRACTIONS } from "@/data/attractionsData";
+
+// ✅ นำเข้า AuthModal 
+import AuthModal, { UserProfile as AuthUserProfile } from "./AuthModal";
 
 // --- MAPPINGS & HELPER FUNCTIONS ---
 const CATEGORY_MATCHING_KEYWORDS: Record<string, string[]> = {
@@ -141,6 +143,9 @@ export default function HomeClient({ initialAttractions, initialCountries }: Hom
   const [userId, setUserId] = useState<string | null>(null);
   const [savedPlaceIds, setSavedPlaceIds] = useState<Set<string>>(new Set());
 
+  // ✅ State สำหรับควบคุม Modal ล็อกอิน
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
   const displaySlides = topAttractions.slice(0, 8);
 
   // 1. Initial Load: Check Auth & Get Saved Places
@@ -234,8 +239,8 @@ export default function HomeClient({ initialAttractions, initialCountries }: Hom
   const handleSavePlace = async (placeId: string, placeName: string) => {
     // Check Authentication
     if (!userId) {
-      alert("Please login to save places.");
-      router.push('/login'); 
+      // ✅ เปลี่ยนจากการใช้ router.push เป็นการเปิด Modal แทน
+      setShowAuthModal(true);
       return;
     }
 
@@ -243,7 +248,6 @@ export default function HomeClient({ initialAttractions, initialCountries }: Hom
 
     if (isAlreadySaved) {
         // --- REMOVE (Unsave) ---
-        // Optimistic Update
         setSavedPlaceIds(prev => {
             const newSet = new Set(prev);
             newSet.delete(placeId);
@@ -259,11 +263,8 @@ export default function HomeClient({ initialAttractions, initialCountries }: Hom
 
             if (error) {
                 console.error("Error removing place:", error);
-                // Revert on error
                 setSavedPlaceIds(prev => new Set(prev).add(placeId));
                 alert("Failed to remove place.");
-            } else {
-                console.log(`Removed ${placeName} from saved places`);
             }
         } catch (err) {
             console.error("Unexpected error:", err);
@@ -272,30 +273,23 @@ export default function HomeClient({ initialAttractions, initialCountries }: Hom
 
     } else {
         // --- ADD (Save) ---
-        // Optimistic Update
         setSavedPlaceIds(prev => new Set(prev).add(placeId));
 
         try {
             const { error } = await supabase
                 .from('saved_places')
                 .insert([
-                    { 
-                        profile_id: userId, 
-                        place_id: placeId 
-                    }
+                    { profile_id: userId, place_id: placeId }
                 ]);
 
             if (error) {
                 console.error("Error saving place:", error);
-                // Revert on error
                 setSavedPlaceIds(prev => {
                     const newSet = new Set(prev);
                     newSet.delete(placeId);
                     return newSet;
                 });
                 alert("Failed to save place.");
-            } else {
-                console.log(`Saved ${placeName} to trip`);
             }
         } catch (err) {
             console.error("Unexpected error:", err);
@@ -306,6 +300,12 @@ export default function HomeClient({ initialAttractions, initialCountries }: Hom
             });
         }
     }
+  };
+
+  // ✅ เมื่อ Login ผ่าน Modal สำเร็จให้รีโหลดหน้าเพื่อให้ดึงข้อมูลสถานที่ที่เซฟไว้มาแสดง
+  const handleAuthSuccess = (u: AuthUserProfile) => {
+    setShowAuthModal(false);
+    window.location.reload();
   };
 
   return (
@@ -551,13 +551,13 @@ export default function HomeClient({ initialAttractions, initialCountries }: Hom
                           `}
                         >
                           {isSaved ? (
-                             <Check size="16px" className="flex-shrink-0" />
+                              <Check size="16px" className="flex-shrink-0" />
                           ) : (
-                             <Icon path={mdiPlus} size="16px" className="flex-shrink-0" />
+                              <Icon path={mdiPlus} size="16px" className="flex-shrink-0" />
                           )}
                           
                           <span className="max-w-0 opacity-0 group-hover:max-w-[40px] group-hover:opacity-100 group-hover:ml-[4px] text-[12px] font-inter font-normal whitespace-nowrap transition-all duration-300">
-                             {isSaved ? "Saved" : "Add"}
+                              {isSaved ? "Saved" : "Add"}
                           </span>
                         </button>
                       </div>
@@ -643,6 +643,15 @@ export default function HomeClient({ initialAttractions, initialCountries }: Hom
         </div>
 
       </div>
+
+      {/* ✅ เพิ่ม Modal ไว้ล่างสุด */}
+      {showAuthModal && (
+        <AuthModal
+          onClose={() => setShowAuthModal(false)}
+          onSuccess={handleAuthSuccess}
+        />
+      )}
+
     </div>
   );
 }

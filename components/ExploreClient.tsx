@@ -19,6 +19,8 @@ import 'swiper/css/pagination';
 import { Place } from '@/types/place';
 import { calculateRelevanceScore } from '@/services/placeService';
 
+import AuthModal, { UserProfile as AuthUserProfile } from "./AuthModal";
+
 // --- CONFIGURATION ---
 const ITEMS_PER_PAGE = 6;
 const FESTIVALS_PER_PAGE = 3;
@@ -126,9 +128,10 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
   const [festivalPage, setFestivalPage] = useState(1);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
-  // ✅ New States for Saving functionality
+  // ✅ New States for Saving functionality & Auth Modal
   const [userId, setUserId] = useState<string | null>(null);
   const [savedPlaceIds, setSavedPlaceIds] = useState<Set<string>>(new Set());
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   // ✅ 1. Fetch User and Existing Saved Places on Mount
   useEffect(() => {
@@ -219,8 +222,8 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
   // ✅ Handle Save/Unsave Place
   const handleSavePlace = async (placeId: string, placeName: string) => {
     if (!userId) {
-      alert("Please login to save places.");
-      router.push('/login'); 
+      // เปลี่ยนจากการเปลี่ยนหน้าเป็นเปิด Popup ล็อกอิน
+      setShowAuthModal(true); 
       return;
     }
 
@@ -253,6 +256,11 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
             setSavedPlaceIds(prev => { const newSet = new Set(prev); newSet.delete(placeId); return newSet; });
         }
     }
+  };
+
+  const handleAuthSuccess = (u: AuthUserProfile) => {
+    setShowAuthModal(false);
+    window.location.reload();
   };
 
   const updateUrlParams = (newFilters: string[]) => {
@@ -585,6 +593,15 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
           ))}
         </div>
       </div>
+
+      {/* ✅ Add AuthModal */}
+      {showAuthModal && (
+        <AuthModal
+          onClose={() => setShowAuthModal(false)}
+          onSuccess={handleAuthSuccess}
+        />
+      )}
+
     </div>
   );
 }
