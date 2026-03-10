@@ -26,6 +26,9 @@ export default function SharedTemplatePage() {
   const { id } = useParams();
   const router = useRouter();
   const supabase = createClient();
+  
+  // ✅ เพิ่ม Base Path
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
 
   const [template, setTemplate] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -58,16 +61,12 @@ export default function SharedTemplatePage() {
     fetchTemplate();
   }, [id]);
 
-  // ✅ ฟังก์ชันดึงรหัสประเทศที่ถูกต้องแม่นยำ
   const getCorrectCountryCode = () => {
-    if (!template?.trips) return "th"; // ค่าเริ่มต้นกรณีเกิดข้อผิดพลาด
-    
-    // รองรับทั้งกรณีที่ Supabase ส่งกลับมาเป็น Object หรือ Array
+    if (!template?.trips) return "th"; 
     let code = Array.isArray(template.trips) ? template.trips[0]?.country : template.trips.country;
     return code ? code.toLowerCase() : "th";
   };
 
-  // ✅ ฟังก์ชันโคลนอัตโนมัติ (สร้าง Trip -> โคลน Template)
   const handleDirectClone = async () => {
     setIsCloning(true);
     try {
@@ -75,14 +74,13 @@ export default function SharedTemplatePage() {
       
       if (!user) {
         alert("Please login first to use this template.");
-        router.push('/'); // ส่งกลับไปหน้าแรกเพื่อให้ล็อกอิน
+        // ✅ เพิ่ม basePath ตอนเตะกลับหน้าแรก
+        router.push(`${basePath}/`); 
         return;
       }
 
-      // 1. ดึงรหัสประเทศที่ถูกต้อง
       const countryCode = getCorrectCountryCode();
 
-      // 2. สร้าง Trip ใหม่สำหรับผู้ใช้คนนี้โดยอัตโนมัติ ด้วยประเทศต้นฉบับ
       const { data: newTrip, error: tripError } = await supabase
         .from('trips')
         .insert({
@@ -94,7 +92,6 @@ export default function SharedTemplatePage() {
 
       if (tripError) throw tripError;
 
-      // 3. โคลน Template ไปใส่ Trip ที่เพิ่งสร้างใหม่
       const { error: cloneError } = await supabase.rpc('clone_template', {
         source_template_id: id,
         new_trip_id: newTrip.id
@@ -103,8 +100,8 @@ export default function SharedTemplatePage() {
       if (cloneError) throw cloneError;
 
       alert("Template cloned successfully!");
-      // 4. พาไปหน้า Edit ของ Trip ที่เพิ่งสร้างเสร็จ เพื่อให้เริ่มจัดแผนต่อได้เลย
-      router.push(`/mytrips/edit/${newTrip.id}`); 
+      // ✅ เพิ่ม basePath ตอนไปหน้า edit ทริป
+      router.push(`${basePath}/mytrips/edit/${newTrip.id}`); 
 
     } catch (err: any) {
       console.error("Clone error:", err.message);
@@ -127,7 +124,8 @@ export default function SharedTemplatePage() {
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center">
         <h1 className="text-2xl font-bold text-gray-800 mb-2">Template Not Found</h1>
         <p className="text-gray-500 mb-6">This template may be private or has been deleted.</p>
-        <button onClick={() => router.push('/')} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+        {/* ✅ เพิ่ม basePath */}
+        <button onClick={() => router.push(`${basePath}/`)} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
           Go to Homepage
         </button>
       </div>

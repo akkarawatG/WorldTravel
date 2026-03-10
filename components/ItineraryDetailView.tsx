@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import {
     MapPin, Calendar, ChevronRight, ChevronDown, Plus,
     GripVertical, Trash2, Loader2, Pencil, Check, X, ChevronLeft,
-    Car, Clock, FileText, Search, Map as MapIcon // ✅ เพิ่ม MapIcon
+    Car, Clock, FileText, Search, Map as MapIcon, ArrowLeft
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { getRouteData, searchPlaces, GeocodeResult } from "@/utils/openRouteService";
@@ -35,7 +35,6 @@ const getDayColor = (date: Date) => {
     }
 };
 
-// --- Helper Functions for Formatting ---
 const formatDistance = (meters: number): string => {
     if (meters < 1000) return `${Math.round(meters)} m`;
     return `${(meters / 1000).toFixed(1)} km`;
@@ -49,18 +48,8 @@ const formatDuration = (seconds: number): string => {
     return remainingMins === 0 ? `${hours} hr` : `${hours} hr ${remainingMins} min`;
 };
 
-// --- Custom Date Picker Component ---
-function CustomDateRangePicker({
-    startDate,
-    endDate,
-    onChange,
-    onClose
-}: {
-    startDate: string,
-    endDate: string,
-    onChange: (s: string, e: string) => void,
-    onClose: () => void
-}) {
+// --- Custom Date Picker Component (สำหรับหน้า List) ---
+function CustomDateRangePicker({ startDate, endDate, onChange, onClose }: any) {
     const initialDate = startDate ? new Date(startDate) : new Date();
     const [viewDate, setViewDate] = useState(initialDate);
 
@@ -104,7 +93,7 @@ function CustomDateRangePicker({
     const prevMonth = () => setViewDate(new Date(year, month - 1, 1));
 
     return (
-        <div className="bg-white rounded-lg shadow-xl border border-gray-200 p-4 w-[300px]" onClick={(e) => e.stopPropagation()}>
+        <div className="bg-white rounded-lg shadow-2xl border border-gray-200 p-4 w-[300px] sm:w-[320px]" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
                 <button onClick={prevMonth} className="p-1 hover:bg-gray-100 rounded-full transition"><ChevronLeft className="w-5 h-5 text-gray-500" /></button>
                 <span className="font-bold text-gray-800 text-[14px] font-inter">{viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
@@ -228,6 +217,12 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
     const [isViewAll, setIsViewAll] = useState(false);
     const [activeTimePickerId, setActiveTimePickerId] = useState<string | null>(null);
 
+    const [mobileViewMode, setMobileViewMode] = useState<'list' | 'map'>('list');
+
+    // ✅ State สำหรับควบคุม Dropdown เลือกวันในแผนที่
+    const [isMapDayDropdownOpen, setIsMapDayDropdownOpen] = useState(false);
+    const mapDayDropdownRef = useRef<HTMLDivElement>(null);
+
     // Map & Route States
     const [travelStats, setTravelStats] = useState<Record<string, { dist: string; dur: string; geometry: any; rawDist: number; rawDur: number; }>>({});
     const [dayTotals, setDayTotals] = useState<Record<number, { totalDist: string, totalDur: string }>>({});
@@ -240,14 +235,18 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
     const [isSearching, setIsSearching] = useState(false);
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    // ✅ State ควบคุมโหมดการจิ้มแผนที่
     const [isMapPickMode, setIsMapPickMode] = useState(false);
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
             const target = event.target as Element;
-            if (datePickerRef.current && !datePickerRef.current.contains(target) && !target.closest('#date-picker-toggle')) {
+            // ปิด Date Picker ทั่วไป
+            if (datePickerRef.current && !datePickerRef.current.contains(target) && !target.closest('.date-picker-toggle-btn')) {
                 setIsDatePickerOpen(false);
+            }
+            // ปิด Dropdown เลือกวันของแผนที่
+            if (mapDayDropdownRef.current && !mapDayDropdownRef.current.contains(target)) {
+                setIsMapDayDropdownOpen(false);
             }
         }
         document.addEventListener("mousedown", handleClickOutside);
@@ -288,7 +287,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                 setIsSearching(false);
             }, 500);
         } else {
-            setSearchResults([]);
+            searchResults.length > 0 && setSearchResults([]);
             setIsSearching(false);
         }
     };
@@ -364,16 +363,12 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
         }
     };
 
-    // ✅ ฟังก์ชัน: เพิ่มสถานที่จากการคลิกแผนที่
     const handleMapClick = async (lat: number, lng: number) => {
         if (!isMapPickMode || !activeSearchDayId) return;
 
         try {
-            setIsSearching(true); // ปรับสถานะปุ่มค้นหาให้หมุนเพื่อบอกผู้ใช้ว่ากำลังโหลด
-
-            // 1. ดึงชื่อที่อยู่จากพิกัด (Reverse Geocoding)
+            setIsSearching(true);
             const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
-            // ✅ ดักจับ Error ตรงนี้ก่อนแปลงเป็น JSON
             const contentType = res.headers.get("content-type");
             if (!contentType || !contentType.includes("application/json")) {
                 throw new Error("Nominatim API blocked the request or returned HTML");
@@ -389,7 +384,6 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
 
             const fullAddress = data.display_name || `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
 
-            // 2. เซฟลงตาราง locations
             const { data: { user } } = await supabase.auth.getUser();
             const { data: newLocation, error: locationError } = await supabase
                 .from('locations')
@@ -405,7 +399,6 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
 
             if (locationError) throw locationError;
 
-            // 3. ผูกเข้ากับตาราง Schedule_items
             const currentDay = schedules.find(s => s.id === activeSearchDayId);
             const newOrderIndex = (currentDay?.daily_schedule_items.length || 0) + 1;
 
@@ -424,7 +417,6 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
 
             if (scheduleError) throw scheduleError;
 
-            // 4. อัปเดตหน้าจอทันที
             setSchedules(prev => prev.map(day => {
                 if (day.id === activeSearchDayId) {
                     const newItem: ScheduleItem = {
@@ -451,10 +443,10 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                 return day;
             }));
 
-            // ปิดโหมดจิ้มแผนที่
             setIsMapPickMode(false);
             setActiveSearchDayId(null);
             setSearchQuery("");
+            setMobileViewMode('list');
 
         } catch (err) {
             console.error("Error picking place from map:", err);
@@ -644,6 +636,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
         if (scrollToDay !== null && scrollToDay !== undefined && scrollToDay > 0) {
             setExpandedDayIndex(scrollToDay - 1);
             setIsViewAll(false);
+            setMobileViewMode('list');
 
             setTimeout(() => {
                 const element = document.getElementById(`day-${scrollToDay}`);
@@ -775,6 +768,25 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
         }
         return days;
     }, [trip]);
+
+    // ✅ จัดการข้อความที่จะแสดงบนปุ่ม Dropdown เลือกวันในแผนที่
+    const mapDropdownDisplayText = useMemo(() => {
+        if (isViewAll || expandedDayIndex === null || !trip) {
+            // โชว์ช่วงเวลาทั้งหมด (1 - 7 January)
+            if (!trip) return "Select date";
+            const start = new Date(trip.start_date);
+            const end = new Date(trip.end_date);
+            if (start.getMonth() === end.getMonth()) {
+                return `${start.getDate()} - ${end.getDate()} ${start.toLocaleDateString('en-GB', { month: 'long' })}`;
+            }
+            return `${start.getDate()} ${start.toLocaleDateString('en-GB', { month: 'short' })} - ${end.getDate()} ${end.toLocaleDateString('en-GB', { month: 'short' })}`;
+        } else {
+            // โชว์วันเฉพาะเจาะจง (1 January)
+            const selectedDay = daysArray[expandedDayIndex];
+            if (!selectedDay) return "";
+            return `${selectedDay.dateObj.getDate()} ${selectedDay.dateObj.toLocaleDateString('en-GB', { month: 'long' })}`;
+        }
+    }, [isViewAll, expandedDayIndex, daysArray, trip]);
 
     const mapLocations = useMemo(() => {
         if (!trip) return [];
@@ -1141,49 +1153,83 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
     const dateRangeStr = `${new Date(trip.start_date).getDate()}/${new Date(trip.start_date).toLocaleDateString('en-GB', { month: 'short' })} - ${new Date(trip.end_date).getDate()}/${new Date(trip.end_date).toLocaleDateString('en-GB', { month: 'short' })}`;
 
     return (
-        <div className="w-full flex flex-row gap-[24px] relative h-full min-h-[900px] bg-white">
+        <div className="w-full flex flex-col lg:flex-row lg:gap-[24px] relative h-full lg:min-h-[900px] bg-white">
 
-            {/* --- LEFT COLUMN: Timeline --- */}
-            <DragDropContext onDragEnd={onDragEnd}>
-                <div className="w-[433px] flex flex-col gap-[24px] overflow-y-auto pr-2 h-[900px] scrollbar-hide pb-20">
+            {/* Date Picker Overlay */}
+            {isDatePickerOpen && (
+                <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4" onClick={(e) => { e.stopPropagation(); setIsDatePickerOpen(false); }}>
+                    <CustomDateRangePicker
+                        startDate={tempDates.start}
+                        endDate={tempDates.end}
+                        onChange={handlePickerChange}
+                        onClose={() => setIsDatePickerOpen(false)}
+                    />
+                </div>
+            )}
 
-                    <div className="flex flex-col gap-[24px] ">
-                        {isEditingTitle ? (
-                            <div className="flex items-center gap-2 w-full justify-center">
-                                <input
-                                    type="text"
-                                    value={editedTitle}
-                                    onChange={(e) => setEditedTitle(e.target.value)}
-                                    className="font-inter font-semibold text-[32px] leading-[39px] text-black border-b-2 border-[#3A82CE] outline-none bg-transparent min-w-[200px]"
-                                    autoFocus
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') handleUpdateTitle();
-                                        if (e.key === 'Escape') {
-                                            setEditedTitle(trip.name);
-                                            setIsEditingTitle(false);
-                                        }
-                                    }}
-                                />
-                                <button onClick={handleUpdateTitle} className="p-2 hover:bg-green-50 rounded-full transition-colors">
-                                    <Check className="w-6 h-6 text-green-600" />
-                                </button>
-                                <button onClick={() => { setEditedTitle(trip.name); setIsEditingTitle(false); }} className="p-2 hover:bg-red-50 rounded-full transition-colors">
-                                    <X className="w-6 h-6 text-red-600" />
-                                </button>
-                            </div>
-                        ) : (
-                            <div className="group flex items-center gap-3 cursor-pointer  hover:bg-gray-50 rounded-lg transition-colors" onClick={() => {
-                                setEditedTitle(trip.name);
-                                setIsEditingTitle(true);
-                            }}>
-                                <h1 className="font-inter font-semibold text-[32px] leading-[39px] text-black text-center">
-                                    {trip.name}
-                                </h1>
-                                <Pencil className="w-5 h-5 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                        )}
+            {/* --- LEFT COLUMN: Timeline (List View) --- */}
+            <div className={`w-full lg:w-[433px] flex-col gap-[24px] overflow-y-auto lg:pr-2 h-[calc(100vh-100px)] lg:h-[900px] scrollbar-hide pb-20 ${mobileViewMode === 'list' ? 'flex' : 'hidden lg:flex'}`}>
+
+                <div className="flex flex-col gap-[16px] lg:gap-[24px] pt-2 lg:pt-0">
+                    {/* --- TITLE --- */}
+                    {isEditingTitle ? (
+                        <div className="flex items-center gap-2 w-full justify-center">
+                            <input
+                                type="text"
+                                value={editedTitle}
+                                onChange={(e) => setEditedTitle(e.target.value)}
+                                className="font-inter font-semibold text-[24px] lg:text-[32px] leading-tight lg:leading-[39px] text-black border-b-2 border-[#3A82CE] outline-none bg-transparent min-w-[200px] text-center"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleUpdateTitle();
+                                    if (e.key === 'Escape') {
+                                        setEditedTitle(trip.name);
+                                        setIsEditingTitle(false);
+                                    }
+                                }}
+                            />
+                            <button onClick={handleUpdateTitle} className="p-2 hover:bg-green-50 rounded-full transition-colors">
+                                <Check className="w-5 h-5 lg:w-6 lg:h-6 text-green-600" />
+                            </button>
+                            <button onClick={() => { setEditedTitle(trip.name); setIsEditingTitle(false); }} className="p-2 hover:bg-red-50 rounded-full transition-colors">
+                                <X className="w-5 h-5 lg:w-6 lg:h-6 text-red-600" />
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="group flex justify-center items-center gap-2 lg:gap-3 cursor-pointer hover:bg-gray-50 rounded-lg transition-colors py-2" onClick={() => {
+                            setEditedTitle(trip.name);
+                            setIsEditingTitle(true);
+                        }}>
+                            <h1 className="font-inter font-semibold text-[24px] lg:text-[32px] leading-tight lg:leading-[39px] text-black text-center">
+                                {trip.name}
+                            </h1>
+                            <Pencil className="w-4 h-4 lg:w-5 lg:h-5 text-gray-400 lg:opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </div>
+                    )}
+
+                    {/* Mobile Controls: ปุ่ม Calendar และ Map (เฉพาะในมือถือ) */}
+                    <div className="flex lg:hidden flex-row items-center justify-center gap-3 w-full border-b border-gray-100 pb-4">
+                        <button
+                            className="flex-1 max-w-[160px] flex items-center justify-center gap-2 py-2 border border-black rounded-lg text-sm text-black font-inter font-medium hover:bg-gray-50 transition-colors"
+                            onClick={() => {
+                                if (!isDatePickerOpen && trip) setTempDates({ start: trip.start_date, end: trip.end_date });
+                                setIsDatePickerOpen(true);
+                            }}
+                        >
+                            <Calendar className="w-4 h-4" />
+                            <span className="truncate">{dateRangeStr}</span>
+                        </button>
+                        <button
+                            className="flex-1 max-w-[120px] flex items-center justify-center gap-2 py-2 border border-black rounded-lg text-sm text-black font-inter font-medium hover:bg-gray-50 transition-colors"
+                            onClick={() => setMobileViewMode('map')}
+                        >
+                            <MapIcon className="w-4 h-4" />
+                            <span>Map</span>
+                        </button>
                     </div>
+                </div>
 
+                <DragDropContext onDragEnd={onDragEnd}>
                     {daysArray.map((day, index) => {
                         const dayData = schedules.find(s => s.day_number === day.day_number);
                         const items = dayData?.daily_schedule_items || [];
@@ -1194,21 +1240,21 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                             <div key={day.day_number} className="flex flex-col w-full">
                                 <div
                                     id={`day-${day.day_number}`}
-                                    className="flex items-center gap-[13px] py-2 cursor-pointer w-full hover:bg-gray-50 rounded px-2 transition-colors"
+                                    className="flex items-center gap-[10px] lg:gap-[13px] py-2 lg:py-3 cursor-pointer w-full hover:bg-gray-50 rounded px-1 lg:px-2 transition-colors"
                                     onClick={() => toggleDay(index)}
                                 >
-                                    <div className="w-[32px] h-[32px] flex items-center justify-center">
-                                        <ChevronDown className={`w-8 h-8 text-black transition-transform ${isExpanded ? 'rotate-0' : '-rotate-90'}`} />
+                                    <div className="w-[24px] h-[24px] lg:w-[32px] lg:h-[32px] flex items-center justify-center">
+                                        <ChevronDown className={`w-6 h-6 lg:w-8 lg:h-8 text-black transition-transform ${isExpanded ? 'rotate-0' : '-rotate-90'}`} />
                                     </div>
                                     <div className="flex flex-col flex-1 justify-center">
-                                        <span className="font-inter font-bold text-[18px] text-black">{day.dateString}</span>
+                                        <span className="font-inter font-bold text-[16px] lg:text-[18px] text-black">{day.dateString}</span>
                                     </div>
                                 </div>
 
-                                <div className="w-full h-px bg-black opacity-20 my-2"></div>
+                                <div className="w-full h-px bg-black opacity-20 my-1 lg:my-2"></div>
 
                                 {isExpanded && (
-                                    <div className="flex flex-col gap-[16px] pb-6 ml-[15px] border-l-2 border-[#E0E0E0] pl-[15px] animate-in slide-in-from-top-2">
+                                    <div className="flex flex-col gap-[16px] pb-6 ml-[10px] lg:ml-[15px] border-l-2 border-[#E0E0E0] pl-[10px] lg:pl-[15px] animate-in slide-in-from-top-2">
 
                                         {/* Buttons Row */}
                                         <div className="flex flex-row gap-[8px] w-full relative z-[50]">
@@ -1227,9 +1273,12 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                                                             className="flex-1 bg-transparent border-none outline-none text-[14px] text-black placeholder:text-gray-400 min-w-0"
                                                         />
 
-                                                        {/* ✅ เพิ่มปุ่มหมุดสำหรับ Pick from map */}
+                                                        {/* ปุ่มหมุดสำหรับ Pick from map */}
                                                         <button
-                                                            onClick={() => setIsMapPickMode(!isMapPickMode)}
+                                                            onClick={() => {
+                                                                setIsMapPickMode(!isMapPickMode);
+                                                                if (window.innerWidth < 1024) setMobileViewMode('map');
+                                                            }}
                                                             className={`w-[24px] h-[24px] flex items-center justify-center rounded-[4px] transition-colors shrink-0 ${isMapPickMode ? 'bg-[#3A82CE] text-white' : 'bg-[#F0F6FC] text-[#3A82CE] hover:bg-[#D9EAF9]'}`}
                                                             title="Pick from map"
                                                         >
@@ -1262,7 +1311,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                                                     className="flex-1 h-[36px] bg-[#F5F5F5] border border-[#EEEEEE] rounded-[8px] flex items-center justify-center gap-[8px] text-[#616161] cursor-pointer hover:border-[#3A82CE] hover:text-[#3A82CE] transition"
                                                 >
                                                     <Plus className="w-[16px] h-[16px]" />
-                                                    <span className="font-inter font-normal text-[16px]">Add a place</span>
+                                                    <span className="font-inter font-normal text-[14px] lg:text-[16px]">Add a place</span>
                                                 </div>
                                             )}
 
@@ -1286,9 +1335,8 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                                                         {items.map((item, itemIndex) => {
                                                             const stats = travelStats[item.id];
 
-                                                            // ✅ Render Condition
+                                                            // Render Note Item
                                                             if (item.item_type === 'note') {
-                                                                // --- Note Item UI ---
                                                                 return (
                                                                     <Draggable key={item.id} draggableId={item.id} index={itemIndex}>
                                                                         {(provided, snapshot) => (
@@ -1319,7 +1367,7 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                                                                                     </div>
                                                                                 </div>
 
-                                                                                <button onClick={() => handleDeleteItem(item.id, dayData.id)} className="w-[28px] h-[28px] bg-[#F5F5F5] border border-[#EEEEEE] rounded-[30px] flex items-center justify-center hover:bg-red-50 cursor-pointer">
+                                                                                <button onClick={() => handleDeleteItem(item.id, dayData.id)} className="w-[28px] h-[28px] bg-[#F5F5F5] border border-[#EEEEEE] rounded-[30px] flex items-center justify-center hover:bg-red-50 cursor-pointer shrink-0">
                                                                                     <Trash2 className="w-3 h-3 text-[#212121] hover:text-red-500" />
                                                                                 </button>
                                                                             </div>
@@ -1327,16 +1375,10 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                                                                     </Draggable>
                                                                 );
                                                             } else {
-                                                                // --- Place / Location Item UI ---
-                                                                const displayIndex = items
-                                                                    .filter(i => i.item_type === 'place')
-                                                                    .findIndex(p => p.id === item.id) + 1;
-
-                                                                // เลือกว่าจะโชว์ข้อมูลจาก places หรือ locations
+                                                                // Render Place Item
+                                                                const displayIndex = items.filter(i => i.item_type === 'place').findIndex(p => p.id === item.id) + 1;
                                                                 const displayName = item.places?.name || item.locations?.name || "Unknown Place";
                                                                 const displayDesc = item.places?.description_short || item.places?.description || item.locations?.full_address || "No description";
-
-                                                                // ✅ ตรวจสอบว่ามีรูปภาพจริงๆ หรือไม่ (มีเฉพาะในตาราง places)
                                                                 const hasImage = item.places?.images && item.places?.images.length > 0;
                                                                 const displayImage = hasImage ? getImageSrc(item.places?.images) : null;
 
@@ -1350,12 +1392,13 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                                                                             >
                                                                                 {/* Row 1: Place Card */}
                                                                                 <div className="flex flex-row items-center gap-[8px] w-full pr-[10px]">
-                                                                                    <div className="absolute -left-[34px] top-[51px] -translate-y-1/2 w-[36px] flex justify-center">
+                                                                                    {/* Number Badge */}
+                                                                                    <div className="absolute -left-[20px] lg:-left-[34px] top-[51px] -translate-y-1/2 w-[36px] flex justify-center">
                                                                                         <div className="w-[20px] h-[25px] bg-[#1E518C] rounded-[4px] flex items-center justify-center text-white text-xs z-10 border border-[#C2DCF3]">
                                                                                             {displayIndex}
                                                                                         </div>
                                                                                     </div>
-                                                                                    <div className="flex flex-row flex-1 min-w-0 h-[101px] bg-white rounded-[8px] overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-transparent hover:border-[#1E518C]">
+                                                                                    <div className="flex flex-row flex-1 min-w-0 h-[101px] bg-white rounded-[8px] overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-transparent hover:border-[#1E518C] ml-2 lg:ml-0">
                                                                                         <div
                                                                                             {...provided.dragHandleProps}
                                                                                             className="w-[24px] bg-gray-50 flex items-center justify-center cursor-grab active:cursor-grabbing border-r border-gray-100 flex-shrink-0"
@@ -1363,31 +1406,23 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                                                                                             <GripVertical className="w-4 h-4 text-gray-400" />
                                                                                         </div>
                                                                                         <div className="flex-1 min-w-0 bg-[#F5F5F5] p-[8px] flex flex-col justify-start gap-[6px] h-full overflow-hidden">
-                                                                                            <h4 className="font-inter font-semibold text-[14px] text-black truncate w-full">
+                                                                                            <h4 className="font-inter font-semibold text-[13px] lg:text-[14px] text-black truncate w-full">
                                                                                                 {displayName}
                                                                                             </h4>
-                                                                                            <p className="font-inter font-normal text-[12px] text-[#212121] leading-[15px] line-clamp-3">
+                                                                                            <p className="font-inter font-normal text-[11px] lg:text-[12px] text-[#212121] leading-[14px] lg:leading-[15px] line-clamp-3">
                                                                                                 {displayDesc}
                                                                                             </p>
                                                                                         </div>
 
-                                                                                        {/* ✅ แสดงกล่องรูปภาพ เฉพาะเมื่อมีรูปจริงๆ เท่านั้น */}
                                                                                         {displayImage && (
-                                                                                            <div className="w-[109px] h-[101px] relative border-l border-[#1E518C] bg-gray-200 flex-shrink-0">
-                                                                                                <Image
-                                                                                                    src={displayImage}
-                                                                                                    alt={displayName}
-                                                                                                    fill
-                                                                                                    className="object-cover"
-                                                                                                    unoptimized
-                                                                                                />
+                                                                                            <div className="w-[80px] lg:w-[109px] h-[101px] relative border-l border-[#1E518C] bg-gray-200 flex-shrink-0">
+                                                                                                <Image src={displayImage} alt={displayName} fill className="object-cover" unoptimized />
                                                                                             </div>
                                                                                         )}
-
                                                                                     </div>
                                                                                     <button
                                                                                         onClick={() => handleDeleteItem(item.id, dayData?.id || "")}
-                                                                                        className="w-[28px] h-[28px] bg-[#F5F5F5] border border-[#EEEEEE] rounded-[30px] flex items-center justify-center flex-shrink-0 opacity-0 group-hover/card:opacity-100 transition-all shadow-sm hover:bg-red-50 hover:border-red-200 cursor-pointer"
+                                                                                        className="w-[28px] h-[28px] bg-[#F5F5F5] border border-[#EEEEEE] rounded-[30px] flex items-center justify-center flex-shrink-0 opacity-100 lg:opacity-0 lg:group-hover/card:opacity-100 transition-all shadow-sm hover:bg-red-50 hover:border-red-200 cursor-pointer"
                                                                                     >
                                                                                         <Trash2 className="w-[14px] h-[14px] text-[#212121] hover:text-red-500" />
                                                                                     </button>
@@ -1400,12 +1435,12 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                                                                                             {stats ? (
                                                                                                 <>
                                                                                                     <div className="flex items-center gap-[6px] bg-blue-50 px-2 py-1 rounded-md">
-                                                                                                        <Clock className="w-[14px] h-[14px] text-blue-600" />
-                                                                                                        <span className="font-inter font-medium text-[11px] text-blue-700">{stats.dur}</span>
+                                                                                                        <Clock className="w-[12px] h-[12px] lg:w-[14px] lg:h-[14px] text-blue-600" />
+                                                                                                        <span className="font-inter font-medium text-[10px] lg:text-[11px] text-blue-700">{stats.dur}</span>
                                                                                                     </div>
                                                                                                     <div className="flex items-center gap-[6px] bg-gray-50 px-2 py-1 rounded-md">
-                                                                                                        <Car className="w-[14px] h-[14px] text-gray-600" />
-                                                                                                        <span className="font-inter font-medium text-[11px] text-gray-700">{stats.dist}</span>
+                                                                                                        <Car className="w-[12px] h-[12px] lg:w-[14px] lg:h-[14px] text-gray-600" />
+                                                                                                        <span className="font-inter font-medium text-[10px] lg:text-[11px] text-gray-700">{stats.dist}</span>
                                                                                                     </div>
                                                                                                 </>
                                                                                             ) : (
@@ -1421,12 +1456,9 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                                                                                             onClick={() => setActiveTimePickerId(activeTimePickerId === item.id ? null : item.id)}
                                                                                             className="flex items-center gap-[6px] text-[11px] text-gray-400 hover:text-blue-500 transition-colors"
                                                                                         >
-                                                                                            <Clock className="w-[14px] h-[14px]" />
-                                                                                            <span className="font-inter font-normal text-[12px] leading-[15px] text-black">
-                                                                                                {item.start_time
-                                                                                                    ? `${formatTimeDisplay(item.start_time || null)} - ${formatTimeDisplay(item.end_time || null)}`
-                                                                                                    : "Add time"
-                                                                                                }
+                                                                                            <Clock className="w-[12px] h-[12px] lg:w-[14px] lg:h-[14px]" />
+                                                                                            <span className="font-inter font-normal text-[11px] lg:text-[12px] leading-[15px] text-black">
+                                                                                                {item.start_time ? `${formatTimeDisplay(item.start_time || null)} - ${formatTimeDisplay(item.end_time || null)}` : "Add time"}
                                                                                             </span>
                                                                                         </button>
                                                                                         {activeTimePickerId === item.id && (
@@ -1500,56 +1532,84 @@ export default function ItineraryDetailView({ tripId, onDataUpdate, scrollToDay 
                             </div>
                         );
                     })}
-                </div>
-            </DragDropContext>
-
+                </DragDropContext>
+            </div>
             {/* --- RIGHT COLUMN: Map --- */}
-            <div className="w-[459px] bg-[#E5E5E5] overflow-hidden relative border border-gray-200 h-[calc(100vh-120px)] rounded-[16px]  sticky top-[20px] flex flex-col shrink-0">
+            <div className={`
+                ${mobileViewMode === 'map'
+                    ? 'fixed inset-0 z-[500] flex bg-white w-full h-full opacity-100 visible'
+                    : 'absolute -z-50 opacity-0 invisible w-full h-full'}
+                lg:flex lg:static lg:w-[459px] lg:bg-[#E5E5E5] lg:border lg:border-gray-200 lg:h-[calc(100vh-120px)] lg:rounded-[16px] lg:top-[20px] lg:opacity-100 lg:visible lg:z-auto flex-col shrink-0 overflow-hidden
+            `}>
 
                 <div className="w-full h-[52px] bg-white flex flex-row items-center justify-between px-[16px] border-b border-gray-200 flex-shrink-0 relative z-[1000]">
-                    {/* ✅ เพิ่ม id ให้ปุ่มเปิดปฏิทิน */}
-                    <div
-                        id="date-picker-toggle"
-                        onClick={handleToggleDatePicker}
-                        className="box-border flex flex-row items-center px-[8px] py-[4px] gap-[8px] bg-white border border-black rounded-[8px] cursor-pointer hover:bg-gray-50 transition-colors"
-                    >
-                        <Calendar className="w-[16px] h-[16px] text-black" />
-                        <span className="font-inter font-normal text-[16px] leading-[19px] text-center text-black">
-                            {dateRangeStr}
-                        </span>
+
+                    {/* ปุ่ม Back ของ Mobile Map */}
+                    <button onClick={() => setMobileViewMode('list')} className="lg:hidden p-2 -ml-2 text-black hover:bg-gray-100 rounded-full transition-colors">
+                        <ArrowLeft className="w-5 h-5" />
+                    </button>
+
+                    {/* ✅ ส่วนเลือกวัน (Dropdown) แบบรูปภาพ image_5c82c3.png */}
+                    <div className="relative" ref={mapDayDropdownRef}>
+                        <button
+                            onClick={() => setIsMapDayDropdownOpen(!isMapDayDropdownOpen)}
+                            className="flex flex-row items-center px-[12px] py-[6px] gap-[8px] bg-white border border-black rounded-full cursor-pointer hover:bg-gray-50 transition-colors shadow-sm"
+                        >
+                            {!isViewAll && expandedDayIndex !== null && daysArray[expandedDayIndex] ? (
+                                <div className="w-3 h-3 rounded-full border shadow-sm" style={{ backgroundColor: getDayColor(daysArray[expandedDayIndex].dateObj), borderColor: "rgba(0,0,0,0.1)" }} />
+                            ) : (
+                                <Calendar className="w-4 h-4 text-gray-700" />
+                            )}
+                            <span className="font-inter font-medium text-[13px] text-black">
+                                {mapDropdownDisplayText}
+                            </span>
+                            <ChevronDown className="w-4 h-4 text-gray-500" />
+                        </button>
+
+                        {/* Dropdown Menu สำหร้บเลือกวัน */}
+                        {isMapDayDropdownOpen && (
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max min-w-[160px] bg-white border border-black rounded-lg shadow-xl z-[2000] py-1 animate-in fade-in zoom-in-95">
+                                {daysArray.map((day, idx) => (
+                                    <div
+                                        key={idx}
+                                        onClick={() => {
+                                            setExpandedDayIndex(idx);
+                                            setIsViewAll(false);
+                                            setIsMapDayDropdownOpen(false);
+                                        }}
+                                        className="flex items-center gap-3 px-4 py-2.5 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors"
+                                    >
+                                        <div className="w-3.5 h-3.5 rounded-full border shadow-sm" style={{ backgroundColor: getDayColor(day.dateObj), borderColor: "rgba(0,0,0,0.1)" }} />
+                                        <span className="text-[13px] font-medium text-gray-800">
+                                            {day.dateObj.getDate()} {day.dateObj.toLocaleDateString('en-GB', { month: 'long' })}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
+                    {/* ปุ่ม View All / Close All */}
                     <button
-                        onClick={handleViewAll}
-                        className={`box-border flex flex-row justify-center items-center px-[12px] py-[8px] gap-[8px] border-2 rounded-[16px] transition-colors ${isViewAll ? 'bg-[#154a85] border-[#1E518C] shadow-inner' : 'bg-[#2666B0] border-[#95C3EA] hover:bg-[#1e5594]'}`}
+                        onClick={() => {
+                            handleViewAll();
+                            setIsMapDayDropdownOpen(false);
+                        }}
+                        className={`box-border flex flex-row justify-center items-center px-[10px] lg:px-[12px] py-[6px] lg:py-[8px] gap-[8px] border rounded-full transition-colors ${isViewAll ? 'bg-[#154a85] border-[#1E518C] shadow-inner text-white' : 'bg-[#3A82CE] border-[#3A82CE] hover:bg-[#2c6cb0] text-white shadow-sm'}`}
                     >
-                        <span className="font-inter font-normal text-[14px] leading-[17px] text-white select-none">
+                        <span className="font-inter font-bold text-[12px] lg:text-[13px] leading-none select-none">
                             {isViewAll ? "Close All" : "View All"}
                         </span>
                     </button>
-
-                    {/* ✅ เพิ่ม ref ให้ container ปฏิทิน */}
-                    {isDatePickerOpen && (
-                        <div ref={datePickerRef} className="absolute top-[60px] left-[16px] animate-in fade-in zoom-in-95 duration-200 z-[1100]">
-                            <CustomDateRangePicker
-                                startDate={tempDates.start}
-                                endDate={tempDates.end}
-                                onChange={handlePickerChange}
-                                onClose={() => setIsDatePickerOpen(false)}
-                            />
-                        </div>
-                    )}
                 </div>
 
-                {/* ✅ เพิ่ม Overlay บอกสถานะเมื่อเปิดโหมดจิ้มแผนที่ */}
                 <div className="flex-1 relative w-full h-full z-0">
                     {isMapPickMode && (
-                        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[2000] bg-[#3A82CE] text-white px-4 py-2 rounded-full shadow-lg font-inter text-[14px] flex items-center gap-2 animate-bounce pointer-events-none">
-                            <MapPin className="w-4 h-4" /> Click anywhere on the map to add location
+                        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[2000] bg-[#3A82CE] text-white px-4 py-2 rounded-full shadow-lg font-inter text-[12px] lg:text-[14px] flex items-center gap-2 animate-bounce pointer-events-none whitespace-nowrap">
+                            <MapPin className="w-4 h-4" /> Click map to add
                         </div>
                     )}
 
-                    {/* ส่ง Props onMapClick ไปให้ Component แผนที่ */}
                     <ItineraryMap locations={mapLocations} onMapClick={handleMapClick} />
                 </div>
             </div>

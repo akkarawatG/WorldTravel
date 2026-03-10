@@ -179,27 +179,28 @@ export default function PlaceToVisit() {
   }
 
   return (
-    // ✅ ปรับความกว้าง Container เป็น max-w-[850px]
     <div className="w-full max-w-[850px] flex flex-col items-start pb-20">
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[24px] w-full">
+      {/* ✅ ปรับ Grid เป็น 2 คอลัมน์บนมือถือ, และ 3 คอลัมน์เมื่อจอใหญ่ (lg) */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-[24px] w-full px-1 sm:px-0">
         
         {savedPlaces.map((saved) => {
           const place = saved.places!;
           const displayString = getDisplayCategories(place.category_tags);
-          
           const imagesArray = Array.isArray(place.images) && place.images.length > 0 ? place.images : [];
 
           return (
+            // ✅ ปรับความกว้างและความสูงเป็นแบบ Responsive (w-full บนมือถือ, ล็อกขนาด w-[264px] บน Desktop)
             <div
               key={saved.id}
               onClick={() => router.push(`/detail?id=${place.id}`)}
-              className="w-[264px] h-[426px] flex flex-col gap-[8px] group cursor-pointer select-none mx-auto"
+              className="w-full sm:w-[264px] h-auto sm:h-[426px] flex flex-col gap-[6px] sm:gap-[8px] group cursor-pointer select-none mx-auto"
             >
-              <div className="flex flex-col gap-2 min-w-0">
+              <div className="flex flex-col gap-2 min-w-0 w-full">
 
                 {/* --- Image Slider Section --- */}
-                <div className="relative w-[264px] h-[331px] rounded-[16px] overflow-hidden shadow-sm bg-gray-100 group/slider flex-shrink-0">
+                {/* ✅ เปลี่ยนความสูงรูปเป็น aspect-[4/5] บนมือถือ และล็อก h-[331px] บน Desktop */}
+                <div className="relative w-full aspect-[4/5] sm:aspect-auto sm:h-[331px] rounded-[12px] sm:rounded-[16px] overflow-hidden shadow-sm bg-gray-100 group/slider flex-shrink-0">
                   <Swiper
                     modules={[Navigation, Pagination, A11y]}
                     spaceBetween={0}
@@ -221,13 +222,13 @@ export default function PlaceToVisit() {
                           const isRiskySource = !imgUrl.includes('supabase.co') && !imgUrl.includes('unsplash.com');
 
                           return (
-                            <SwiperSlide key={idx} className="overflow-hidden rounded-[16px]">
+                            <SwiperSlide key={idx} className="overflow-hidden rounded-[12px] sm:rounded-[16px]">
                               <Image 
                                 src={imgUrl} 
                                 alt={`${place.name} ${idx + 1}`}
                                 fill
-                                className="object-cover rounded-[16px]"
-                                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+                                className="object-cover rounded-[12px] sm:rounded-[16px]"
+                                sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
                                 unoptimized={isRiskySource}
                               />
                             </SwiperSlide>
@@ -235,15 +236,15 @@ export default function PlaceToVisit() {
                         })
                     ) : (
                         <SwiperSlide>
-                            <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">No Image</div>
+                            <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400 text-sm">No Image</div>
                         </SwiperSlide>
                     )}
 
-                    <button onClick={(e) => e.stopPropagation()} className={`prev-btn-${place.id} absolute left-2 top-1/2 -translate-y-1/2 z-10 w-[24px] h-[24px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-all shadow-sm cursor-pointer text-white`}>
-                      <ArrowLeft className="w-[14px] h-[14px]" />
+                    <button onClick={(e) => e.stopPropagation()} className={`prev-btn-${place.id} absolute left-2 top-1/2 -translate-y-1/2 z-10 w-[20px] h-[20px] sm:w-[24px] sm:h-[24px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-all shadow-sm cursor-pointer text-white`}>
+                      <ArrowLeft className="w-[12px] h-[12px] sm:w-[14px] sm:h-[14px]" />
                     </button>
-                    <button onClick={(e) => e.stopPropagation()} className={`next-btn-${place.id} absolute right-2 top-1/2 -translate-y-1/2 z-10 w-[24px] h-[24px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-all shadow-sm cursor-pointer text-white`}>
-                      <ArrowRight className="w-[14px] h-[14px]" />
+                    <button onClick={(e) => e.stopPropagation()} className={`next-btn-${place.id} absolute right-2 top-1/2 -translate-y-1/2 z-10 w-[20px] h-[20px] sm:w-[24px] sm:h-[24px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-all shadow-sm cursor-pointer text-white`}>
+                      <ArrowRight className="w-[12px] h-[12px] sm:w-[14px] sm:h-[14px]" />
                     </button>
                     
                     <div className={`pagination-custom-${place.id} absolute bottom-3 left-0 w-full flex justify-center gap-1 z-20 !pointer-events-none`}></div>
@@ -261,10 +262,10 @@ export default function PlaceToVisit() {
                         e.stopPropagation(); 
                         handleUnsave(saved.id, place.name);
                       }} 
-                      className="flex h-[24px] w-[32px] group-hover:w-[60px] items-center justify-center rounded-[8px] border border-white text-white shadow-sm transition-all duration-300 ease-in-out overflow-hidden cursor-pointer backdrop-blur-[2px] bg-[#3A82CE] group-hover:bg-[#1565C0]"
+                      className="flex h-[22px] w-[28px] sm:h-[24px] sm:w-[32px] sm:group-hover:w-[60px] items-center justify-center rounded-[6px] sm:rounded-[8px] border border-white text-white shadow-sm transition-all duration-300 ease-in-out overflow-hidden cursor-pointer backdrop-blur-[2px] bg-[#3A82CE] sm:group-hover:bg-[#1565C0]"
                     >
-                      <Check size="16px" className="flex-shrink-0" />
-                      <span className="max-w-0 opacity-0 group-hover:max-w-[40px] group-hover:opacity-100 group-hover:ml-[4px] text-[12px] font-inter font-normal whitespace-nowrap transition-all duration-300">
+                      <Check className="w-[14px] h-[14px] sm:w-[16px] sm:h-[16px] flex-shrink-0" />
+                      <span className="hidden sm:inline-block max-w-0 opacity-0 group-hover:max-w-[40px] group-hover:opacity-100 group-hover:ml-[4px] text-[12px] font-inter font-normal whitespace-nowrap transition-all duration-300">
                          Saved
                       </span>
                     </button>
@@ -272,28 +273,29 @@ export default function PlaceToVisit() {
                 </div>
 
                 {/* --- Text Content Section --- */}
-                <div className="w-full h-[87px] flex flex-col gap-[4px] min-w-0">
-                  <h4 className="text-[20px] font-inter font-normal text-[#212121] leading-none w-full">
+                {/* ✅ ย่อ Text ให้เล็กลงในหน้าจอมือถือ และกลับไปขนาดเดิมบนจอใหญ่ (sm:) */}
+                <div className="w-full h-auto sm:h-[87px] flex flex-col gap-[2px] sm:gap-[4px] min-w-0 px-1 sm:px-0">
+                  <h4 className="text-[14px] sm:text-[20px] font-inter font-bold sm:font-normal text-[#212121] leading-tight sm:leading-none w-full">
                     <span className="inline-block max-w-full truncate border-b border-transparent group-hover:border-[#212121] pb-[1px] transition-colors duration-200 align-bottom">
                       {place.name}
                     </span>
                   </h4>
-                  <p className="flex items-center gap-1 text-[14px] font-inter font-normal text-[#9E9E9E] w-full">
-                    <MapPin className="w-4 h-4 shrink-0" />
-                    <span className="truncate leading-none">
+                  <p className="flex items-center gap-1 text-[11px] sm:text-[14px] font-inter font-normal text-[#9E9E9E] w-full">
+                    <MapPin className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" />
+                    <span className="truncate leading-none mt-[1px]">
                       {place.province_state}, {place.country}
                     </span>
                   </p>
-                  <div className="flex items-center gap-[4px]">
+                  <div className="flex items-center gap-[4px] mt-[2px] sm:mt-0">
                     {[1, 2, 3, 4, 5].map((star) => (
                       <Star
                         key={star}
-                        className={`w-[12px] h-[12px] ${star <= Math.round(place.rating || 0) ? "fill-yellow-400 text-yellow-400" : "fill-gray-200 text-gray-200"}`}
+                        className={`w-[10px] h-[10px] sm:w-[12px] sm:h-[12px] ${star <= Math.round(place.rating || 0) ? "fill-yellow-400 text-yellow-400" : "fill-gray-200 text-gray-200"}`}
                       />
                     ))}
-                    <span className="text-xs font-medium text-[#9E9E9E] ml-1">({place.review_count || 0})</span>
+                    <span className="text-[10px] sm:text-xs font-medium text-[#9E9E9E] ml-1">({place.review_count || 0})</span>
                   </div>
-                  <p className="text-[14px] font-inter font-semibold text-[#212121] truncate leading-none w-full capitalize">
+                  <p className="text-[11px] sm:text-[14px] font-inter font-semibold text-[#212121] truncate leading-none w-full capitalize mt-[2px] sm:mt-0">
                     {displayString}
                   </p>
                 </div>

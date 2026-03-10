@@ -5,12 +5,11 @@ import { useMemo, useState } from "react";
 
 interface ItinerarySidebarProps {
   onCreateNewPlan?: () => void;
-  onBackToList?: () => void; // ปุ่ม My Plan
+  onBackToList?: () => void; 
   onPlaceToVisit?: () => void;
-  // ✅ เพิ่ม Prop รับฟังก์ชันเมื่อกดปุ่ม Budget
   onBudgetClick?: () => void; 
   onDateClick?: (dayNumber: number) => void;
-  viewMode?: 'default' | 'detail' | 'place_to_visit' | 'budget'; // ✅ เพิ่ม 'budget' ใน type (มีอยู่แล้ว)
+  viewMode?: 'default' | 'detail' | 'place_to_visit' | 'budget';
   startDate?: string | null;
   endDate?: string | null;
 }
@@ -19,7 +18,7 @@ export default function ItinerarySidebar({
   onCreateNewPlan, 
   onBackToList,
   onPlaceToVisit,
-  onBudgetClick, // ✅ รับมาใช้
+  onBudgetClick, 
   onDateClick, 
   viewMode = 'default',
   startDate,
@@ -74,11 +73,12 @@ export default function ItinerarySidebar({
     }`;
 
   return (
-    <aside className="w-[191px] h-[937px] bg-[#F5F5F5] rounded-[16px] p-[16px] flex flex-col gap-[24px] overflow-y-auto font-inter transition-all flex-shrink-0 z-40 sticky top-[110px] scrollbar-thin">
+    // ✅ เปลี่ยน lg:h-[937px] เป็น lg:h-fit และจำกัดความสูงไม่ให้เกินจอด้วย lg:max-h-[calc(100vh-140px)]
+    <aside className="w-full lg:w-[191px] h-auto lg:h-fit lg:max-h-[calc(100vh-140px)] bg-[#F5F5F5] rounded-[16px] p-[16px] flex flex-col gap-[24px] overflow-y-auto font-inter transition-all flex-shrink-0 z-40 relative lg:sticky lg:top-[110px] scrollbar-thin">
       
       <button 
         onClick={onCreateNewPlan}
-        className="w-full h-[40px] bg-[#3A82CE] border border-[#1E518C] rounded-[8px] flex items-center justify-center gap-[8px] hover:bg-[#3272b5] transition-colors shadow-sm flex-shrink-0 cursor-pointer"
+        className="hidden lg:flex w-full h-[40px] bg-[#3A82CE] border border-[#1E518C] rounded-[8px] items-center justify-center gap-[8px] hover:bg-[#3272b5] transition-colors shadow-sm flex-shrink-0 cursor-pointer"
       >
         <div className="w-[17.33px] h-[17.33px] bg-white rounded-sm flex items-center justify-center">
             <Plus className="w-3 h-3 text-[#3A82CE] stroke-[4px]" />
@@ -113,7 +113,6 @@ export default function ItinerarySidebar({
                     <span className="text-[16px] leading-[19px] text-[#212121]">Place to visit</span>
                  </button>
                  
-                 {/* ✅ แก้ไขปุ่ม Budget ใส่ onClick */}
                  <button 
                     onClick={onBudgetClick} 
                     className={getButtonClass(viewMode === 'budget')}

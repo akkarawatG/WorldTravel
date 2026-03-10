@@ -3,13 +3,12 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Search, MapPin, ArrowLeft, ArrowRight, Map, Star, Check, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { Search, MapPin, ArrowLeft, ArrowRight, Map, Star, Check, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 import Icon from '@mdi/react';
 import { mdiPlus } from '@mdi/js';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Navigation, Pagination, A11y, Autoplay } from 'swiper/modules';
 
-// ✅ Import Supabase Client
 import { createClient } from '@/utils/supabase/client';
 
 import 'swiper/css';
@@ -25,7 +24,6 @@ import AuthModal, { UserProfile as AuthUserProfile } from "./AuthModal";
 const ITEMS_PER_PAGE = 6;
 const FESTIVALS_PER_PAGE = 3;
 
-// ... (CONSTANTS & MAPPINGS KEEP SAME) ...
 const FILTER_GROUPS = [
   { title: "Nature & Outdoors", items: ["Mountains", "National parks", "Islands", "Lakes / Rivers", "Hot Spring", "Gardens"] },
   { title: "History & Culture", items: ["Temples", "Church / Mosque", "Ancient ruins", "Castles", "Old towns", "Museums", "Monuments"] },
@@ -62,10 +60,7 @@ const DB_TAG_TO_DISPLAY: Record<string, string> = {
   "zoos_aquariums": "Zoos / Aquariums", "nightlife": "Nightlife", "spas_wellness": "Spas / Wellness"
 };
 
-const MONTHS = [
-  "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
-  "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
-];
+const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
 const MONTH_FULL_NAMES: Record<string, string> = {
   "JAN": "January", "FEB": "February", "MAR": "March", "APR": "April", "MAY": "May", "JUN": "June",
@@ -109,12 +104,10 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
   const router = useRouter();
   const supabase = createClient();
 
-  // Params
   const paramCountry = typeof searchParams.country === 'string' ? searchParams.country : "Thailand";
   const urlSearchQuery = typeof searchParams.search === 'string' ? searchParams.search : "";
   const urlTag = typeof searchParams.tag === 'string' ? searchParams.tag : "";
 
-  // State
   const [filteredPlaces, setFilteredPlaces] = useState<Place[]>(initialPlaces);
   const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState(urlSearchQuery);
@@ -122,29 +115,24 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
   const [showDropdown, setShowDropdown] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Festival State
   const [dbFestivals, setDbFestivals] = useState<any[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<string>(MONTHS[new Date().getMonth()]);
   const [festivalPage, setFestivalPage] = useState(1);
   const searchContainerRef = useRef<HTMLDivElement>(null);
+  
+  const [isMonthDropdownOpen, setIsMonthDropdownOpen] = useState(false);
+  const monthDropdownRef = useRef<HTMLDivElement>(null);
 
-  // ✅ New States for Saving functionality & Auth Modal
   const [userId, setUserId] = useState<string | null>(null);
   const [savedPlaceIds, setSavedPlaceIds] = useState<Set<string>>(new Set());
   const [showAuthModal, setShowAuthModal] = useState(false);
 
-  // ✅ 1. Fetch User and Existing Saved Places on Mount
   useEffect(() => {
     const checkUserAndSavedPlaces = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      
       if (user) {
         setUserId(user.id);
-        const { data: savedData, error } = await supabase
-          .from('saved_places')
-          .select('place_id')
-          .eq('profile_id', user.id);
-          
+        const { data: savedData, error } = await supabase.from('saved_places').select('place_id').eq('profile_id', user.id);
         if (savedData && !error) {
           const ids = new Set(savedData.map(item => item.place_id));
           setSavedPlaceIds(ids);
@@ -154,24 +142,14 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
     checkUserAndSavedPlaces();
   }, []);
 
-  // Fetch Festivals
   useEffect(() => {
     const fetchFestivals = async () => {
-      const { data, error } = await supabase
-        .from('festivals')
-        .select('*')
-        .eq('country', paramCountry);
-
-      if (error) {
-        console.error('Error fetching festivals:', error);
-      } else if (data) {
-        setDbFestivals(data);
-      }
+      const { data, error } = await supabase.from('festivals').select('*').eq('country', paramCountry);
+      if (!error && data) setDbFestivals(data);
     };
     fetchFestivals();
   }, [paramCountry]);
 
-  // Sync State & Logic
   useEffect(() => { if (urlTag) setSelectedFilters(urlTag.split(",")); else setSelectedFilters([]); }, [urlTag]);
   useEffect(() => { setSearchQuery(urlSearchQuery); }, [urlSearchQuery]);
 
@@ -203,65 +181,40 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
   const totalPages = Math.ceil(filteredPlaces.length / ITEMS_PER_PAGE);
   const paginatedItems = filteredPlaces.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-  // Festival Filter Logic
   const filteredFestivals = dbFestivals.filter((festival) => {
     if (selectedMonth === "ALL") return true;
     const monthName = MONTH_FULL_NAMES[selectedMonth];
-    const isPeriodMatch = festival.period_str?.toLowerCase().includes(monthName.toLowerCase());
-    return isPeriodMatch;
+    return festival.period_str?.toLowerCase().includes(monthName.toLowerCase());
   });
 
   const totalFestivalPages = Math.ceil(filteredFestivals.length / FESTIVALS_PER_PAGE);
-  const currentFestivals = filteredFestivals.slice(
-    (festivalPage - 1) * FESTIVALS_PER_PAGE,
-    festivalPage * FESTIVALS_PER_PAGE
-  );
+  const currentFestivals = filteredFestivals.slice((festivalPage - 1) * FESTIVALS_PER_PAGE, festivalPage * FESTIVALS_PER_PAGE);
 
   useEffect(() => { setFestivalPage(1); }, [selectedMonth]);
 
-  // ✅ Handle Save/Unsave Place
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (searchContainerRef.current && !searchContainerRef.current.contains(target)) setShowDropdown(false);
+      if (monthDropdownRef.current && !monthDropdownRef.current.contains(target)) setIsMonthDropdownOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const handleSavePlace = async (placeId: string, placeName: string) => {
-    if (!userId) {
-      // เปลี่ยนจากการเปลี่ยนหน้าเป็นเปิด Popup ล็อกอิน
-      setShowAuthModal(true); 
-      return;
-    }
-
+    if (!userId) { setShowAuthModal(true); return; }
     const isAlreadySaved = savedPlaceIds.has(placeId);
-
     if (isAlreadySaved) {
-        // --- REMOVE ---
-        setSavedPlaceIds(prev => { const newSet = new Set(prev); newSet.delete(placeId); return newSet; });
-        try {
-            const { error } = await supabase.from('saved_places').delete().eq('place_id', placeId).eq('profile_id', userId);
-            if (error) {
-                setSavedPlaceIds(prev => new Set(prev).add(placeId));
-                alert("Failed to remove place.");
-            } else {
-                console.log(`Removed ${placeName}`);
-            }
-        } catch (err) { setSavedPlaceIds(prev => new Set(prev).add(placeId)); }
+      setSavedPlaceIds(prev => { const newSet = new Set(prev); newSet.delete(placeId); return newSet; });
+      try { await supabase.from('saved_places').delete().eq('place_id', placeId).eq('profile_id', userId); } catch (err) { setSavedPlaceIds(prev => new Set(prev).add(placeId)); }
     } else {
-        // --- ADD ---
-        setSavedPlaceIds(prev => new Set(prev).add(placeId));
-        try {
-            const { error } = await supabase.from('saved_places').insert([{ profile_id: userId, place_id: placeId }]);
-            if (error) {
-                setSavedPlaceIds(prev => { const newSet = new Set(prev); newSet.delete(placeId); return newSet; });
-                alert("Failed to save place.");
-            } else {
-                console.log(`Saved ${placeName}`);
-            }
-        } catch (err) {
-            setSavedPlaceIds(prev => { const newSet = new Set(prev); newSet.delete(placeId); return newSet; });
-        }
+      setSavedPlaceIds(prev => new Set(prev).add(placeId));
+      try { await supabase.from('saved_places').insert([{ profile_id: userId, place_id: placeId }]); } catch (err) { setSavedPlaceIds(prev => { const newSet = new Set(prev); newSet.delete(placeId); return newSet; }); }
     }
   };
 
-  const handleAuthSuccess = (u: AuthUserProfile) => {
-    setShowAuthModal(false);
-    window.location.reload();
-  };
+  const handleAuthSuccess = () => { setShowAuthModal(false); window.location.reload(); };
 
   const updateUrlParams = (newFilters: string[]) => {
     const params = new URLSearchParams();
@@ -278,6 +231,7 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
   };
 
   const clearAllFilters = () => { setSelectedFilters([]); updateUrlParams([]); };
+  
   const handleSearchSubmit = (value: string) => {
     const params = new URLSearchParams();
     if (selectedFilters.length > 0) params.set("tag", selectedFilters.join(","));
@@ -316,110 +270,84 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
   const currentContinent = filteredPlaces[0]?.continent || "Asia";
 
   return (
-    <div className="min-h-screen bg-[#FFFFFF] font-inter text-gray-800 pb-20" onClick={() => setShowDropdown(false)}>
+    <div className="min-h-screen bg-[#FFFFFF] font-inter text-gray-800 pb-20 overflow-x-hidden">
 
       <style jsx global>{`
         .custom-pagination-container { display: flex !important; align-items: center !important; justify-content: center !important; height: 12px !important; }
         .custom-pagination-container .swiper-pagination-bullet { width: 4px !important; height: 4px !important; background-color: #deecf9 !important; border: 1px solid #c2dcf3 !important; opacity: 1 !important; margin: 0 4px !important; transition: all 0.3s ease-in-out !important; border-radius: 50% !important; flex-shrink: 0 !important; }
         .custom-pagination-container .swiper-pagination-bullet-active { width: 8px !important; height: 8px !important; background-color: #041830 !important; border: 1px solid #c2dcf3 !important; }
-        
-        .festival-nav-btn { position: absolute; top: 50%; transform: translateY(-50%); z-index: 50; width: 48px; height: 48px; background-color: #3A82CE66; border: 1px solid #95C3EA; border-radius: 30px; padding: 9px; display: flex; align-items: center; justify-content: center; gap: 10px; color: #ffffff; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); cursor: pointer; transition: all 0.2s ease-in-out; }
+        .festival-nav-btn { position: absolute; top: 50%; transform: translateY(-50%); z-index: 50; width: 48px; height: 48px; background-color: #3A82CE66; border: 1px solid #95C3EA; border-radius: 30px; display: flex; align-items: center; justify-content: center; color: #ffffff; cursor: pointer; transition: all 0.2s; }
         .festival-nav-btn:hover { background-color: #3A82CE; }
-        .festival-nav-btn:active { transform: translateY(-50%) scale(0.95); }
-        .festival-nav-btn:disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
 
       {/* Breadcrumb */}
-      <div className="max-w-[1440px] mx-auto px-[156px] pt-6 mb-4">
-        <div className="flex items-center gap-2 flex-wrap mb-2 font-Inter font-[600] text-[14px] leading-[100%] text-[#9E9E9E]">
+      <div className="w-full max-w-[1440px] mx-auto px-4 md:px-8 lg:px-[156px] pt-6 mb-4">
+        <div className="flex items-center gap-2 flex-wrap mb-2 font-Inter font-[600] text-[12px] md:text-[14px] text-[#9E9E9E]">
           <span className="hover:underline cursor-pointer" onClick={() => router.push('/')}>Home</span> /
           <span className="hover:underline cursor-pointer" onClick={() => router.push(`/countries?continent=${currentContinent}`)}>{currentContinent}</span> /
-          <span className="text-[#101828] hover:underline cursor-pointer">{paramCountry}</span>
+          <span className="text-[#101828]">{paramCountry}</span>
         </div>
       </div>
 
-      {/* HERO SLIDER (Unchanged for now, focusing on Grid) */}
-      <div className="w-full h-[414px] bg-[#DEECF9]">
-        <div className="w-full max-w-[1440px] h-[414px] mx-auto bg-[#DEECF9] flex justify-center">
+      {/* HERO SLIDER */}
+      <div className="w-full h-[300px] md:h-[414px] bg-[#DEECF9]">
+        <div className="w-full max-w-[1440px] h-full mx-auto bg-[#DEECF9] flex justify-center">
           {displaySlides.length === 0 ? (
-            <div className="w-full h-[414px] flex items-center justify-center text-gray-500">No attractions found</div>
+            <div className="w-full h-full flex items-center justify-center text-gray-500">No attractions found</div>
           ) : (
-            <div className="w-full h-[445px] flex flex-col gap-[16px] px-[156px]">
-              <div className="relative w-full h-[413px] bg-black overflow-hidden group flex-shrink-0 shadow-sm">
-                <Swiper
-                  key={paramCountry}
-                  modules={[Navigation, A11y, Autoplay]}
-                  spaceBetween={0} slidesPerView={1} loop={displaySlides.length > 1} autoplay={{ delay: 5000 }}
-                  navigation={{ prevEl: '.custom-prev-button', nextEl: '.custom-next-button' }}
-                  className="w-full h-full"
-                  onSlideChange={(swiper) => {
-                    const realIndex = swiper.realIndex;
-                    const bullets = document.querySelectorAll('.custom-pagination-bullet');
-                    bullets.forEach((bullet, index) => {
-                      bullet.classList.remove('bg-[#121212]', 'border-[4px]', 'border-[#E0E0E0]');
-                      bullet.classList.add('bg-[#E0E0E0]', 'border', 'border-[#EEEEEE]');
-                      if (index === realIndex) {
-                        bullet.classList.remove('bg-[#E0E0E0]', 'border', 'border-[#EEEEEE]');
-                        bullet.classList.add('bg-[#121212]', 'border-[4px]', 'border-[#E0E0E0]');
-                      }
-                    });
-                  }}
-                >
+            <div className="w-full flex flex-col gap-[16px] px-0 md:px-8 lg:px-[156px]">
+              <div className="relative w-full h-[250px] md:h-[413px] bg-black overflow-hidden sm:rounded-[16px] md:rounded-none group shadow-sm">
+                <Swiper modules={[Navigation, A11y, Autoplay]} spaceBetween={0} slidesPerView={1} loop={displaySlides.length > 1} autoplay={{ delay: 5000 }} navigation={{ prevEl: '.custom-prev-button', nextEl: '.custom-next-button' }} className="w-full h-full">
                   {displaySlides.map((slide, index) => {
                     const imgUrl = Array.isArray(slide.images) && typeof slide.images[0] === 'object' && 'url' in slide.images[0] ? (slide.images[0] as any).url : (slide.images?.[0] || "https://placehold.co/800x400?text=No+Image");
                     const isRisky = !imgUrl.includes('supabase.co') && !imgUrl.includes('unsplash.com');
                     return (
-                      <SwiperSlide key={slide.id} className="relative w-full h-full">
+                      <SwiperSlide key={slide.id}>
                         <Image src={imgUrl} alt={slide.name} fill priority={index === 0} className="object-cover" sizes="100vw" unoptimized={isRisky} />
                         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60"></div>
-                        <div className="absolute bottom-0 left-0 z-40 h-[79px] flex flex-col justify-center gap-[9px] bg-[#3C3C4399] text-white p-4 rounded-tr-[8px] rounded-br-[8px] animate-in fade-in slide-in-from-bottom-4 duration-700">
-                          <div className=" h-[47px] flex flex-col justify-center gap-[8px]">
-                            <h2 onClick={(e) => { e.stopPropagation(); router.push(`/detail?id=${slide.id}`); }} className="text-[18px] font-Inter font-[700] leading-tight drop-shadow-md truncate max-w-[300px] cursor-pointer hover:underline hover:text-[#DEECF9]">{slide.name}</h2>
-                            <div className="flex items-center gap-2 text-[14px] font-Inter font-[600] opacity-90"><MapPin className="w-4 h-4 flex-shrink-0" /><span className="truncate">{slide.province_state}, {slide.country}</span></div>
-                          </div>
+                        <div className="absolute bottom-0 left-0 w-[85%] md:w-auto z-40 h-[79px] flex flex-col justify-center gap-[9px] bg-[#3C3C4399] text-white p-4 rounded-tr-[8px] rounded-br-[8px]">
+                          <h2 onClick={() => router.push(`/detail?id=${slide.id}`)} className="text-[16px] md:text-[18px] font-Inter font-[700] leading-tight drop-shadow-md truncate w-full md:max-w-[300px] cursor-pointer hover:underline">{slide.name}</h2>
+                          <div className="flex items-center gap-2 text-[12px] md:text-[14px] font-Inter font-[600] opacity-90"><MapPin className="w-4 h-4" /><span className="truncate">{slide.province_state}, {slide.country}</span></div>
                         </div>
                       </SwiperSlide>
                     )
                   })}
-                  <button className="custom-prev-button absolute left-4 top-1/2 -translate-y-1/2 z-30 w-[48px] h-[48px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-[30px] p-[9px] flex items-center justify-center gap-[10px] text-[#ffffff] transition-all active:scale-95 hidden md:flex shadow-sm cursor-pointer"><ArrowLeft className="w-[30px] h-[30px]" /></button>
-                  <button className="custom-next-button absolute right-4 top-1/2 -translate-y-1/2 z-30 w-[48px] h-[48px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-[30px] p-[9px] flex items-center justify-center gap-[10px] text-[#ffffff] transition-all active:scale-95 hidden md:flex shadow-sm cursor-pointer"><ArrowRight className="w-[30px] h-[30px]" /></button>
+                  <button className="custom-prev-button absolute left-4 top-1/2 -translate-y-1/2 z-30 w-[40px] md:w-[48px] h-[40px] md:h-[48px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full hidden md:flex items-center justify-center text-white"><ArrowLeft className="w-[30px]" /></button>
+                  <button className="custom-next-button absolute right-4 top-1/2 -translate-y-1/2 z-30 w-[40px] md:w-[48px] h-[40px] md:h-[48px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full hidden md:flex items-center justify-center text-white"><ArrowRight className="w-[30px]" /></button>
                 </Swiper>
               </div>
-              <div className="w-[184px] h-[16px] flex justify-center items-center gap-[8px] flex-shrink-0 mx-auto">
-                {displaySlides.map((_, index) => (<div key={index} className={`custom-pagination-bullet rounded-full transition-all duration-300 cursor-pointer box-border ${index === 0 ? 'w-[16px] h-[16px] bg-[#121212] border-[4px] border-[#E0E0E0]' : 'w-[16px] h-[16px] bg-[#E0E0E0] border border-[#EEEEEE]'}`}></div>))}
+              <div className="w-[184px] h-[16px] flex justify-center items-center gap-[8px] mx-auto">
+                {displaySlides.map((_, index) => (<div key={index} className={`custom-pagination-bullet rounded-full transition-all duration-300 w-[16px] h-[16px] ${index === 0 ? 'bg-[#121212] border-[4px] border-[#E0E0E0]' : 'bg-[#E0E0E0] border border-[#EEEEEE]'}`}></div>))}
               </div>
             </div>
           )}
         </div>
       </div>
 
-      <div className="max-w-[1440px] mx-auto px-[156px] pt-6 mt-16">
+      {/* Main Content Container */}
+      <div className="w-full max-w-[1440px] mx-auto px-4 md:px-8 lg:px-[156px] pt-6 mt-8 md:mt-16">
+        
+        {/* Title & Search */}
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4 border-b border-gray-200 pb-4">
-          <h1 className="text-3xl md:text-4xl font-extrabold text-[#194473]">Attractions in {paramCountry}</h1>
-          <div className="relative" ref={searchContainerRef}>
-            <div className="flex items-center w-[268px] h-[31px] gap-[8px] px-[8px] py-[4px] bg-[#194473] border border-[#E0E0E0] rounded-[8px] shadow-sm transition">
-              <Search className="w-[24px] h-[24px] p-[4px] text-white flex-shrink-0" />
-              <div className="flex items-center w-[220px] h-[23px] bg-[#FFFFFF] rounded-[4px] px-[8px]">
-                <input type="text" placeholder="Search" className="w-full h-full bg-transparent border-none outline-none text-[12px] font-inter font-[400] text-[#9E9E9E] leading-none placeholder-[#9E9E9E]"
-                  value={searchQuery}
-                  onChange={(e) => { setSearchQuery(e.target.value); setShowDropdown(true); }}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleSearchSubmit(searchQuery); }}
-                  onFocus={() => setShowDropdown(true)}
-                  onClick={(e) => e.stopPropagation()}
+          <h1 className="text-[24px] md:text-4xl font-extrabold text-[#194473] leading-tight">Attractions in {paramCountry}</h1>
+          <div className="relative w-full md:w-auto" ref={searchContainerRef}>
+            <div className="flex items-center w-full md:w-[268px] h-[40px] md:h-[31px] gap-[8px] px-[8px] bg-[#194473] border border-[#E0E0E0] rounded-[8px] shadow-sm">
+              <Search className="w-[20px] h-[20px] text-white shrink-0" />
+              <div className="flex items-center flex-1 h-[32px] md:h-[23px] bg-[#FFFFFF] rounded-[4px] px-[8px]">
+                <input type="text" placeholder="Search" className="w-full bg-transparent outline-none text-[13px] md:text-[12px] font-inter text-[#212121] placeholder-[#9E9E9E]"
+                  value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setShowDropdown(true); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleSearchSubmit(searchQuery); }} onFocus={() => setShowDropdown(true)}
                 />
               </div>
             </div>
             {showDropdown && searchQuery && searchResults.length > 0 && (
-              <div className="absolute top-[36px] left-0 w-[268px] bg-white rounded-lg shadow-xl border border-gray-100 overflow-hidden py-1 z-50 animate-in fade-in zoom-in-95 duration-200">
+              <div className="absolute top-[44px] md:top-[36px] left-0 w-full md:w-[268px] bg-white rounded-lg shadow-xl border border-gray-100 py-1 z-50">
                 {searchResults.map((result, idx) => (
-                  <div key={idx} onClick={(e) => { e.stopPropagation(); setSearchQuery(result.name); handleSearchSubmit(result.name); setShowDropdown(false); }} className="px-4 py-2 hover:bg-blue-50 cursor-pointer flex items-center gap-3 transition-colors border-b border-gray-50 last:border-none">
-                    <div className="text-gray-400">
-                      {result.type === 'province' ? <Map size={14} /> : <MapPin size={14} />}
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[12px] font-medium text-gray-800 line-clamp-1">{result.name}</span>
-                      <span className="text-[10px] text-gray-400 capitalize">{result.subText}</span>
-                    </div>
+                  <div key={idx} onClick={() => { setSearchQuery(result.name); handleSearchSubmit(result.name); setShowDropdown(false); }} className="px-4 py-2 hover:bg-blue-50 cursor-pointer flex items-center gap-3 transition-colors border-b border-gray-50 last:border-none">
+                    <div className="text-gray-400">{result.type === 'province' ? <Map size={14} /> : <MapPin size={14} />}</div>
+                    <div className="flex flex-col"><span className="text-[12px] font-medium text-gray-800">{result.name}</span><span className="text-[10px] text-gray-400 capitalize">{result.subText}</span></div>
                   </div>
                 ))}
               </div>
@@ -428,102 +356,89 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* SIDEBAR FILTER */}
-          <div className="hidden lg:block lg:col-span-1">
-            <div className="w-[266px] h-fit bg-[#F5F5F5] p-[16px] rounded-[16px] flex flex-col gap-[10px] border border-[#EEEEEE]">
-              <div className="w-full h-[24px] mb-[12px] flex items-center justify-center flex-shrink-0"><h3 className="font-Inter font-[700] text-[20px] leading-[100%] tracking-[0] text-center text-[#212121]">Filters</h3></div>
+          
+          {/* ✅ SIDEBAR FILTER (Mobile: Horizontal Scroll, Desktop: Vertical Sidebar) */}
+          <div className="lg:col-span-1 w-full">
+            <div className="w-full lg:w-[266px] h-fit bg-transparent lg:bg-[#F5F5F5] p-0 lg:p-[16px] rounded-none lg:rounded-[16px] flex flex-col gap-[10px]">
+              <div className="hidden lg:flex w-full h-[24px] mb-[12px] items-center justify-center">
+                <h3 className="font-Inter font-[700] text-[20px] text-[#212121]">Filters</h3>
+              </div>
+              
+              {/* Selected Filters (Horizontal on mobile) */}
               {selectedFilters.length > 0 && (
-                <div className="flex flex-col gap-3 mb-4 border-b border-gray-300 pb-4">
-                  <div className="flex justify-between items-center">
-                    <h4 className="font-Inter font-[700] text-[16px] leading-[100%] text-[#041830]">Your filters</h4>
-                    <button onClick={clearAllFilters} className="text-[12px] text-gray-500 hover:text-[#3A82CE] hover:underline">Clear</button>
+                <div className="flex flex-col gap-3 mb-2 lg:mb-4 border-b border-gray-200 pb-4">
+                  <div className="flex justify-between items-center px-1 lg:px-0">
+                    <h4 className="font-Inter font-[700] text-[14px] lg:text-[16px] text-[#041830]">Your filters</h4>
+                    <button onClick={clearAllFilters} className="text-[12px] text-gray-500 hover:text-[#3A82CE]">Clear</button>
                   </div>
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-row lg:flex-col gap-2 overflow-x-auto scrollbar-hide pb-1">
                     {selectedFilters.map((filter) => (
-                      <button key={`selected-${filter}`} onClick={() => toggleFilter(filter)} className="w-full text-left flex items-center gap-[8px] group cursor-pointer">
-                        <div className="w-[16px] h-[16px] rounded-full bg-[#3A82CE] flex items-center justify-center flex-shrink-0"><Check size={10} className="text-white" strokeWidth={4} /></div>
-                        <span className="font-Inter font-[700] text-[12px] leading-[100%] text-[#3A82CE] truncate">{filter}</span>
+                      <button key={`sel-${filter}`} onClick={() => toggleFilter(filter)} className="flex-shrink-0 lg:w-full text-left flex items-center gap-[6px] bg-blue-50 lg:bg-transparent px-3 py-1.5 lg:px-0 rounded-full lg:rounded-none border border-blue-100 lg:border-none">
+                        <div className="w-[14px] h-[14px] rounded-full bg-[#3A82CE] flex items-center justify-center flex-shrink-0"><Check size={10} className="text-white" strokeWidth={4} /></div>
+                        <span className="font-Inter font-[700] text-[11px] lg:text-[12px] text-[#3A82CE]">{filter}</span>
                       </button>
                     ))}
                   </div>
                 </div>
               )}
-              <div className="w-full flex flex-col gap-[24px] overflow-y-auto overflow-x-hidden pr-1 custom-scrollbar max-h-[600px]">
-                <div className="flex flex-col gap-[24px]">
-                  {FILTER_GROUPS.map((group, idx) => (
-                    <div key={idx} className="flex flex-col gap-[8px]">
-                      <h5 className="font-Inter font-[700] text-[16px] leading-[100%] text-[#212121] text-center">{group.title}</h5>
-                      <div className="flex flex-col gap-[8px]">
-                        {group.items.map((item) => {
-                          const isSelected = selectedFilters.includes(item);
-                          return (
-                            <button key={item} onClick={() => toggleFilter(item)} className="w-full text-left flex items-center gap-[8px] group cursor-pointer">
-                              <div className={`w-[16px] h-[16px] rounded-full transition-all duration-200 cursor-pointer flex-shrink-0 flex items-center justify-center ${isSelected ? "bg-[#3A82CE]" : "bg-[#E0E0E0] group-hover:bg-[#d0d0d0]"}`}>{isSelected && <Check size={10} className="text-white" strokeWidth={4} />}</div>
-                              <span className={`font-Inter font-[700] text-[12px] leading-[100%] transition-colors truncate ${isSelected ? "text-[#212121]" : "text-[#757575] group-hover:text-[#212121]"}`}>{item}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
+              
+              {/* Filter Groups (Horizontal on mobile) */}
+              <div className="w-full flex flex-row lg:flex-col gap-4 lg:gap-6 overflow-x-auto lg:overflow-y-auto scrollbar-hide pb-2 lg:pb-0 lg:max-h-[600px]">
+                {FILTER_GROUPS.map((group, idx) => (
+                  <div key={idx} className="flex flex-col gap-2 lg:gap-[8px] flex-shrink-0 min-w-[140px] lg:min-w-0">
+                    <h5 className="font-Inter font-[700] text-[13px] lg:text-[16px] text-[#212121] lg:text-center border-b lg:border-none border-gray-100 pb-1 lg:pb-0">{group.title}</h5>
+                    <div className="flex flex-col gap-1.5 lg:gap-[8px]">
+                      {group.items.map((item) => {
+                        const isSelected = selectedFilters.includes(item);
+                        return (
+                          <button key={item} onClick={() => toggleFilter(item)} className="w-full text-left flex items-center gap-2 group">
+                            <div className={`w-[14px] lg:w-[16px] h-[14px] lg:h-[16px] rounded-full transition-all flex-shrink-0 flex items-center justify-center ${isSelected ? "bg-[#3A82CE]" : "bg-[#E0E0E0]"}`}>{isSelected && <Check size={10} className="text-white" strokeWidth={4} />}</div>
+                            <span className={`font-Inter font-[600] lg:font-[700] text-[12px] transition-colors truncate ${isSelected ? "text-[#212121]" : "text-[#757575]"}`}>{item}</span>
+                          </button>
+                        );
+                      })}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
 
-          {/* GRID CONTENT (ATTRACTIONS) */}
-          <div className="w-[840px] mx-auto flex flex-col justify-between min-h-[950px]">
-            {paginatedItems.length === 0 ? (<div className="w-full h-96 flex items-center justify-center text-gray-400">No places found.</div>) : (
-              <div className="grid grid-cols-3 gap-[24px]">
+          {/* ✅ GRID CONTENT (Mobile: 2 Columns, Desktop: 3 Columns) */}
+          <div className="w-full lg:col-span-3 flex flex-col justify-between min-h-0 lg:min-h-[950px]">
+            {paginatedItems.length === 0 ? (<div className="w-full h-40 flex items-center justify-center text-gray-400">No places found.</div>) : (
+              <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-[24px]">
                 {paginatedItems.map((place) => {
                   const displayCategories = getDisplayCategories(place.category_tags);
                   const displayString = displayCategories.length > 0 ? displayCategories.slice(0, 3).join(", ") : "Attraction";
-                  const isSaved = savedPlaceIds.has(String(place.id)); // Check if saved
+                  const isSaved = savedPlaceIds.has(String(place.id)); 
+                  const images = Array.isArray(place.images) && place.images.length > 0 ? place.images : [];
 
                   return (
-                    <div key={place.id} className="w-[264px] h-[426px] flex flex-col gap-[8px] cursor-pointer group select-none" onClick={() => router.push(`/detail?id=${place.id}`)}>
-                      <div className="flex flex-col gap-2 min-w-0">
-                        <div className="relative w-[264px] h-[331px] rounded-[16px] overflow-hidden shadow-sm bg-gray-100 group/slider">
-                          <Swiper modules={[Navigation, Pagination, A11y]} spaceBetween={0} slidesPerView={1} loop={true} navigation={{ prevEl: `.prev-btn-${place.id}`, nextEl: `.next-btn-${place.id}` }} pagination={{ clickable: true, el: `.pagination-custom-${place.id}` }} className="w-full h-full relative">
-                            {(Array.isArray(place.images) && place.images.length > 0 ? place.images : []).map((img, idx) => {
-                              const imgUrl = (typeof img === 'object' && 'url' in img) ? (img as any).url : img;
-                              const isRisky = !imgUrl.includes('supabase.co') && !imgUrl.includes('unsplash.com');
-                              return (
-                                <SwiperSlide key={idx} className="relative overflow-hidden rounded-[16px]">
-                                  <Image src={imgUrl} alt={`${place.name} ${idx + 1}`} fill className="object-cover rounded-[16px]" sizes="264px" unoptimized={isRisky} />
-                                </SwiperSlide>
-                              )
-                            })}
-                            <button onClick={(e) => e.stopPropagation()} className={`prev-btn-${place.id} absolute left-2 top-1/2 -translate-y-1/2 z-10 w-[24px] h-[24px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-all shadow-sm cursor-pointer text-white`}><ArrowLeft className="w-[14px] h-[14px]" /></button>
-                            <button onClick={(e) => e.stopPropagation()} className={`next-btn-${place.id} absolute right-2 top-1/2 -translate-y-1/2 z-10 w-[24px] h-[24px] bg-[#3A82CE66] border border-[#95C3EA] hover:bg-[#3A82CE] rounded-full flex items-center justify-center opacity-0 group-hover/slider:opacity-100 transition-all shadow-sm cursor-pointer text-white`}><ArrowRight className="w-[14px] h-[14px]" /></button>
-                            <div className={`pagination-custom-${place.id} custom-pagination-container absolute bottom-3 left-0 w-full flex justify-center gap-1 z-20 !pointer-events-none`}></div>
-                          </Swiper>
-                          
-                          {/* ✅ ADD/TOGGLE BUTTON */}
-                          <div className="absolute top-2 right-2 z-20">
-                            <button 
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-                                handleSavePlace(String(place.id), place.name);
-                              }} 
-                              className={`flex h-[24px] w-[32px] group-hover:w-[60px] items-center justify-center rounded-[8px] border border-white text-white shadow-sm transition-all duration-300 ease-in-out overflow-hidden cursor-pointer backdrop-blur-[2px] 
-                                ${isSaved ? "bg-[#3A82CE] group-hover:bg-[#1565C0]" : "bg-[#00000066] group-hover:bg-[#1565C0]"}
-                              `}
-                            >
-                              {isSaved ? (<Check size="16px" className="flex-shrink-0" />) : (<Icon path={mdiPlus} size="16px" className="flex-shrink-0" />)}
-                              <span className="max-w-0 opacity-0 group-hover:max-w-[40px] group-hover:opacity-100 group-hover:ml-[4px] text-[12px] font-inter font-normal whitespace-nowrap transition-all duration-300">
-                                {isSaved ? "Saved" : "Add"}
-                              </span>
-                            </button>
-                          </div>
-
+                    <div key={place.id} className="w-full flex flex-col gap-[6px] md:gap-[8px] cursor-pointer group" onClick={() => router.push(`/detail?id=${place.id}`)}>
+                      <div className="relative w-full aspect-[4/5] sm:aspect-auto sm:h-[300px] lg:h-[331px] rounded-[12px] md:rounded-[16px] overflow-hidden shadow-sm bg-gray-100">
+                        <Swiper modules={[Navigation, Pagination, A11y]} slidesPerView={1} loop={images.length > 1} className="w-full h-full">
+                          {images.map((img, idx) => {
+                            const imgUrl = (typeof img === 'object' && 'url' in img) ? (img as any).url : img;
+                            return (
+                              <SwiperSlide key={idx}><Image src={imgUrl} alt={place.name} fill className="object-cover" sizes="(max-width: 768px) 50vw, 300px" /></SwiperSlide>
+                            )
+                          })}
+                          <div className={`pagination-custom-${place.id} custom-pagination-container absolute bottom-2 left-0 w-full flex justify-center gap-1 z-20 !pointer-events-none`}></div>
+                        </Swiper>
+                        <div className="absolute top-1.5 right-1.5 lg:top-2 lg:right-2 z-20">
+                          <button onClick={(e) => { e.stopPropagation(); handleSavePlace(String(place.id), place.name); }} 
+                            className={`flex h-[22px] lg:h-[24px] w-[28px] lg:w-[32px] lg:group-hover:w-[60px] items-center justify-center rounded-[6px] lg:rounded-[8px] border border-white text-white shadow-sm transition-all duration-300 backdrop-blur-[2px] ${isSaved ? "bg-[#3A82CE]" : "bg-[#00000066]"}`}>
+                            {isSaved ? (<Check size="14px" />) : (<Icon path={mdiPlus} size="14px" />)}
+                            <span className="max-w-0 opacity-0 lg:group-hover:max-w-[40px] lg:group-hover:opacity-100 lg:group-hover:ml-1 text-[11px] font-inter whitespace-nowrap transition-all">{isSaved ? "Saved" : "Add"}</span>
+                          </button>
                         </div>
-                        <div className="w-full h-[87px] flex flex-col gap-[4px] min-w-0">
-                          <h4 className="text-[20px] font-inter font-normal text-[#212121] leading-none w-full"><span className="inline-block max-w-full truncate border-b border-transparent group-hover:border-[#212121] pb-[1px] transition-colors duration-200 align-bottom">{place.name}</span></h4>
-                          <p className="flex items-center gap-1 text-[14px] font-inter font-normal text-[#9E9E9E] w-full"><MapPin className="w-4 h-4 shrink-0" /><span className="truncate leading-none">{place.province_state}, {place.country}</span></p>
-                          <div className="flex items-center gap-[4px]">{[1, 2, 3, 4, 5].map((star) => (<Star key={star} className={`w-[12px] h-[12px] ${star <= Math.round(place.rating || 0) ? "fill-yellow-400 text-yellow-400" : "fill-gray-200 text-gray-200"}`} />))}<span className="text-xs font-medium text-[#9E9E9E] ml-1">({place.rating})</span></div>
-                          <p className="text-[14px] font-inter font-semibold text-[#212121] truncate leading-none w-full">{displayString}</p>
-                        </div>
+                      </div>
+                      <div className="flex flex-col gap-0.5 md:gap-1 px-1">
+                        <h4 className="text-[14px] md:text-[20px] font-bold md:font-normal text-[#212121] leading-tight truncate">{place.name}</h4>
+                        <p className="flex items-center gap-1 text-[11px] md:text-[14px] text-[#9E9E9E]"><MapPin size={12} className="shrink-0" /><span className="truncate">{place.province_state}</span></p>
+                        <div className="flex items-center gap-1 text-[11px] md:text-xs text-[#9E9E9E]"><Star size={10} className="fill-yellow-400 text-yellow-400" /><span>{place.rating}</span></div>
+                        <p className="text-[11px] md:text-[14px] font-semibold text-[#212121] truncate capitalize">{displayString}</p>
                       </div>
                     </div>
                   );
@@ -531,77 +446,78 @@ export default function ExploreClient({ initialPlaces, searchParams }: ExploreCl
               </div>
             )}
 
-            {/* Pagination Controls */}
+            {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex justify-end items-center gap-[8px] mt-auto pt-10">
-                <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="flex items-center justify-center w-[32px] h-[24px] gap-[8px] px-[8px] py-[4px] rounded-[4px] bg-[#9E9E9E] border border-[#EEEEEE] disabled:opacity-50 transition hover:bg-[#757575] cursor-pointer"><ChevronLeft size={16} className="text-white" /></button>
-                {getPaginationGroup().map((page, index) => (
-                  <button key={index} onClick={() => setCurrentPage(page)} className={`flex items-center justify-center w-[25px] h-[25px] px-[8px] py-[4px] rounded-[4px] border border-[#EEEEEE] text-[12px] font-medium transition-colors cursor-pointer ${currentPage === page ? "bg-[#194473] text-white" : "bg-[#9E9E9E] text-white hover:bg-gray-400"}`}>{page}</button>
-                ))}
-                {totalPages > 5 && currentPage < totalPages - 2 && <span className="text-gray-400">...</span>}
-                {totalPages > 5 && currentPage < totalPages - 2 && (<button onClick={() => setCurrentPage(totalPages)} className={`flex items-center justify-center w-[25px] h-[25px] px-[8px] py-[4px] rounded-[4px] border border-[#EEEEEE] text-[12px] font-medium transition-colors bg-[#9E9E9E] text-white hover:bg-gray-400 cursor-pointer`}>{totalPages}</button>)}
-                <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="flex items-center justify-center w-[32px] h-[24px] gap-[8px] px-[8px] py-[4px] rounded-[4px] bg-[#9E9E9E] border border-[#EEEEEE] disabled:opacity-50 transition hover:bg-[#757575] cursor-pointer"><ChevronRight size={20} className="text-white" /></button>
+              <div className="flex justify-center lg:justify-end items-center gap-2 mt-8 md:mt-10">
+                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="w-8 h-8 flex items-center justify-center bg-gray-100 rounded disabled:opacity-30"><ChevronLeft size={16} /></button>
+                <div className="flex gap-1">
+                  {getPaginationGroup().map(p => (
+                    <button key={p} onClick={() => setCurrentPage(p)} className={`w-8 h-8 rounded text-sm ${currentPage === p ? "bg-[#194473] text-white" : "bg-gray-100"}`}>{p}</button>
+                  ))}
+                </div>
+                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="w-8 h-8 flex items-center justify-center bg-gray-100 rounded disabled:opacity-30"><ChevronRight size={16} /></button>
               </div>
             )}
           </div>
         </div>
 
-        {/* FESTIVAL SECTION */}
-        <h1 className="text-3xl md:text-4xl font-extrabold text-[#194473] mb-8 mt-12">
+        {/* ✅ FESTIVAL SECTION */}
+        <h1 className="text-[24px] md:text-[36px] font-extrabold text-[#194473] mb-4 md:mb-8 mt-12 md:mt-16 text-center lg:text-left">
           Recommend festival in {selectedMonth === "ALL" ? paramCountry : MONTH_FULL_NAMES[selectedMonth]}
         </h1>
 
-        <div className="w-[1014px] h-[373px] mx-auto mb-10 flex flex-col gap-[24px] relative">
-          <div className="relative w-full h-full">
-            {filteredFestivals.length === 0 ? (
-              <div className="w-full h-full flex items-center justify-center text-gray-500 rounded-[24px] bg-[#F5F5F5]">
-                No festivals found for {selectedMonth === "ALL" ? "any month" : selectedMonth} in {paramCountry}.
+        {/* ✅ MONTH TABS (Mobile: Dropdown, Desktop: Buttons Row) */}
+        <div className="w-full flex lg:hidden justify-center mb-6 relative z-10" ref={monthDropdownRef}>
+            <button onClick={() => setIsMonthDropdownOpen(!isMonthDropdownOpen)} className="w-full max-w-[280px] h-[44px] bg-white border border-gray-300 rounded-lg flex items-center justify-between px-4 text-[#194473] font-bold text-sm shadow-sm">
+              <span>{selectedMonth === "ALL" ? "All Year" : MONTH_FULL_NAMES[selectedMonth]}</span>
+              <ChevronDown className={`w-5 h-5 transition-transform ${isMonthDropdownOpen ? "rotate-180" : ""}`} />
+            </button>
+            {isMonthDropdownOpen && (
+              <div className="absolute top-full mt-1 w-full max-w-[280px] max-h-[250px] overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-xl z-50">
+                <div onClick={() => { setSelectedMonth("ALL"); setIsMonthDropdownOpen(false); }} className={`px-4 py-3 text-sm ${selectedMonth === "ALL" ? "bg-blue-50 text-blue-700 font-bold" : ""}`}>All Year</div>
+                {MONTHS.map(m => (
+                  <div key={m} onClick={() => { setSelectedMonth(m); setIsMonthDropdownOpen(false); }} className={`px-4 py-3 text-sm border-t border-gray-50 ${selectedMonth === m ? "bg-blue-50 text-blue-700 font-bold" : ""}`}>{MONTH_FULL_NAMES[m]}</div>
+                ))}
               </div>
-            ) : (
-              <>
-                {totalFestivalPages > 1 && (
-                  <>
-                    <button onClick={() => setFestivalPage(p => Math.max(1, p - 1))} disabled={festivalPage === 1} className="festival-nav-btn" style={{ left: '-60px' }}><ArrowLeft className="w-[24px] h-[24px]" /></button>
-                    <button onClick={() => setFestivalPage(p => Math.min(totalFestivalPages, p + 1))} disabled={festivalPage === totalFestivalPages} className="festival-nav-btn" style={{ right: '-60px' }}><ArrowRight className="w-[24px] h-[24px]" /></button>
-                  </>
-                )}
-                <div className="grid grid-cols-3 gap-[27px]">
-                  {currentFestivals.map((festival) => (
-                    <div key={festival.id} className="w-[320px] h-[373px] flex flex-col gap-[8px] p-[16px] rounded-[24px] bg-[#F5F5F5] hover:shadow-md transition-shadow">
-                      <div className="relative w-[288px] h-[115px] rounded-[8px] overflow-hidden flex-shrink-0">
-                        <Image src={getFestivalImageUrl(festival.images)} alt={festival.name} fill className="object-cover" unoptimized />
-                      </div>
-                      <div className="flex flex-col flex-1 overflow-hidden gap-[8px]">
-                        <div className="w-[288px] flex flex-col gap-[4px] overflow-hidden">
-                          <h3 className="font-inter font-bold text-[18px] text-[#212121] leading-tight line-clamp-2">{festival.name}</h3>
-                          <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight ">{festival.description}</p>
-                          <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight break-words"><span className="font-bold">When: </span>{festival.period_str}</p>
-                          <p className="font-inter font-normal text-[16px] text-[#212121] leading-tight break-words"><span className="font-bold">Top Spot : </span>{festival.province_state}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
             )}
-          </div>
         </div>
-        <div className="flex justify-end items-center gap-[8px] mt-4">
-          <button onClick={() => setSelectedMonth("ALL")} className={`flex items-center justify-center w-[40px] h-[24px] px-2 rounded-[4px] border border-[#EEEEEE] text-[12px] font-medium transition-colors cursor-pointer ${selectedMonth === "ALL" ? "bg-[#194473] text-white" : "bg-[#9E9E9E] text-white hover:bg-gray-400"}`}>All</button>
-          {MONTHS.map((month) => (
-            <button key={month} onClick={() => setSelectedMonth(month)} className={`flex items-center justify-center w-[40px] h-[24px] px-2 rounded-[4px] border border-[#EEEEEE] text-[12px] font-medium transition-colors cursor-pointer ${selectedMonth === month ? "bg-[#194473] text-white" : "bg-[#9E9E9E] text-white hover:bg-gray-400"}`}>{month}</button>
+
+        {/* Festival Cards */}
+        <div className="w-full lg:w-[1014px] mx-auto mb-10">
+          {filteredFestivals.length === 0 ? (
+            <div className="w-full h-32 flex items-center justify-center text-gray-400 bg-gray-50 rounded-xl">No festivals found.</div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-[27px]">
+              {currentFestivals.map((f) => (
+                <div key={f.id} className="bg-[#F5F5F5] p-4 rounded-2xl md:rounded-[24px] flex flex-col gap-3">
+                  <div className="relative w-full aspect-video md:h-[115px] rounded-lg overflow-hidden shrink-0">
+                    <Image src={getFestivalImageUrl(f.images)} alt={f.name} fill className="object-cover" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <h3 className="font-bold text-base md:text-[18px] text-[#212121] leading-tight line-clamp-1">{f.name}</h3>
+                    <p className="text-xs md:text-sm text-gray-600 line-clamp-3 mb-2">{f.description}</p>
+                    <div className="text-[11px] md:text-sm space-y-0.5">
+                      <p><span className="font-bold text-[#194473]">When:</span> {f.period_str}</p>
+                      <p><span className="font-bold text-[#194473]">Spot:</span> {f.province_state}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Desktop Month Tabs */}
+        <div className="hidden lg:flex justify-end items-center gap-2 mt-4">
+          <button onClick={() => setSelectedMonth("ALL")} className={`px-3 py-1 rounded text-xs font-medium border ${selectedMonth === "ALL" ? "bg-[#194473] text-white border-[#194473]" : "bg-gray-400 text-white"}`}>All</button>
+          {MONTHS.map(m => (
+            <button key={m} onClick={() => setSelectedMonth(m)} className={`px-3 py-1 rounded text-xs font-medium border ${selectedMonth === m ? "bg-[#194473] text-white border-[#194473]" : "bg-gray-400 text-white"}`}>{m}</button>
           ))}
         </div>
+
       </div>
 
-      {/* ✅ Add AuthModal */}
-      {showAuthModal && (
-        <AuthModal
-          onClose={() => setShowAuthModal(false)}
-          onSuccess={handleAuthSuccess}
-        />
-      )}
-
+      {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} onSuccess={handleAuthSuccess} />}
     </div>
   );
 }

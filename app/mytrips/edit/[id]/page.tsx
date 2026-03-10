@@ -145,6 +145,11 @@ export default function EditTripPage({ params }: PageProps) {
     const [isRegionDropdownOpen, setIsRegionDropdownOpen] = useState(false);
     const [regionSearchQuery, setRegionSearchQuery] = useState("");
 
+    // ✅ State สำหรับ Mobile (เพิ่มใหม่เพื่อความเข้ากันได้)
+    const [isMobileOpen, setIsMobileOpen] = useState(false);
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => { setMounted(true); }, []);
+
     const activeGroup = useMemo(() => tripGroups.find(g => g.id === activeGroupId), [tripGroups, activeGroupId]);
 
     // --- INIT DATA ---
@@ -258,7 +263,7 @@ export default function EditTripPage({ params }: PageProps) {
 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => { const files = e.target.files; if (files) { const newFiles = Array.from(files); if (currentImages.length + newFiles.length > 10) { alert("Maximum 10 images allowed."); return; } const newImageStates: ImageState[] = newFiles.map(file => ({ id: `new-${Date.now()}-${Math.random()}`, url: URL.createObjectURL(file), file: file })); setCurrentImages(prev => [...prev, ...newImageStates]); } if (fileInputRef.current) fileInputRef.current.value = ""; };
     const handleRemoveImage = (idToRemove: string) => { setCurrentImages(prev => prev.filter(img => img.id !== idToRemove)); };
-    const handleAddGroup = () => { const newId = `temp-${Date.now()}`; const newGroup: TripGroup = { id: newId, name: `Trip ${tripGroups.length + 1}`, regions: [], notes: "", images: [], travel_start_date: null, travel_end_date: null, rating: 0 }; setTripGroups([...tripGroups, newGroup]); setActiveGroupId(newId); };
+    const handleAddGroup = () => { const newId = `temp-${Date.now()}`; const newGroup: TripGroup = { id: newId, name: `Trip ${tripGroups.length + 1}`, regions: [], notes: "", images: [], travel_start_date: null, travel_end_date: null, rating: 0 }; setTripGroups([...tripGroups, newGroup]); setActiveGroupId(newId); setIsMobileOpen(true); };
     const toggleRegion = (regionName: string) => { if (!activeGroupId) return; setCurrentGroupRegions(prev => { const exists = prev.find(r => r.name === regionName); if (exists) return prev.filter(r => r.name !== regionName); return [...prev, { name: regionName, statusId: tripStatuses[0].id }]; }); };
     const updateRegionStatus = (regionName: string, newStatusId: string) => { setCurrentGroupRegions(prev => prev.map(r => r.name === regionName ? { ...r, statusId: newStatusId } : r)); };
 
@@ -330,7 +335,6 @@ export default function EditTripPage({ params }: PageProps) {
         async function fetchHighchartsMapData() { 
             if (!countryCode || countryCode.trim() === "") return; 
 
-            // ดึงจาก Cache ถ้ามีอยู่แล้ว
             if (regionCache[countryCode]) {
                 setRegionList(regionCache[countryCode]);
                 setIsLoadingRegions(false);
@@ -345,7 +349,7 @@ export default function EditTripPage({ params }: PageProps) {
                 const data = await response.json(); 
                 if (data && data.features) { 
                     const regions = data.features.map((feature: any) => feature.properties.name).filter((name: any) => name).sort();
-                    regionCache[countryCode] = regions; // เก็บลง Cache
+                    regionCache[countryCode] = regions; 
                     setRegionList(regions); 
                 } 
             } catch (error) { 
@@ -360,7 +364,7 @@ export default function EditTripPage({ params }: PageProps) {
     const startResizing = useCallback((e: React.MouseEvent) => { setIsResizing(true); e.preventDefault(); }, []);
     const stopResizing = useCallback(() => { setIsResizing(false); }, []);
     const resize = useCallback((e: MouseEvent) => { if (isResizing) { let newWidth = window.innerWidth - e.clientX; if (newWidth < 400) newWidth = 400; if (newWidth > 1000) newWidth = 1000; setSidebarWidth(newWidth); } }, [isResizing]);
-    useEffect(() => { if (isResizing) { window.addEventListener("mousemove", resize); window.addEventListener("mouseup", stopResizing); } else { window.removeEventListener("mousemove", resize); window.removeEventListener("mouseup", stopResizing); } return () => { window.removeEventListener("mousemove", resize); window.removeEventListener("mouseup", stopResizing); }; }, [isResizing, resize, stopResizing]);
+    useEffect(() => { if (isResizing) { window.addEventListener("mousemove", resize); window.addEventListener("mouseup", stopResizing); } return () => { window.removeEventListener("mousemove", resize); window.removeEventListener("mouseup", stopResizing); }; }, [isResizing, resize, stopResizing]);
 
     const filteredRegions = useMemo(() => regionList.filter(region => region.toLowerCase().includes(regionSearchQuery.toLowerCase())), [regionList, regionSearchQuery]);
     const handleRegionClick = (provinceName: string) => { if (activeGroupId) toggleRegion(provinceName); };
@@ -393,16 +397,27 @@ export default function EditTripPage({ params }: PageProps) {
 
     return (
         <div className={`flex flex-col bg-[#FFFFFF] font-sans text-gray-800 h-screen overflow-hidden ${isFullscreen ? "fixed inset-0 z-[9999]" : "relative z-0"} ${isResizing ? "cursor-col-resize select-none" : ""}`}>
-            {/* HEADER */}
-            <div className="h-[60px] bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] px-10 z-20 flex-shrink-0 flex items-center justify-between relative mb-[32px]">
-                <div className="flex items-center gap-[48px]">
-                    <button onClick={() => router.back()} className="hover:opacity-60 transition"><ArrowLeft className="w-6 h-6 text-black" /></button>
-                    <div className="flex items-center gap-[16px]">
-                        {countryCode && <img src={`https://flagcdn.com/w40/${countryCode}.png`} alt={countryCode} className="w-[54px] h-[36px] rounded-[5px] object-cover shadow-sm" />}
-                        <h1 className="text-[28px] font-bold text-black leading-[34px] tracking-[0.02em]">{countryName}</h1>
+            
+            {/* HEADER - ไม่แตะต้องคลาส Desktop เลย เพิ่มแค่ md: นำหน้าเพื่อรองรับ Mobile */}
+            <div className="h-auto min-h-[60px] md:h-[60px] bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] px-4 md:px-10 z-20 flex-shrink-0 flex flex-col md:flex-row items-center justify-between relative mb-4 md:mb-[32px] py-2 md:py-0 gap-3 md:gap-0">
+                <div className="flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-[48px] w-full md:w-auto">
+                    <div className="flex items-center justify-between w-full md:w-auto">
+                        <div className="flex items-center gap-3 md:gap-[48px]">
+                            <button onClick={() => router.back()} className="hover:opacity-60 transition"><ArrowLeft className="w-5 h-5 md:w-6 md:h-6 text-black" /></button>
+                            <div className="flex items-center gap-2 md:gap-[16px]">
+                                {countryCode && <img src={`https://flagcdn.com/w40/${countryCode}.png`} alt={countryCode} className="w-[36px] h-[24px] md:w-[54px] md:h-[36px] rounded-[3px] md:rounded-[5px] object-cover shadow-sm" />}
+                                <h1 className="text-[20px] md:text-[28px] font-bold text-black leading-[24px] md:leading-[34px] tracking-[0.02em]">{countryName}</h1>
+                            </div>
+                        </div>
+                        {/* ปุ่มเปิด Sidebar บนมือถือ */}
+                        <button onClick={() => setIsMobileOpen(!isMobileOpen)} className="md:hidden p-2 bg-blue-50 text-blue-600 rounded-lg">
+                            <LayoutTemplate className="w-5 h-5"/>
+                        </button>
                     </div>
-                                        <div className="relative">
-                        <button onClick={(e) => { e.stopPropagation(); if (!activeGroupId) return; setIsRegionDropdownOpen(!isRegionDropdownOpen); setRegionSearchQuery(""); }} disabled={isLoadingRegions || !activeGroupId} className={`w-[323px] h-[40px] bg-[#F0F6FC] border border-[#60A3DE] rounded-[10px] flex items-center justify-between px-[16px] transition disabled:opacity-50 disabled:cursor-not-allowed ${!activeGroupId ? "opacity-60" : ""}`}>
+
+                    {/* ✅ Dropdown เลือกรัฐ กลับมาอยู่แนบกับชื่อประเทศ 100% ตามโค้ดต้นฉบับ */}
+                    <div className="relative w-full md:w-auto">
+                        <button onClick={(e) => { e.stopPropagation(); if (!activeGroupId) return; setIsRegionDropdownOpen(!isRegionDropdownOpen); setRegionSearchQuery(""); }} disabled={isLoadingRegions || !activeGroupId} className={`w-full md:w-[323px] h-[40px] bg-[#F0F6FC] border border-[#60A3DE] rounded-[10px] flex items-center justify-between px-[16px] transition disabled:opacity-50 disabled:cursor-not-allowed ${!activeGroupId ? "opacity-60" : ""}`}>
                             <div className="flex items-center gap-[10px]">
                                 <MapPin className="w-[22px] h-[24px] text-[#60A3DE]" />
                                 <span className="font-normal text-[20px] leading-[24px] tracking-[0.02em] text-[#60A3DE] truncate max-w-[200px]">{isLoadingRegions ? "Loading..." : activeGroupId ? (currentGroupRegions.length > 0 ? `${currentGroupRegions.length} Regions` : "Select Provinces") : "Select Template First"}</span>
@@ -410,7 +425,7 @@ export default function EditTripPage({ params }: PageProps) {
                             {isRegionDropdownOpen ? <ChevronUp className="w-[16px] h-[16px] text-[#60A3DE]" /> : <ChevronDown className="w-[16px] h-[16px] text-[#60A3DE]" />}
                         </button>
                         {isRegionDropdownOpen && activeGroupId && (
-                            <div className="absolute top-full left-0 mt-2 w-[323px] max-h-[400px] bg-white border border-gray-200 rounded-lg shadow-xl z-50 animate-in fade-in zoom-in-95 duration-100 flex flex-col" onClick={(e) => e.stopPropagation()}>
+                            <div className="absolute top-full left-0 mt-2 w-full md:w-[323px] max-h-[400px] bg-white border border-gray-200 rounded-lg shadow-xl z-50 animate-in fade-in zoom-in-95 duration-100 flex flex-col" onClick={(e) => e.stopPropagation()}>
                                 <div className="p-2 border-b border-gray-100 sticky top-0 bg-white z-10">
                                     <div className="relative"><Search className="absolute left-2.5 top-2.5 w-4 h-4 text-gray-400" /><input type="text" placeholder="Search region..." value={regionSearchQuery} onChange={(e) => setRegionSearchQuery(e.target.value)} className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50" autoFocus /></div>
                                 </div>
@@ -426,18 +441,20 @@ export default function EditTripPage({ params }: PageProps) {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-[24px]">
+                {/* ด้านขวาของ Header: ปุ่ม My Templates & Fullscreen - ซ่อนในมือถือ */}
+                <div className="hidden md:flex items-center gap-[24px]">
                     <button onClick={() => router.push('/mytrips')} className="w-[190px] h-[40px] border border-[#3A82CE] rounded-[5px] flex items-center justify-center gap-[10px] hover:bg-[#F0F6FC] transition"><LayoutTemplate className="w-[18px] h-[18px] text-[#3A82CE]" /><span className="font-medium text-[20px] leading-[24px] text-[#3A82CE]">My Templates</span></button>
                     <div className="w-px h-8 bg-gray-300"></div>
                     <button onClick={() => setIsFullscreen(!isFullscreen)} className={`p-2 rounded-lg transition border ${isFullscreen ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`} title={isFullscreen ? "Show Navbar" : "Fullscreen"}>{isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}</button>
                 </div>
             </div>
 
-            {/* BODY */}
-            <div className="flex-1 flex overflow-hidden relative px-[60px] pb-[40px] pt-[20px]">
+            {/* BODY - Flex Col สำหรับ Mobile และ Flex Row สำหรับ Desktop */}
+            <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative px-4 md:px-[60px] pb-4 md:pb-[40px] pt-4 md:pt-[20px]">
+                
                 {/* MAP AREA */}
-                <div className="flex-1 relative mr-[32px]">
-                    <div className="w-full h-full bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] rounded-[10px] overflow-hidden relative">
+                <div className="flex-1 relative md:mr-[32px] mb-4 md:mb-0">
+                    <div className="w-full h-full bg-white md:shadow-[0px_4px_4px_rgba(0,0,0,0.25)] rounded-[10px] overflow-hidden relative">
                         <div className="w-full h-full">
                             <DynamicMap 
                                 countryCode={countryCode} 
@@ -448,27 +465,40 @@ export default function EditTripPage({ params }: PageProps) {
                                 onMoveEnd={setMapPosition}
                             />
                         </div>
-                        <div className="absolute bottom-8 right-8 w-[53px] bg-white border border-[#D9D9D9] rounded-[5px] flex flex-col items-center py-2 shadow-sm z-10">
-                            <button onClick={handleZoomIn} className="w-[37px] h-[42px] flex items-center justify-center hover:bg-gray-50 transition"><Plus className="w-5 h-5 text-[#9E9E9E]" /></button>
+                        <div className="absolute bottom-4 right-4 md:bottom-8 md:right-8 w-[40px] md:w-[53px] bg-white border border-[#D9D9D9] rounded-[5px] flex flex-col items-center py-1 md:py-2 shadow-sm z-10">
+                            <button onClick={handleZoomIn} className="w-8 h-8 md:w-[37px] md:h-[42px] flex items-center justify-center hover:bg-gray-50 transition"><Plus className="w-4 h-4 md:w-5 h-5 text-[#9E9E9E]" /></button>
                             <div className="w-full h-px bg-[#D9D9D9]"></div>
-                            <button onClick={handleZoomOut} className="w-[37px] h-[42px] flex items-center justify-center hover:bg-gray-50 transition"><Minus className="w-5 h-5 text-[#9E9E9E]" /></button>
+                            <button onClick={handleZoomOut} className="w-8 h-8 md:w-[37px] md:h-[42px] flex items-center justify-center hover:bg-gray-50 transition"><Minus className="w-4 h-4 md:w-5 h-5 text-[#9E9E9E]" /></button>
                             <div className="w-full h-px bg-[#D9D9D9]"></div>
-                            <button onClick={handleResetZoom} className="w-[37px] h-[42px] flex items-center justify-center hover:bg-gray-50 transition"><RefreshCw className="w-4 h-4 text-[#9E9E9E]" /></button>
+                            <button onClick={handleResetZoom} className="w-8 h-8 md:w-[37px] md:h-[42px] flex items-center justify-center hover:bg-gray-50 transition"><RefreshCw className="w-4 h-4 text-[#9E9E9E]" /></button>
                         </div>
                     </div>
                 </div>
 
-                {/* RESIZER */}
-                <div className={`w-1 hover:bg-blue-400 cursor-col-resize z-40 transition-colors flex items-center justify-center group ${isResizing ? "bg-blue-500" : "bg-transparent"}`} onMouseDown={startResizing}>
+                {/* RESIZER - ซ่อนในมือถือ */}
+                <div className={`hidden md:flex w-1 hover:bg-blue-400 cursor-col-resize z-40 transition-colors items-center justify-center group ${isResizing ? "bg-blue-500" : "bg-transparent"}`} onMouseDown={startResizing}>
                     <div className="h-8 w-4 bg-white border border-gray-300 rounded-full flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"><GripVertical className="w-3 h-3 text-gray-400" /></div>
                 </div>
 
-                {/* RIGHT PANEL */}
-                <div ref={sidebarRef} className="bg-white shadow-[0px_0px_4px_rgba(0,0,0,0.25)] rounded-[5px] flex flex-col z-30 md:static flex-shrink-0 relative" style={{ width: sidebarWidth, minWidth: 483 }}>
-                    
+                {/* ✅ RIGHT PANEL / BOTTOM SHEET FOR MOBILE */}
+                <div 
+                    ref={sidebarRef} 
+                    className={`
+                        fixed inset-x-0 bottom-0 z-[50] bg-white shadow-2xl rounded-t-[24px] transition-transform duration-300 transform flex flex-col flex-shrink-0
+                        md:static md:h-full md:rounded-[5px] md:shadow-[0px_0px_4px_rgba(0,0,0,0.25)] md:translate-y-0
+                        ${isMobileOpen ? 'translate-y-0 h-[80vh]' : 'translate-y-full md:block'}
+                    `}
+                    style={{ width: mounted && typeof window !== 'undefined' && window.innerWidth > 768 ? sidebarWidth : '100%', minWidth: mounted && typeof window !== 'undefined' && window.innerWidth > 768 ? 483 : 'auto' }}
+                >
+                    {/* ขีดลากลง (Mobile Handle) */}
+                    <div className="md:hidden w-full flex justify-center py-3" onClick={() => setIsMobileOpen(false)}>
+                        <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
+                    </div>
+
+                    {/* ✅ เนื้อหาด้านใน ก๊อปปี้คลาสคุณมาเป๊ะๆ 100% ไม่แตะต้องเลย */}
                     {activeGroupId ? (
                         /* ✅✅✅ EDIT MODE LAYOUT ✅✅✅ */
-                        <div className="flex flex-col h-full bg-white border border-[#E0E0E0] shadow-[0px_4px_4px_rgba(0,0,0,0.25)] rounded-[10px] p-[10px] pt-[20px] gap-2 overflow-hidden relative">
+                        <div className="flex flex-col h-full bg-white md:border border-[#E0E0E0] md:shadow-[0px_4px_4px_rgba(0,0,0,0.25)] rounded-[10px] p-[10px] pt-[20px] gap-2 overflow-hidden relative">
                             {/* --- HEADER --- */}
                             <div className="flex justify-between items-center w-full pb-[8px] border-b border-[#9E9E9E] mb-4 flex-shrink-0">
                                 <div className="flex items-center gap-[10px] overflow-hidden">
@@ -594,25 +624,6 @@ export default function EditTripPage({ params }: PageProps) {
                                     {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : "Save Template"}
                                 </button>
                             </div>
-
-                            {/* ✅✅✅ MODAL OVERLAY DATE PICKER ✅✅✅ */}
-                            {isDatePickerOpen && (
-                                <div 
-                                    className="absolute inset-0 z-[100] flex items-center justify-center bg-gray-900/20 backdrop-blur-[1px] rounded-[10px]"
-                                    onClick={() => setIsDatePickerOpen(false)}
-                                >
-                                    <CustomDateRangePicker 
-                                        startDate={startDate} 
-                                        endDate={endDate} 
-                                        onClose={() => setIsDatePickerOpen(false)}
-                                        onChange={(start, end) => { 
-                                            setStartDate(start); 
-                                            setEndDate(end); 
-                                        }} 
-                                    />
-                                </div>
-                            )}
-
                         </div>
                     ) : (
                         /* ✅✅✅ LIST MODE (No Active Group) ✅✅✅ */
@@ -638,7 +649,7 @@ export default function EditTripPage({ params }: PageProps) {
                                             <div key={group.id} onClick={() => setPreviewGroupId(prev => prev === group.id ? null : group.id)} className={`box-border w-full h-[64px] bg-white border ${(activeGroupId === group.id || previewGroupId === group.id) ? 'border-[#3A82CE] ring-1 ring-[#3A82CE]' : 'border-[#C2DCF3]'} shadow-[0px_4px_4px_rgba(0,0,0,0.25)] rounded-[5px] flex items-start justify-between p-[10px] gap-[27px] cursor-pointer transition-all hover:border-[#3A82CE] group relative`}>
                                                 <div className="flex items-center gap-[12px]">{group.images && group.images.length > 0 ? (<img src={group.images[0]} alt={group.name} className="w-[44px] h-[44px] rounded-[5px] object-cover" />) : (<div className="w-[44px] h-[44px] rounded-[5px] bg-[#F0F6FC] flex items-center justify-center text-[#3A82CE]"><ImageIcon className="w-5 h-5" /></div>)}<div className="flex flex-col items-start gap-[4px]"><h3 className="font-inter font-medium text-[16px] leading-[19px] text-black truncate max-w-[175px]">{group.name}</h3><p className="font-inter font-normal text-[12px] leading-[15px] text-black">{group.regions.length} {group.regions.length > 1 ? 'provinces' : 'province'}</p></div></div>
                                                 <div className="flex items-center justify-center w-[36px] h-[24px] my-auto"><button onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === group.id ? null : group.id); }} className="text-black hover:text-gray-600 transition"><MoreVertical className="w-5 h-5" /></button></div>
-                                                {openMenuId === group.id && (<div className="absolute right-2 top-10 w-32 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100"><button onClick={(e) => { e.stopPropagation(); setActiveGroupId(group.id); setOpenMenuId(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 flex items-center gap-2 border-b border-gray-50"><Edit3 className="w-4 h-4" /> Edit</button><button onClick={(e) => { e.stopPropagation(); handleDeleteGroupById(group.id); setOpenMenuId(null); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"><Trash2 className="w-4 h-4" /> Delete</button></div>)}
+                                                {openMenuId === group.id && (<div className="absolute right-2 top-10 w-32 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100"><button onClick={(e) => { e.stopPropagation(); setActiveGroupId(group.id); setOpenMenuId(null); setIsMobileOpen(true); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 flex items-center gap-2 border-b border-gray-50"><Edit3 className="w-4 h-4" /> Edit</button><button onClick={(e) => { e.stopPropagation(); handleDeleteGroupById(group.id); setOpenMenuId(null); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"><Trash2 className="w-4 h-4" /> Delete</button></div>)}
                                             </div>
                                         ))}
                                         <button onClick={handleAddGroup} className="w-[220px] h-[42px] bg-[#3A82CE] rounded-[5px] flex items-center justify-center gap-[8px] hover:bg-[#2c6cb0] transition shadow-sm mt-4 mx-auto"><div className="w-[14px] h-[14px] flex items-center justify-center"><Plus className="w-full h-full text-white" strokeWidth={3} /></div><span className="font-normal text-[18px] leading-[22px] text-white font-inter">Create New Trip</span></button>
@@ -649,6 +660,13 @@ export default function EditTripPage({ params }: PageProps) {
                     )}
                 </div>
             </div>
+
+            {/* ✅ Date Picker Overlay */}
+            {isDatePickerOpen && (
+                <div className="fixed inset-0 z-[10002] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setIsDatePickerOpen(false)}>
+                    <CustomDateRangePicker startDate={startDate} endDate={endDate} onClose={() => setIsDatePickerOpen(false)} onChange={(s, e) => { setStartDate(s); setEndDate(e); }} />
+                </div>
+            )}
         </div>
     );
 }

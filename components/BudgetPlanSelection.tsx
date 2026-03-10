@@ -55,26 +55,47 @@ export default function BudgetPlanSelection({ onSelect }: { onSelect: (id: strin
         fetchTrips();
     }, []);
 
-    if (loading) return <div className="flex h-full items-center justify-center"><Loader2 className="animate-spin text-[#3A82CE]" /></div>;
+    if (loading) return <div className="flex h-[400px] items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#3A82CE]" /></div>;
 
     return (
-        <div className=" w-full max-w-[1440px] mx-auto">
-            <h1 className="text-[32px] font-bold mb-8 font-inter text-[#212121]">Select Plan to Manage Budget</h1>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[24px]">
+        <div className="w-full max-w-[1440px] mx-auto px-2 sm:px-0 pb-20">
+            {/* ✅ ปรับขนาด Header ให้เล็กลงในมือถือ และจัดให้อยู่ตรงกลาง (หรือชิดซ้ายตามเหมาะสม) */}
+            <h1 className="text-[24px] sm:text-[32px] font-bold mb-6 sm:mb-8 font-inter text-[#212121] text-center sm:text-left px-2 sm:px-0">
+                Select Plan to Manage Budget
+            </h1>
+            
+            {/* ✅ ปรับ Grid เป็น 2 คอลัมน์บนมือถือ */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-3 sm:gap-[24px]">
                 {trips.map(trip => (
-                    <div key={trip.id} onClick={() => onSelect(trip.id)} className="box-border flex flex-col items-end p-[16px] gap-[16px] w-[266px] h-[320px] border border-[#1E518C] rounded-[16px] bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer mx-auto">
-                        <div className="relative w-[234px] h-[149px] bg-gray-200 rounded-[8px] overflow-hidden flex-shrink-0">
+                    // ✅ ปรับกล่องการ์ดให้กว้างเต็มช่อง (w-full) และย่อ Padding/Gap ในมือถือ
+                    <div 
+                        key={trip.id} 
+                        onClick={() => onSelect(trip.id)} 
+                        className="box-border flex flex-col p-[10px] sm:p-[16px] gap-[10px] sm:gap-[16px] w-full sm:w-[266px] h-auto sm:h-[320px] border border-[#1E518C] rounded-[12px] sm:rounded-[16px] bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer mx-auto"
+                    >
+                        {/* ✅ รูปภาพ: ปรับเป็น Aspect Ratio บนมือถือ และล็อกความสูง (h-[149px]) บน Desktop */}
+                        <div className="relative w-full aspect-[16/10] sm:aspect-auto sm:h-[149px] bg-gray-200 rounded-[6px] sm:rounded-[8px] overflow-hidden flex-shrink-0">
                             <Image src={getTripImage(trip.name)} alt={trip.name} fill className="object-cover transition-transform duration-500 hover:scale-110" unoptimized />
                         </div>
-                        <div className="flex flex-col items-start gap-[16px] w-[234px] flex-1">
-                            <div className="flex flex-col items-start gap-[8px] w-full">
-                                <h3 className="font-inter font-bold text-[18px] leading-[22px] text-[#000000] w-full truncate">{trip.name}</h3>
-                                <p className="font-inter font-normal text-[16px] leading-[19px] text-[#9E9E9E] w-full truncate">{formatDateRange(trip.start_date, trip.end_date)}</p>
+                        
+                        {/* ✅ เนื้อหา (Text & Button) ให้เต็มความกว้าง w-full */}
+                        <div className="flex flex-col items-start gap-[10px] sm:gap-[16px] w-full flex-1">
+                            <div className="flex flex-col items-start gap-[4px] sm:gap-[8px] w-full">
+                                <h3 className="font-inter font-bold text-[14px] sm:text-[18px] leading-tight sm:leading-[22px] text-[#000000] w-full truncate">
+                                    {trip.name}
+                                </h3>
+                                <p className="font-inter font-normal text-[11px] sm:text-[16px] leading-tight sm:leading-[19px] text-[#9E9E9E] w-full truncate">
+                                    {formatDateRange(trip.start_date, trip.end_date)}
+                                </p>
                             </div>
+                            
                             <div className="mt-auto w-full">
-                                <button className="box-border flex flex-row justify-center items-center px-[8px] py-[4px] gap-[8px] w-full h-[40px] bg-[#3A82CE] border border-[#C2DCF3] rounded-[8px] hover:bg-[#3272b5] transition-colors">
-                                    <Wallet className="w-[20px] h-[20px] text-white" />
-                                    <span className="font-inter font-normal text-[16px] leading-[19px] text-white">Manage Budget</span>
+                                {/* ✅ ย่อขนาดปุ่มและไอคอนบนมือถือ */}
+                                <button className="box-border flex flex-row justify-center items-center px-[4px] sm:px-[8px] py-[4px] gap-[4px] sm:gap-[8px] w-full h-[28px] sm:h-[40px] bg-[#3A82CE] border border-[#C2DCF3] rounded-[6px] sm:rounded-[8px] hover:bg-[#3272b5] transition-colors overflow-hidden">
+                                    <Wallet className="w-[14px] h-[14px] sm:w-[20px] sm:h-[20px] text-white shrink-0" />
+                                    <span className="font-inter font-medium sm:font-normal text-[11px] sm:text-[16px] leading-none sm:leading-[19px] text-white truncate">
+                                        Manage Budget
+                                    </span>
                                 </button>
                             </div>
                         </div>

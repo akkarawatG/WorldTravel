@@ -6,9 +6,9 @@ import PlanNewTripForm from "@/components/PlanNewTripForm";
 import ItineraryCard from "@/components/ItineraryCard";
 import ItineraryDetailView from "@/components/ItineraryDetailView";
 import PlaceToVisit from "@/components/PlaceToVisit";
-import BudgetView from "@/components/BudgetView"; // ✅ 1. Import BudgetView
+import BudgetView from "@/components/BudgetView";
 import { createClient } from "@/utils/supabase/client";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 
 interface Itinerary {
   id: string;
@@ -17,7 +17,6 @@ interface Itinerary {
   end_date: string | null;
 }
 
-// ✅ 2. เพิ่ม 'budget' ใน Type
 type ViewState = 'list' | 'create' | 'detail' | 'place_to_visit' | 'budget';
 
 export default function ItineraryPage() {
@@ -72,7 +71,6 @@ export default function ItineraryPage() {
         const { error } = await supabase.from('itineraries').delete().eq('id', id);
         if (error) throw error;
         setItineraries(prev => prev.filter(item => item.id !== id));
-        // ถ้าลบ Plan ที่กำลังดูอยู่ ให้กลับไปหน้า List
         if (selectedTripId === id) {
             setSelectedTripId(null);
             setViewState('list');
@@ -96,7 +94,7 @@ export default function ItineraryPage() {
   const getSidebarViewMode = () => {
       if (viewState === 'detail') return 'detail';
       if (viewState === 'place_to_visit') return 'place_to_visit';
-      if (viewState === 'budget') return 'budget'; // ✅ เพิ่มเงื่อนไขนี้
+      if (viewState === 'budget') return 'budget';
       return 'default'; 
   };
 
@@ -108,36 +106,34 @@ export default function ItineraryPage() {
       }, 10);
   };
 
-  // ✅ 3. Handler สำหรับปุ่ม Budget
   const handleBudgetClick = () => {
       setViewState('budget');
-      // หมายเหตุ: ไม่ต้อง clear selectedTripId เพราะ BudgetView รองรับทั้งแบบมีและไม่มี selectedTripId
   };
 
   return (
-    <div className="relative min-h-screen bg-white">
-      <div className="absolute left-0 w-full flex justify-center pb-20">
-        <div className="w-[1440px] px-[156px] flex flex-row items-start gap-[24px]">
+// 1. เอา min-h-screen ออก เพื่อไม่ให้มันบังคับความสูงทะลุจอ
+    <div className="bg-white w-full relative">
+      {/* 2. เปลี่ยน pb-20 เป็น pb-32 (เผื่อที่ให้ปุ่มบวกในมือถือ) และ lg:pb-8 (ลดขอบล่างในคอม) */}
+      <div className="w-full max-w-[1440px] mx-auto px-4 lg:px-[156px] pb-32 lg:pb-8 pt-[20px] lg:pt-[38px] min-h-[calc(100vh-80px)]">
+        
+        <div className="flex flex-col lg:flex-row items-start gap-6 lg:gap-[24px]">
             
             {/* Sidebar */}
-            <div className="mt-[38px] flex-shrink-0">
+            <div className="w-full lg:w-auto flex-shrink-0">
                <ItinerarySidebar 
-                  onCreateNewPlan={() => setViewState('create')} 
-                  onBackToList={() => setViewState('list')}
-                  onPlaceToVisit={() => setViewState('place_to_visit')} 
-                  onDateClick={handleDateClick}
-                  
-                  // ✅ ส่ง prop onBudgetClick
-                  onBudgetClick={handleBudgetClick} 
-
-                  viewMode={getSidebarViewMode()}
-                  startDate={selectedTrip?.start_date}
-                  endDate={selectedTrip?.end_date}
+                 onCreateNewPlan={() => setViewState('create')} 
+                 onBackToList={() => setViewState('list')}
+                 onPlaceToVisit={() => setViewState('place_to_visit')} 
+                 onDateClick={handleDateClick}
+                 onBudgetClick={handleBudgetClick} 
+                 viewMode={getSidebarViewMode()}
+                 startDate={selectedTrip?.start_date}
+                 endDate={selectedTrip?.end_date}
                />
             </div>
 
             {/* Main Content */}
-            <div className="mt-[38px] flex-1">
+            <div className="flex-1 w-full lg:mt-0">
                {viewState === 'create' ? (
                    <PlanNewTripForm onSuccess={handleCreateSuccess} />
                ) : viewState === 'detail' ? (
@@ -149,33 +145,68 @@ export default function ItineraryPage() {
                ) : viewState === 'place_to_visit' ? ( 
                    <PlaceToVisit />
                ) : viewState === 'budget' ? ( 
-                   // ✅ 4. Render BudgetView
                    <BudgetView /> 
                ) : (
-                   // List Mode
+                   // --- LIST MODE ---
                    <>
                        {isLoading ? (
-                           <div className="w-full h-[400px] flex items-center justify-center">
+                           <div className="w-full h-[300px] lg:h-[400px] flex items-center justify-center">
                                <Loader2 className="w-8 h-8 text-[#3A82CE] animate-spin" />
                            </div>
                        ) : itineraries.length > 0 ? (
-                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[24px] pb-10">
-                               {itineraries.map((trip) => (
-                                   <div key={trip.id} onClick={() => handleCardClick(trip.id)} className="cursor-pointer">
-                                       <ItineraryCard 
-                                           id={trip.id}
-                                           name={trip.name}
-                                           startDate={trip.start_date}
-                                           endDate={trip.end_date}
-                                           onDelete={handleDelete}
-                                       />
-                                   </div>
-                               ))}
-                           </div>
+                           // ✅ มีข้อมูลทริป
+                           <>
+                               {/* ปรับ Grid ให้มือถือแสดง 2 คอลัมน์เหมือนในรูป */}
+                               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-3 gap-3 lg:gap-[24px] pb-24">
+                                   {itineraries.map((trip) => (
+                                       <div key={trip.id} onClick={() => handleCardClick(trip.id)} className="cursor-pointer">
+                                           <ItineraryCard 
+                                               id={trip.id}
+                                               name={trip.name}
+                                               startDate={trip.start_date}
+                                               endDate={trip.end_date}
+                                               onDelete={handleDelete}
+                                           />
+                                       </div>
+                                   ))}
+                               </div>
+                               
+                               {/* ✅ ปุ่ม Floating Action Button (วงกลมมุมขวาล่าง) เฉพาะในมือถือ */}
+                               <button 
+                                   onClick={() => setViewState('create')}
+                                   className="lg:hidden fixed bottom-8 right-6 w-[56px] h-[56px] bg-[#3A82CE] text-white rounded-full flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.3)] hover:bg-[#2c6cb0] active:scale-95 transition-transform z-50"
+                               >
+                                   <Plus className="w-8 h-8" strokeWidth={2.5} />
+                               </button>
+                           </>
                        ) : (
-                           <div className="w-[708px] h-[500px] border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center text-gray-400 gap-4 mt-[-47px]">
-                               <span>Select a plan or create a new one to get started</span>
-                           </div>
+                           // ✅ ยังไม่มีข้อมูล (Empty State)
+                           <>
+                               {/* Desktop Empty State (มีกรอบเส้นประ, ซ่อนในมือถือ) */}
+                               <div className="hidden lg:flex w-[708px] h-[500px] border-2 border-dashed border-gray-200 rounded-xl flex-col items-center justify-center text-gray-400 gap-4 mt-[-47px]">
+                                   <span>Select a plan or create a new one to get started</span>
+                               </div>
+
+                               {/* Mobile Empty State (ไม่มีกรอบ, แสดงปุ่มกลางจอ) */}
+                               <div className="lg:hidden flex flex-col items-center justify-start w-full bg-white px-4 font-inter text-center mt-[60px] pb-20">
+                                   <h2 className="text-[24px] font-bold text-black mb-[16px]">
+                                       Plan a new trip
+                                   </h2>
+                                   
+                                   <div className="flex flex-col gap-[8px] text-[14px] text-[#9E9E9E] mb-[32px]">
+                                       <p>You haven't created any trip plans.</p>
+                                       <p>Click "Create a new plan" to get started.</p>
+                                   </div>
+
+                                   <button 
+                                       onClick={() => setViewState('create')} 
+                                       className="flex items-center justify-center gap-[8px] bg-[#3A82CE] text-white px-[24px] py-[10px] rounded-[8px] hover:bg-[#2c6cb0] transition-colors shadow-sm active:scale-95"
+                                   >
+                                       <Plus className="w-[20px] h-[20px] text-white" strokeWidth={2.5} />
+                                       <span className="font-bold text-[14px]">Create a new plan</span>
+                                   </button>
+                               </div>
+                           </>
                        )}
                    </>
                )}
