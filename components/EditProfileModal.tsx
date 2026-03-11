@@ -168,33 +168,38 @@ export default function EditProfileModal({ user, onClose, onSuccess }: EditProfi
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-[483px] h-[439px] bg-[#FFFFFF] rounded-[16px] border-[2px] border-[#C2DCF3] shadow-[5px_8px_11px_0px_#00000059] p-[32px] flex flex-col gap-[32px]">
+    // ✅ นอกสุด: มือถือพื้นหลังขาวล้วน (bg-white) เลื่อนขึ้นมา | Desktop มี Backdrop (sm:bg-black/40)
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-white sm:bg-black/40 sm:backdrop-blur-sm sm:p-4 animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:fade-in duration-300">
+      
+      {/* ✅ กล่องใน: มือถือเต็มจอ 100dvh ไม่มีขอบมน | Desktop กว้าง 483px มีขอบมนและเงา */}
+      <div className="relative w-full h-[100dvh] sm:h-auto sm:min-h-[400px] sm:max-w-[483px] bg-[#FFFFFF] sm:rounded-[16px] sm:border-[2px] sm:border-[#C2DCF3] sm:shadow-[5px_8px_11px_0px_#00000059] flex flex-col p-6 pt-16 sm:p-[32px] gap-6 sm:gap-[32px] overflow-y-auto">
 
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <h3 className="font-inter font-bold text-[36px] text-[#194473] leading-none tracking-normal">
-            {isCropping ? "Adjust Photo" : user.name}
-          </h3>
-          <button onClick={onClose} className="p-2 text-gray-400 hover:bg-gray-100 rounded-full transition">
-            <X size={20} />
-          </button>
-        </div>
+        {/* ปุ่มปิด (X) - วางตำแหน่ง Absolute มุมขวาบน */}
+        <button 
+          onClick={onClose} 
+          className="absolute top-4 right-4 sm:top-6 sm:right-6 p-2 text-gray-500 hover:bg-gray-100 rounded-full transition flex-shrink-0 z-10"
+        >
+          <X size={24} className="sm:w-5 sm:h-5" />
+        </button>
 
         {/* ---------------------------------------------------- */}
-        {/* หน้าจอ CROP IMAGE (แสดงเมื่อเลือกรูปใหม่) */}
+        {/* หน้าจอ CROP IMAGE */}
         {/* ---------------------------------------------------- */}
         {isCropping ? (
-          <div className="flex flex-col h-full gap-4 relative animate-in fade-in zoom-in-95 duration-200">
+          <div className="flex flex-col flex-1 gap-4 relative animate-in fade-in zoom-in-95 duration-200 min-h-[300px]">
+            <h3 className="font-inter font-bold text-[24px] sm:text-[36px] text-[#194473] text-center leading-none tracking-normal">
+              Adjust Photo
+            </h3>
+            
             {/* พื้นที่ Crop */}
-            <div className="relative flex-1 w-full bg-gray-100 rounded-[12px] overflow-hidden border border-gray-200">
+            <div className="relative flex-1 w-full bg-gray-100 rounded-[12px] overflow-hidden border border-gray-200 min-h-[300px] sm:min-h-[250px]">
               {imageSrc && (
                 <Cropper
                   image={imageSrc}
                   crop={crop}
                   zoom={zoom}
-                  aspect={1}          // บังคับสัดส่วนให้เป็น 1:1 (สี่เหลี่ยมจัตุรัส)
-                  cropShape="round"   // ให้กรอบตัดเป็นวงกลม (เหมาะกับโปรไฟล์)
+                  aspect={1}
+                  cropShape="round"
                   showGrid={false}
                   onCropChange={setCrop}
                   onCropComplete={onCropComplete}
@@ -219,20 +224,20 @@ export default function EditProfileModal({ user, onClose, onSuccess }: EditProfi
             </div>
 
             {/* ปุ่มยืนยัน / ยกเลิก */}
-            <div className="flex items-center gap-3 mt-auto">
+            <div className="flex items-center gap-3 mt-auto pt-2">
               <button
                 type="button"
                 onClick={() => setIsCropping(false)}
-                className="flex-1 h-10 border border-gray-300 text-gray-600 font-medium rounded-lg hover:bg-gray-50 transition"
+                className="flex-1 h-12 sm:h-10 border border-gray-300 text-gray-600 font-medium rounded-lg hover:bg-gray-50 transition"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleCropConfirm}
-                className="flex-1 h-10 bg-[#194473] hover:bg-[#14365d] text-white font-medium rounded-lg flex items-center justify-center gap-2 transition"
+                className="flex-1 h-12 sm:h-10 bg-[#194473] hover:bg-[#14365d] text-white font-medium rounded-lg flex items-center justify-center gap-2 transition"
               >
-                <Check size={16} /> Confirm
+                <Check size={18} className="sm:w-4 sm:h-4" /> Confirm
               </button>
             </div>
           </div>
@@ -240,41 +245,47 @@ export default function EditProfileModal({ user, onClose, onSuccess }: EditProfi
           /* ---------------------------------------------------- */
           /* หน้าจอแก้ไขโปรไฟล์ปกติ */
           /* ---------------------------------------------------- */
-          <form onSubmit={handleSubmit} className="flex flex-col gap-6 h-full animate-in fade-in duration-200">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-6 sm:gap-8 h-full animate-in fade-in duration-200">
             
+            {/* ✅ Title: ตรงกลางตามแบบ Design (มือถือและ Desktop) */}
+            <h3 className="font-inter font-bold text-[32px] sm:text-[36px] text-[#194473] leading-none tracking-normal text-center w-full truncate px-4">
+              {user.name}
+            </h3>
+
             {/* Avatar Section */}
-            <div className="flex flex-col items-center gap-4">
-              <label className="relative w-[91px] h-[90px] cursor-pointer group">
+            <div className="flex flex-col items-center gap-3 mt-2 sm:mt-0">
+              <label className="relative w-[110px] h-[110px] sm:w-[91px] sm:h-[90px] cursor-pointer group">
                 <input
                   type="file"
                   className="hidden"
                   accept="image/*"
                   onChange={handleAvatarChange}
                 />
-                <div className="w-full h-full rounded-full overflow-hidden border-2 border-gray-100 shadow-sm group-hover:border-blue-400 transition-all">
+                <div className="w-full h-full rounded-full overflow-hidden border-[3px] border-gray-100 shadow-md group-hover:border-blue-400 transition-all">
                   {avatarPreview ? (
                     <img src={avatarPreview} alt="Preview" className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                      <User className="w-8 h-8 text-gray-400" />
+                      <User className="w-10 h-10 sm:w-8 sm:h-8 text-gray-400" />
                     </div>
                   )}
                 </div>
-                <div className="absolute bottom-0 right-0 bg-blue-600 group-hover:bg-blue-700 text-white p-2 rounded-full shadow-md transition-all transform group-hover:scale-105">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                {/* ไอคอน Edit ดินสอ ตามภาพ Design */}
+                <div className="absolute bottom-0 right-0 bg-gray-200 text-gray-700 p-2 rounded-full shadow-md border border-white transition-all transform group-hover:scale-105">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.91l-.495 3.762a1 1 0 0 0 1.08 1.08l3.762-.495a2 2 0 0 0 .91-.5l13.573-13.577z" />
                   </svg>
                 </div>
               </label>
 
-              <p className="font-inter font-normal text-[12px] text-[#9E9E9E] leading-none tracking-normal">
+              <p className="font-inter font-normal text-[13px] sm:text-[12px] text-[#9E9E9E] leading-none tracking-normal text-center mt-1">
                 Click icon to change photo
               </p>
             </div>
 
             {/* Username Section */}
-            <div className="w-[419px] h-[75px] flex flex-col gap-[16px]">
-              <label className="font-inter font-bold text-[20px] text-[#194473] leading-none tracking-normal">
+            <div className="w-full flex flex-col gap-2 sm:gap-[16px] mt-4 sm:mt-0">
+              <label className="font-inter font-bold text-[18px] sm:text-[20px] text-[#194473] leading-none tracking-normal">
                 Username
               </label>
               <input
@@ -284,7 +295,7 @@ export default function EditProfileModal({ user, onClose, onSuccess }: EditProfi
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
                 required
-                className={`w-[419px] h-[43px] bg-[#FFFFFF] border-[1px] border-[#EEEEEE] rounded-[8px] px-[16px] py-[12px] outline-none focus:border-[#2196F3] transition-all
+                className={`w-full h-[48px] sm:h-[43px] bg-[#FFFFFF] border-[1px] border-[#EEEEEE] rounded-[8px] px-[16px] py-[12px] outline-none focus:border-[#2196F3] transition-all shadow-sm sm:shadow-none
                   font-inter font-medium text-[16px] leading-none tracking-normal
                   ${(isFocused || username !== user.name) ? "text-[#212121]" : "text-[#9E9E9E]"}
                 `}
@@ -292,20 +303,22 @@ export default function EditProfileModal({ user, onClose, onSuccess }: EditProfi
               />
             </div>
 
-            {/* Action Buttons */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full h-10 bg-[#194473] hover:bg-[#14365d] text-white font-medium rounded-lg transition-all flex items-center justify-center gap-2 mt-auto disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" /> Saving...
-                </>
-              ) : (
-                "Save Changes"
-              )}
-            </button>
+            {/* Action Buttons - ดันลงล่างสุดถ้ามีที่ว่าง */}
+            <div className="mt-4 sm:mt-auto pt-4">
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full h-[48px] sm:h-12 bg-gray-400 sm:bg-[#194473] hover:bg-gray-500 sm:hover:bg-[#14365d] text-white font-medium text-[16px] rounded-lg transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" /> Saving...
+                  </>
+                ) : (
+                  "Save"
+                )}
+              </button>
+            </div>
           </form>
         )}
       </div>

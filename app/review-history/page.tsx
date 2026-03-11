@@ -229,10 +229,7 @@ export default function ReviewHistoryPage() {
                                             </div>
                                         </div>
 
-                                        <div className="flex items-center gap-6 pt-2">
-                                            <button className="flex items-center gap-2 text-[13px] md:text-[14px] text-[#194473] font-medium hover:opacity-70 transition-opacity"><ThumbsUp size={16} /> Like</button>
-                                            <button className="flex items-center gap-2 text-[13px] md:text-[14px] text-[#194473] font-medium hover:opacity-70 transition-opacity"><Share2 size={16} /> Share</button>
-                                        </div>
+
                                     </div>
                                 </div>
                             ))}
