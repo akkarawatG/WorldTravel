@@ -46,8 +46,8 @@ const COUNTRY_NAMES: Record<string, string> = {
 };
 
 const DynamicMap = dynamic(
-    () => import('../../../../components/DynamicMap'), 
-    { ssr: false, loading: () => <div className="p-10 text-gray-400 flex items-center justify-center h-full"><Loader2 className="w-6 h-6 animate-spin mr-2"/>Loading Map...</div> }
+    () => import('../../../../components/DynamicMap'),
+    { ssr: false, loading: () => <div className="p-10 text-gray-400 flex items-center justify-center h-full"><Loader2 className="w-6 h-6 animate-spin mr-2" />Loading Map...</div> }
 );
 
 interface PageProps { params: Promise<{ id: string }>; }
@@ -158,7 +158,7 @@ export default function EditTripPage({ params }: PageProps) {
             try {
                 const { data: { user } } = await supabase.auth.getUser();
                 if (!user) return;
-                
+
                 setDbTripId(tripId);
                 const { data: trip, error: tripError } = await supabase.from('trips').select('country').eq('id', tripId).single();
                 if (tripError || !trip) { router.push('/mytrips'); return; }
@@ -183,7 +183,7 @@ export default function EditTripPage({ params }: PageProps) {
                     });
 
                     let syncedStatuses = JSON.parse(JSON.stringify(DEFAULT_STATUSES));
-                    
+
                     dbStatuses.forEach((color, label) => {
                         const existingIdx = syncedStatuses.findIndex((s: TripStatus) => s.label === label);
                         if (existingIdx !== -1) {
@@ -196,7 +196,7 @@ export default function EditTripPage({ params }: PageProps) {
                             });
                         }
                     });
-                    
+
                     setTripStatuses(syncedStatuses);
 
                     const mappedGroups: TripGroup[] = templates.map((t: any) => {
@@ -204,7 +204,7 @@ export default function EditTripPage({ params }: PageProps) {
                             let matchedStatus = syncedStatuses.find((s: TripStatus) => s.label === p.status && s.color === p.color);
                             if (!matchedStatus) matchedStatus = syncedStatuses.find((s: TripStatus) => s.label === p.status);
                             if (!matchedStatus) matchedStatus = syncedStatuses[0];
-                            
+
                             return { name: p.province_code, statusId: matchedStatus.id };
                         });
 
@@ -219,13 +219,13 @@ export default function EditTripPage({ params }: PageProps) {
                             regions: mappedRegions,
                             travel_start_date: t.travel_start_date,
                             travel_end_date: t.travel_end_date,
-                            rating: t.rating || 0 
+                            rating: t.rating || 0
                         };
                     });
 
                     setTripGroups(mappedGroups);
-                    
-                    if(mappedGroups.length > 0) {
+
+                    if (mappedGroups.length > 0) {
                         setIsViewAll(true);
                     }
                 }
@@ -234,7 +234,7 @@ export default function EditTripPage({ params }: PageProps) {
             }
         };
         initData();
-    }, [tripId]); 
+    }, [tripId]);
 
     // --- Active Group Effect ---
     useEffect(() => {
@@ -244,7 +244,7 @@ export default function EditTripPage({ params }: PageProps) {
             setGroupNote(activeGroup.notes || "");
             setStartDate(activeGroup.travel_start_date || "");
             setEndDate(activeGroup.travel_end_date || "");
-            setTripRating(activeGroup.rating || 0); 
+            setTripRating(activeGroup.rating || 0);
             const loadedImages = (activeGroup.images || []).map((url, idx) => ({ id: `existing-${idx}`, url: url }));
             setCurrentImages(loadedImages);
             setPreviewGroupId(null);
@@ -319,7 +319,7 @@ export default function EditTripPage({ params }: PageProps) {
             setTripGroups(prev => prev.map(g => g.id === activeGroupId ? {
                 ...g, id: realTemplateId, regions: currentGroupRegions, name: groupName, notes: groupNote, images: finalImageUrls,
                 travel_start_date: startDate || null, travel_end_date: endDate || null,
-                rating: tripRating 
+                rating: tripRating
             } : g));
             setActiveGroupId(null);
         } catch (err: any) { console.error("Save failed:", err); alert(`Failed to save: ${err.message}`); } finally { setIsSaving(false); }
@@ -331,9 +331,9 @@ export default function EditTripPage({ params }: PageProps) {
     const handleDeleteStatus = (id: string) => { if (tripStatuses.length <= 1) return; setTripStatuses(prev => prev.filter(s => s.id !== id)); const firstAvailable = tripStatuses.find(s => s.id !== id)?.id || ""; setCurrentGroupRegions(prev => prev.map(r => r.statusId === id ? { ...r, statusId: firstAvailable } : r)); };
 
     // ✅ ใช้ระบบ Cache เพื่อป้องกันการยิง API ซ้ำๆ ไปที่ Highcharts
-    useEffect(() => { 
-        async function fetchHighchartsMapData() { 
-            if (!countryCode || countryCode.trim() === "") return; 
+    useEffect(() => {
+        async function fetchHighchartsMapData() {
+            if (!countryCode || countryCode.trim() === "") return;
 
             if (regionCache[countryCode]) {
                 setRegionList(regionCache[countryCode]);
@@ -341,24 +341,24 @@ export default function EditTripPage({ params }: PageProps) {
                 return;
             }
 
-            setIsLoadingRegions(true); 
-            try { 
-                const mapUrl = `https://code.highcharts.com/mapdata/countries/${countryCode}/${countryCode}-all.geo.json`; 
-                const response = await fetch(mapUrl); 
-                if (!response.ok) throw new Error("Map data not found"); 
-                const data = await response.json(); 
-                if (data && data.features) { 
+            setIsLoadingRegions(true);
+            try {
+                const mapUrl = `https://code.highcharts.com/mapdata/countries/${countryCode}/${countryCode}-all.geo.json`;
+                const response = await fetch(mapUrl);
+                if (!response.ok) throw new Error("Map data not found");
+                const data = await response.json();
+                if (data && data.features) {
                     const regions = data.features.map((feature: any) => feature.properties.name).filter((name: any) => name).sort();
-                    regionCache[countryCode] = regions; 
-                    setRegionList(regions); 
-                } 
-            } catch (error) { 
-                setRegionList([]); 
-            } finally { 
-                setIsLoadingRegions(false); 
-            } 
-        } 
-        fetchHighchartsMapData(); 
+                    regionCache[countryCode] = regions;
+                    setRegionList(regions);
+                }
+            } catch (error) {
+                setRegionList([]);
+            } finally {
+                setIsLoadingRegions(false);
+            }
+        }
+        fetchHighchartsMapData();
     }, [countryCode]);
 
     const startResizing = useCallback((e: React.MouseEvent) => { setIsResizing(true); e.preventDefault(); }, []);
@@ -394,10 +394,21 @@ export default function EditTripPage({ params }: PageProps) {
         const date = new Date(dateStr);
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
     };
+    // ✅ คำนวณเปอร์เซ็นต์ความสำเร็จ (Achievement)
+    const achievementStats = useMemo(() => {
+        if (regionList.length === 0) return { percent: 0, current: 0, total: 0 };
+
+        // นับจำนวนจังหวัดที่ไม่ซ้ำกันจากทุกกลุ่ม (กรณี View All) หรือกลุ่มที่กำลังเลือกอยู่
+        const selectedCount = mapSelectedRegions.length;
+        const totalCount = regionList.length;
+        const percent = Math.round((selectedCount / totalCount) * 100);
+
+        return { percent, current: selectedCount, total: totalCount };
+    }, [regionList, mapSelectedRegions]);
 
     return (
         <div className={`flex flex-col bg-[#FFFFFF] font-sans text-gray-800 h-screen overflow-hidden ${isFullscreen ? "fixed inset-0 z-[9999]" : "relative z-0"} ${isResizing ? "cursor-col-resize select-none" : ""}`}>
-            
+
             {/* HEADER - ไม่แตะต้องคลาส Desktop เลย เพิ่มแค่ md: นำหน้าเพื่อรองรับ Mobile */}
             <div className="h-auto min-h-[60px] md:h-[60px] bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] px-4 md:px-10 z-20 flex-shrink-0 flex flex-col md:flex-row items-center justify-between relative mb-4 md:mb-[32px] py-2 md:py-0 gap-3 md:gap-0">
                 <div className="flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-[48px] w-full md:w-auto">
@@ -411,7 +422,7 @@ export default function EditTripPage({ params }: PageProps) {
                         </div>
                         {/* ปุ่มเปิด Sidebar บนมือถือ */}
                         <button onClick={() => setIsMobileOpen(!isMobileOpen)} className="md:hidden p-2 bg-blue-50 text-blue-600 rounded-lg">
-                            <LayoutTemplate className="w-5 h-5"/>
+                            <LayoutTemplate className="w-5 h-5" />
                         </button>
                     </div>
 
@@ -448,18 +459,60 @@ export default function EditTripPage({ params }: PageProps) {
                     <button onClick={() => setIsFullscreen(!isFullscreen)} className={`p-2 rounded-lg transition border ${isFullscreen ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`} title={isFullscreen ? "Show Navbar" : "Fullscreen"}>{isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}</button>
                 </div>
             </div>
+            {/* ✅ ACHIEVEMENT SECTION - แสดงเปอร์เซ็นต์การสำรวจประเทศ */}
+            <div className="px-4 md:px-[60px] mb-2 flex-shrink-0 animate-in fade-in slide-in-from-top-1 duration-500">
+                <div className="w-full bg-[#F0F6FC] rounded-[12px] p-3 md:p-4 border border-[#C2DCF3] shadow-sm flex flex-col md:flex-row items-center gap-3 md:gap-6">
+                    <div className="flex items-center gap-3 shrink-0">
+                        <div className="relative w-12 h-12 md:w-14 md:h-14 flex items-center justify-center">
+                            {/* วงกลมความก้าวหน้า (SVG Progress Circle) */}
+                            <svg className="w-full h-full transform -rotate-90">
+                                <circle cx="50%" cy="50%" r="20" stroke="#E0E0E0" strokeWidth="4" fill="transparent" className="md:r-24" />
+                                <circle
+                                    cx="50%" cy="50%" r="20" stroke="#3A82CE" strokeWidth="4" fill="transparent"
+                                    strokeDasharray={125.6}
+                                    strokeDashoffset={125.6 - (125.6 * achievementStats.percent) / 100}
+                                    strokeLinecap="round"
+                                    className="transition-all duration-1000 ease-out md:r-24"
+                                />
+                            </svg>
+                            <span className="absolute text-[10px] md:text-[12px] font-bold text-[#194473]">{achievementStats.percent}%</span>
+                        </div>
+                        <div className="flex flex-col">
+                            <h4 className="text-[14px] md:text-[16px] font-bold text-[#194473] font-inter">Explore Achievement</h4>
+                            <p className="text-[11px] md:text-[13px] text-[#616161] font-inter">You have explored {achievementStats.current} of {achievementStats.total} regions</p>
+                        </div>
+                    </div>
+
+                    {/* Progress Bar สำหรับ Mobile (ถ้า SVG ดูเล็กไป) หรือเส้นประเชื่อมต่อ */}
+                    <div className="flex-1 w-full h-2 bg-white rounded-full overflow-hidden border border-[#C2DCF3] hidden md:block">
+                        <div
+                            className="h-full bg-gradient-to-r from-[#3A82CE] to-[#60A3DE] transition-all duration-1000 ease-out"
+                            style={{ width: `${achievementStats.percent}%` }}
+                        />
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0 bg-white px-3 py-1 rounded-full border border-[#C2DCF3]">
+                        <Star className={`w-4 h-4 ${achievementStats.percent === 100 ? "text-yellow-500 fill-yellow-500" : "text-gray-300"}`} />
+                        <span className="text-[11px] md:text-[12px] font-bold text-[#194473] uppercase tracking-wider">
+                            {achievementStats.percent === 100 ? "Country Master" :
+                                achievementStats.percent >= 50 ? "Senior Explorer" :
+                                    achievementStats.percent >= 20 ? "Backpacker" : "Beginner"}
+                        </span>
+                    </div>
+                </div>
+            </div>
 
             {/* BODY - Flex Col สำหรับ Mobile และ Flex Row สำหรับ Desktop */}
             <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative px-4 md:px-[60px] pb-4 md:pb-[40px] pt-4 md:pt-[20px]">
-                
+
                 {/* MAP AREA */}
                 <div className="flex-1 relative md:mr-[32px] mb-4 md:mb-0">
                     <div className="w-full h-full bg-white md:shadow-[0px_4px_4px_rgba(0,0,0,0.25)] rounded-[10px] overflow-hidden relative">
                         <div className="w-full h-full">
-                            <DynamicMap 
-                                countryCode={countryCode} 
-                                regionColors={regionColors} 
-                                selectedRegions={mapSelectedRegions} 
+                            <DynamicMap
+                                countryCode={countryCode}
+                                regionColors={regionColors}
+                                selectedRegions={mapSelectedRegions}
                                 onRegionClick={handleRegionClick}
                                 mapPosition={mapPosition}
                                 onMoveEnd={setMapPosition}
@@ -481,8 +534,8 @@ export default function EditTripPage({ params }: PageProps) {
                 </div>
 
                 {/* ✅ RIGHT PANEL / BOTTOM SHEET FOR MOBILE */}
-                <div 
-                    ref={sidebarRef} 
+                <div
+                    ref={sidebarRef}
                     className={`
                         fixed inset-x-0 bottom-0 z-[50] bg-white shadow-2xl rounded-t-[24px] transition-transform duration-300 transform flex flex-col flex-shrink-0
                         md:static md:h-full md:rounded-[5px] md:shadow-[0px_0px_4px_rgba(0,0,0,0.25)] md:translate-y-0
@@ -554,7 +607,7 @@ export default function EditTripPage({ params }: PageProps) {
                                 {/* --- DATE (Input Trigger) --- */}
                                 <div className="flex flex-col gap-[4px] relative">
                                     <label className="text-[14px] font-normal text-[#616161] font-inter">Date (From - To)</label>
-                                    <div 
+                                    <div
                                         className="box-border w-full h-[26px] bg-white border border-[#9E9E9E] rounded-[5px] flex justify-between items-center px-[10px] cursor-pointer hover:border-[#3A82CE] transition"
                                         onClick={(e) => { e.stopPropagation(); setIsDatePickerOpen(true); }}
                                     >
@@ -576,10 +629,10 @@ export default function EditTripPage({ params }: PageProps) {
                                     <label className="text-[14px] font-normal text-[#616161] font-inter">Trip Rating</label>
                                     <div className="h-[40px] w-full flex items-center justify-center gap-[8px] px-[80px] py-[10px]">
                                         {[1, 2, 3, 4, 5].map((star) => (
-                                            <button 
-                                                key={star} 
-                                                onClick={() => setTripRating(star)} 
-                                                className="focus:outline-none transition-transform hover:scale-110 active:scale-95 flex-shrink-0" 
+                                            <button
+                                                key={star}
+                                                onClick={() => setTripRating(star)}
+                                                className="focus:outline-none transition-transform hover:scale-110 active:scale-95 flex-shrink-0"
                                                 type="button"
                                             >
                                                 <Star className={`w-[20px] h-[20px] ${star <= tripRating ? "fill-[#FFCC00] text-[#FFCC00]" : "fill-[#9E9E9E] text-[#9E9E9E]"}`} strokeWidth={0} />
@@ -595,18 +648,18 @@ export default function EditTripPage({ params }: PageProps) {
                                         {currentGroupRegions.length === 0 ? (
                                             <div className="flex-1 flex flex-col items-center justify-center gap-2 p-4 bg-[#F0F6FC] h-full">
                                                 <div className="w-[21px] h-[21px] bg-[#3A82CE] rounded-full flex items-center justify-center"><MapPin className="w-[12px] h-[12px] text-white" /></div>
-                                                <span className="text-[12px] text-[#9E9E9E] text-center font-inter leading-[15px]">No provinces selected.<br/>Click on the map to add.</span>
+                                                <span className="text-[12px] text-[#9E9E9E] text-center font-inter leading-[15px]">No provinces selected.<br />Click on the map to add.</span>
                                             </div>
                                         ) : (
                                             <div className="flex flex-col w-full">
                                                 {currentGroupRegions.map(region => (
-                                                    <RegionItem 
-                                                        key={region.name} 
-                                                        region={region} 
-                                                        statuses={tripStatuses} 
-                                                        onUpdateStatus={(newId) => updateRegionStatus(region.name, newId)} 
-                                                        onRemove={() => toggleRegion(region.name)} 
-                                                        statusActions={{ onUpdate: handleUpdateStatus, onDelete: handleDeleteStatus, onAdd: handleAddStatus }} 
+                                                    <RegionItem
+                                                        key={region.name}
+                                                        region={region}
+                                                        statuses={tripStatuses}
+                                                        onUpdateStatus={(newId) => updateRegionStatus(region.name, newId)}
+                                                        onRemove={() => toggleRegion(region.name)}
+                                                        statusActions={{ onUpdate: handleUpdateStatus, onDelete: handleDeleteStatus, onAdd: handleAddStatus }}
                                                     />
                                                 ))}
                                             </div>
@@ -684,7 +737,7 @@ function CustomDateRangePicker({ startDate, endDate, onChange, onClose }: { star
     const handleDayClick = (day: number) => {
         const clickedDate = new Date(year, month, day);
         const dateStr = `${clickedDate.getFullYear()}-${String(clickedDate.getMonth() + 1).padStart(2, '0')}-${String(clickedDate.getDate()).padStart(2, '0')}`;
-        
+
         if (!startDate || (startDate && endDate)) {
             onChange(dateStr, "");
         } else if (startDate && !endDate) {
@@ -731,7 +784,7 @@ function CustomDateRangePicker({ startDate, endDate, onChange, onClose }: { star
                     const status = isSelected(day);
                     let bgClass = "hover:bg-blue-50 text-gray-700";
                     let textClass = "text-gray-700";
-                    
+
                     if (status === 'start' || status === 'end') {
                         bgClass = "bg-[#3A82CE] hover:bg-[#2c6cb0]";
                         textClass = "text-white font-bold";
@@ -742,9 +795,9 @@ function CustomDateRangePicker({ startDate, endDate, onChange, onClose }: { star
                     }
 
                     return (
-                        <button 
-                            key={day} 
-                            onClick={() => handleDayClick(day)} 
+                        <button
+                            key={day}
+                            onClick={() => handleDayClick(day)}
                             className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] transition mx-auto font-inter ${bgClass} ${textClass}`}
                         >
                             {day}
@@ -754,7 +807,7 @@ function CustomDateRangePicker({ startDate, endDate, onChange, onClose }: { star
             </div>
 
             <div className="flex justify-end pt-2 border-t border-gray-100">
-                <button 
+                <button
                     onClick={onClose}
                     className="bg-[#3A82CE] text-white text-[12px] font-medium px-4 py-1.5 rounded-[5px] hover:bg-[#2c6cb0] transition shadow-sm font-inter"
                 >
@@ -768,7 +821,7 @@ function CustomDateRangePicker({ startDate, endDate, onChange, onClose }: { star
 function RegionItem({ region, statuses, onUpdateStatus, onRemove, statusActions }: RegionItemProps) {
     const [isOpen, setIsOpen] = useState(false);
     const currentStatus = statuses.find((s) => s.id === region.statusId) || statuses[0];
-    
+
     return (
         <div className={`bg-white border-b border-[#E0E0E0] last:border-none transition-all duration-200 ${isOpen ? 'shadow-md border-transparent ring-1 ring-blue-100 z-10 relative rounded-[5px] my-1' : ''}`}>
             {/* Header Row */}
@@ -789,7 +842,7 @@ function RegionItem({ region, statuses, onUpdateStatus, onRemove, statusActions 
             {isOpen && (
                 <div className="px-3 pb-3 pt-0 animate-in slide-in-from-top-2 cursor-default" onClick={(e) => e.stopPropagation()}>
                     <div className="h-px bg-gray-100 w-full mb-3"></div>
-                    
+
                     {/* Header Columns */}
                     <div className="grid grid-cols-[30px_1fr_40px_30px] gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 px-1">
                         <div></div>
@@ -801,8 +854,8 @@ function RegionItem({ region, statuses, onUpdateStatus, onRemove, statusActions 
                     {/* Status List */}
                     <div className="space-y-1.5">
                         {statuses.map((status) => (
-                            <div 
-                                key={status.id} 
+                            <div
+                                key={status.id}
                                 className={`grid grid-cols-[30px_1fr_40px_30px] gap-2 items-center p-1.5 rounded-lg border transition-all cursor-pointer ${status.id === region.statusId ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-200' : 'bg-white border-gray-100 hover:border-gray-300'}`}
                                 onClick={() => onUpdateStatus(status.id)}
                             >
@@ -815,30 +868,30 @@ function RegionItem({ region, statuses, onUpdateStatus, onRemove, statusActions 
 
                                 {/* Label Input */}
                                 <div>
-                                    <input 
-                                        type="text" 
-                                        value={status.label} 
-                                        onClick={(e) => e.stopPropagation()} 
-                                        onChange={(e) => statusActions.onUpdate(status.id, 'label', e.target.value)} 
-                                        className="bg-transparent text-xs font-medium text-gray-700 outline-none border-b border-transparent focus:border-blue-300 focus:bg-white rounded px-1 transition h-6 w-full" 
+                                    <input
+                                        type="text"
+                                        value={status.label}
+                                        onClick={(e) => e.stopPropagation()}
+                                        onChange={(e) => statusActions.onUpdate(status.id, 'label', e.target.value)}
+                                        className="bg-transparent text-xs font-medium text-gray-700 outline-none border-b border-transparent focus:border-blue-300 focus:bg-white rounded px-1 transition h-6 w-full"
                                     />
                                 </div>
 
                                 {/* Color Picker */}
                                 <div className="relative w-5 h-5 rounded-full overflow-hidden border border-gray-200 shadow-sm mx-auto" onClick={(e) => e.stopPropagation()}>
-                                    <input 
-                                        type="color" 
-                                        value={status.color} 
-                                        onChange={(e) => statusActions.onUpdate(status.id, 'color', e.target.value)} 
-                                        className="absolute -top-1 -left-1 w-7 h-7 border-none cursor-pointer p-0" 
+                                    <input
+                                        type="color"
+                                        value={status.color}
+                                        onChange={(e) => statusActions.onUpdate(status.id, 'color', e.target.value)}
+                                        className="absolute -top-1 -left-1 w-7 h-7 border-none cursor-pointer p-0"
                                     />
                                 </div>
 
                                 {/* Delete Button */}
                                 <div className="text-right">
-                                    <button 
-                                        onClick={(e) => { e.stopPropagation(); statusActions.onDelete(status.id); }} 
-                                        disabled={statuses.length <= 1} 
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); statusActions.onDelete(status.id); }}
+                                        disabled={statuses.length <= 1}
                                         className="text-gray-300 hover:text-red-500 transition disabled:opacity-30 disabled:hover:text-gray-300 p-1"
                                     >
                                         <Trash2 className="w-3.5 h-3.5" />
@@ -849,8 +902,8 @@ function RegionItem({ region, statuses, onUpdateStatus, onRemove, statusActions 
                     </div>
 
                     {/* Add New Button */}
-                    <button 
-                        onClick={statusActions.onAdd} 
+                    <button
+                        onClick={statusActions.onAdd}
                         className="w-full mt-2 flex items-center justify-center gap-2 py-1.5 text-[10px] font-bold text-blue-500 border border-dashed border-blue-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition"
                     >
                         <Plus className="w-3 h-3" /> Add New Status
