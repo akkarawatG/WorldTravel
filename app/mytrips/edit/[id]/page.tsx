@@ -988,7 +988,7 @@ function RegionItem({ region, statuses, onUpdateStatus, onRemove, statusActions,
                         onClick={statusActions.onAdd}
                         className="w-full mt-2 flex items-center justify-center gap-2 py-1.5 text-[10px] font-bold text-blue-500 border border-dashed border-blue-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition"
                     >
-                        <Plus className="w-3 h-3" /> Add New Status
+                        <Plus clas sName="w-3 h-3" /> Add New Status
                     </button>
                 </div>
             )}
