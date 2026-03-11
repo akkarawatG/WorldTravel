@@ -18,7 +18,6 @@ import {
     Minus,
     RefreshCw,
     Layers,
-    StickyNote,
     Loader2,
     Check,
     Image as ImageIcon,
@@ -30,7 +29,8 @@ import {
     Calendar,
     Eye,
     EyeOff,
-    Star
+    Star,
+    Sparkles // ✅ เพิ่ม Icon Sparkles สำหรับแนะนำสถานที่
 } from "lucide-react";
 import dynamic from 'next/dynamic';
 
@@ -46,8 +46,8 @@ const COUNTRY_NAMES: Record<string, string> = {
 };
 
 const DynamicMap = dynamic(
-    () => import('../../../../components/DynamicMap'),
-    { ssr: false, loading: () => <div className="p-10 text-gray-400 flex items-center justify-center h-full"><Loader2 className="w-6 h-6 animate-spin mr-2" />Loading Map...</div> }
+    () => import('../../../../components/DynamicMap'), 
+    { ssr: false, loading: () => <div className="p-10 text-gray-400 flex items-center justify-center h-full"><Loader2 className="w-6 h-6 animate-spin mr-2"/>Loading Map...</div> }
 );
 
 interface PageProps { params: Promise<{ id: string }>; }
@@ -81,6 +81,7 @@ interface RegionItemProps {
         onDelete: (id: string) => void;
         onAdd: () => void;
     };
+    supabase: any; // ✅ รับ supabase client เข้ามา
 }
 
 const DEFAULT_STATUSES: TripStatus[] = [
@@ -90,7 +91,6 @@ const DEFAULT_STATUSES: TripStatus[] = [
     { id: 'dream', label: 'Dream', color: '#9C27B0' },
 ];
 
-// ✅ ตัวแปร Cache เก็บข้อมูลจังหวัดเพื่อไม่ให้ยิง API ซ้ำ
 const regionCache: Record<string, string[]> = {};
 
 // --- Main Component ---
@@ -145,7 +145,6 @@ export default function EditTripPage({ params }: PageProps) {
     const [isRegionDropdownOpen, setIsRegionDropdownOpen] = useState(false);
     const [regionSearchQuery, setRegionSearchQuery] = useState("");
 
-    // ✅ State สำหรับ Mobile (เพิ่มใหม่เพื่อความเข้ากันได้)
     const [isMobileOpen, setIsMobileOpen] = useState(false);
     const [mounted, setMounted] = useState(false);
     useEffect(() => { setMounted(true); }, []);
@@ -158,7 +157,7 @@ export default function EditTripPage({ params }: PageProps) {
             try {
                 const { data: { user } } = await supabase.auth.getUser();
                 if (!user) return;
-
+                
                 setDbTripId(tripId);
                 const { data: trip, error: tripError } = await supabase.from('trips').select('country').eq('id', tripId).single();
                 if (tripError || !trip) { router.push('/mytrips'); return; }
@@ -183,7 +182,7 @@ export default function EditTripPage({ params }: PageProps) {
                     });
 
                     let syncedStatuses = JSON.parse(JSON.stringify(DEFAULT_STATUSES));
-
+                    
                     dbStatuses.forEach((color, label) => {
                         const existingIdx = syncedStatuses.findIndex((s: TripStatus) => s.label === label);
                         if (existingIdx !== -1) {
@@ -196,7 +195,7 @@ export default function EditTripPage({ params }: PageProps) {
                             });
                         }
                     });
-
+                    
                     setTripStatuses(syncedStatuses);
 
                     const mappedGroups: TripGroup[] = templates.map((t: any) => {
@@ -204,7 +203,7 @@ export default function EditTripPage({ params }: PageProps) {
                             let matchedStatus = syncedStatuses.find((s: TripStatus) => s.label === p.status && s.color === p.color);
                             if (!matchedStatus) matchedStatus = syncedStatuses.find((s: TripStatus) => s.label === p.status);
                             if (!matchedStatus) matchedStatus = syncedStatuses[0];
-
+                            
                             return { name: p.province_code, statusId: matchedStatus.id };
                         });
 
@@ -219,13 +218,13 @@ export default function EditTripPage({ params }: PageProps) {
                             regions: mappedRegions,
                             travel_start_date: t.travel_start_date,
                             travel_end_date: t.travel_end_date,
-                            rating: t.rating || 0
+                            rating: t.rating || 0 
                         };
                     });
 
                     setTripGroups(mappedGroups);
-
-                    if (mappedGroups.length > 0) {
+                    
+                    if(mappedGroups.length > 0) {
                         setIsViewAll(true);
                     }
                 }
@@ -234,7 +233,7 @@ export default function EditTripPage({ params }: PageProps) {
             }
         };
         initData();
-    }, [tripId]);
+    }, [tripId]); 
 
     // --- Active Group Effect ---
     useEffect(() => {
@@ -244,7 +243,7 @@ export default function EditTripPage({ params }: PageProps) {
             setGroupNote(activeGroup.notes || "");
             setStartDate(activeGroup.travel_start_date || "");
             setEndDate(activeGroup.travel_end_date || "");
-            setTripRating(activeGroup.rating || 0);
+            setTripRating(activeGroup.rating || 0); 
             const loadedImages = (activeGroup.images || []).map((url, idx) => ({ id: `existing-${idx}`, url: url }));
             setCurrentImages(loadedImages);
             setPreviewGroupId(null);
@@ -319,7 +318,7 @@ export default function EditTripPage({ params }: PageProps) {
             setTripGroups(prev => prev.map(g => g.id === activeGroupId ? {
                 ...g, id: realTemplateId, regions: currentGroupRegions, name: groupName, notes: groupNote, images: finalImageUrls,
                 travel_start_date: startDate || null, travel_end_date: endDate || null,
-                rating: tripRating
+                rating: tripRating 
             } : g));
             setActiveGroupId(null);
         } catch (err: any) { console.error("Save failed:", err); alert(`Failed to save: ${err.message}`); } finally { setIsSaving(false); }
@@ -330,35 +329,32 @@ export default function EditTripPage({ params }: PageProps) {
     const handleUpdateStatus = (id: string, key: keyof TripStatus, value: string) => { setTripStatuses(prev => prev.map(s => s.id === id ? { ...s, [key]: value } : s)); };
     const handleDeleteStatus = (id: string) => { if (tripStatuses.length <= 1) return; setTripStatuses(prev => prev.filter(s => s.id !== id)); const firstAvailable = tripStatuses.find(s => s.id !== id)?.id || ""; setCurrentGroupRegions(prev => prev.map(r => r.statusId === id ? { ...r, statusId: firstAvailable } : r)); };
 
-    // ✅ ใช้ระบบ Cache เพื่อป้องกันการยิง API ซ้ำๆ ไปที่ Highcharts
-    useEffect(() => {
-        async function fetchHighchartsMapData() {
-            if (!countryCode || countryCode.trim() === "") return;
-
+    useEffect(() => { 
+        async function fetchHighchartsMapData() { 
+            if (!countryCode || countryCode.trim() === "") return; 
             if (regionCache[countryCode]) {
                 setRegionList(regionCache[countryCode]);
                 setIsLoadingRegions(false);
                 return;
             }
-
-            setIsLoadingRegions(true);
-            try {
-                const mapUrl = `https://code.highcharts.com/mapdata/countries/${countryCode}/${countryCode}-all.geo.json`;
-                const response = await fetch(mapUrl);
-                if (!response.ok) throw new Error("Map data not found");
-                const data = await response.json();
-                if (data && data.features) {
+            setIsLoadingRegions(true); 
+            try { 
+                const mapUrl = `https://code.highcharts.com/mapdata/countries/${countryCode}/${countryCode}-all.geo.json`; 
+                const response = await fetch(mapUrl); 
+                if (!response.ok) throw new Error("Map data not found"); 
+                const data = await response.json(); 
+                if (data && data.features) { 
                     const regions = data.features.map((feature: any) => feature.properties.name).filter((name: any) => name).sort();
-                    regionCache[countryCode] = regions;
-                    setRegionList(regions);
-                }
-            } catch (error) {
-                setRegionList([]);
-            } finally {
-                setIsLoadingRegions(false);
-            }
-        }
-        fetchHighchartsMapData();
+                    regionCache[countryCode] = regions; 
+                    setRegionList(regions); 
+                } 
+            } catch (error) { 
+                setRegionList([]); 
+            } finally { 
+                setIsLoadingRegions(false); 
+            } 
+        } 
+        fetchHighchartsMapData(); 
     }, [countryCode]);
 
     const startResizing = useCallback((e: React.MouseEvent) => { setIsResizing(true); e.preventDefault(); }, []);
@@ -394,23 +390,20 @@ export default function EditTripPage({ params }: PageProps) {
         const date = new Date(dateStr);
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
     };
-    // ✅ คำนวณเปอร์เซ็นต์ความสำเร็จ (Achievement)
+
     const achievementStats = useMemo(() => {
         if (regionList.length === 0) return { percent: 0, current: 0, total: 0 };
-
-        // นับจำนวนจังหวัดที่ไม่ซ้ำกันจากทุกกลุ่ม (กรณี View All) หรือกลุ่มที่กำลังเลือกอยู่
         const selectedCount = mapSelectedRegions.length;
         const totalCount = regionList.length;
         const percent = Math.round((selectedCount / totalCount) * 100);
-
         return { percent, current: selectedCount, total: totalCount };
     }, [regionList, mapSelectedRegions]);
 
     return (
         <div className={`flex flex-col bg-[#FFFFFF] font-sans text-gray-800 h-screen overflow-hidden ${isFullscreen ? "fixed inset-0 z-[9999]" : "relative z-0"} ${isResizing ? "cursor-col-resize select-none" : ""}`}>
-
-            {/* HEADER - ไม่แตะต้องคลาส Desktop เลย เพิ่มแค่ md: นำหน้าเพื่อรองรับ Mobile */}
-            <div className="h-auto min-h-[60px] md:h-[60px] bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] px-4 md:px-10 z-20 flex-shrink-0 flex flex-col md:flex-row items-center justify-between relative mb-4 md:mb-[32px] py-2 md:py-0 gap-3 md:gap-0">
+            
+            {/* HEADER */}
+            <div className="h-auto min-h-[60px] md:h-[60px] bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] px-4 md:px-10 z-20 flex-shrink-0 flex flex-col md:flex-row items-center justify-between relative mb-4 md:mb-[16px] py-2 md:py-0 gap-3 md:gap-0">
                 <div className="flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-[48px] w-full md:w-auto">
                     <div className="flex items-center justify-between w-full md:w-auto">
                         <div className="flex items-center gap-3 md:gap-[48px]">
@@ -420,13 +413,11 @@ export default function EditTripPage({ params }: PageProps) {
                                 <h1 className="text-[20px] md:text-[28px] font-bold text-black leading-[24px] md:leading-[34px] tracking-[0.02em]">{countryName}</h1>
                             </div>
                         </div>
-                        {/* ปุ่มเปิด Sidebar บนมือถือ */}
                         <button onClick={() => setIsMobileOpen(!isMobileOpen)} className="md:hidden p-2 bg-blue-50 text-blue-600 rounded-lg">
-                            <LayoutTemplate className="w-5 h-5" />
+                            <LayoutTemplate className="w-5 h-5"/>
                         </button>
                     </div>
 
-                    {/* ✅ Dropdown เลือกรัฐ กลับมาอยู่แนบกับชื่อประเทศ 100% ตามโค้ดต้นฉบับ */}
                     <div className="relative w-full md:w-auto">
                         <button onClick={(e) => { e.stopPropagation(); if (!activeGroupId) return; setIsRegionDropdownOpen(!isRegionDropdownOpen); setRegionSearchQuery(""); }} disabled={isLoadingRegions || !activeGroupId} className={`w-full md:w-[323px] h-[40px] bg-[#F0F6FC] border border-[#60A3DE] rounded-[10px] flex items-center justify-between px-[16px] transition disabled:opacity-50 disabled:cursor-not-allowed ${!activeGroupId ? "opacity-60" : ""}`}>
                             <div className="flex items-center gap-[10px]">
@@ -440,7 +431,7 @@ export default function EditTripPage({ params }: PageProps) {
                                 <div className="p-2 border-b border-gray-100 sticky top-0 bg-white z-10">
                                     <div className="relative"><Search className="absolute left-2.5 top-2.5 w-4 h-4 text-gray-400" /><input type="text" placeholder="Search region..." value={regionSearchQuery} onChange={(e) => setRegionSearchQuery(e.target.value)} className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50" autoFocus /></div>
                                 </div>
-                                <div className="overflow-y-auto flex-1">
+                                <div className="overflow-y-auto flex-1 custom-scrollbar">
                                     {filteredRegions.length > 0 ? filteredRegions.map(region => (
                                         <button key={region} onClick={() => toggleRegion(region)} className={`w-full text-left px-4 py-2.5 text-sm transition flex items-center justify-between group border-b border-gray-50 last:border-none ${currentGroupRegions.some(r => r.name === region) ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-700 hover:bg-gray-50"}`}>
                                             {region} {currentGroupRegions.some(r => r.name === region) && <Check className="w-4 h-4 text-blue-600" />}
@@ -452,27 +443,26 @@ export default function EditTripPage({ params }: PageProps) {
                     </div>
                 </div>
 
-                {/* ด้านขวาของ Header: ปุ่ม My Templates & Fullscreen - ซ่อนในมือถือ */}
                 <div className="hidden md:flex items-center gap-[24px]">
                     <button onClick={() => router.push('/mytrips')} className="w-[190px] h-[40px] border border-[#3A82CE] rounded-[5px] flex items-center justify-center gap-[10px] hover:bg-[#F0F6FC] transition"><LayoutTemplate className="w-[18px] h-[18px] text-[#3A82CE]" /><span className="font-medium text-[20px] leading-[24px] text-[#3A82CE]">My Templates</span></button>
                     <div className="w-px h-8 bg-gray-300"></div>
                     <button onClick={() => setIsFullscreen(!isFullscreen)} className={`p-2 rounded-lg transition border ${isFullscreen ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`} title={isFullscreen ? "Show Navbar" : "Fullscreen"}>{isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}</button>
                 </div>
             </div>
-            {/* ✅ ACHIEVEMENT SECTION - แสดงเปอร์เซ็นต์การสำรวจประเทศ */}
+
+            {/* ACHIEVEMENT SECTION */}
             <div className="px-4 md:px-[60px] mb-2 flex-shrink-0 animate-in fade-in slide-in-from-top-1 duration-500">
                 <div className="w-full bg-[#F0F6FC] rounded-[12px] p-3 md:p-4 border border-[#C2DCF3] shadow-sm flex flex-col md:flex-row items-center gap-3 md:gap-6">
                     <div className="flex items-center gap-3 shrink-0">
                         <div className="relative w-12 h-12 md:w-14 md:h-14 flex items-center justify-center">
-                            {/* วงกลมความก้าวหน้า (SVG Progress Circle) */}
                             <svg className="w-full h-full transform -rotate-90">
-                                <circle cx="50%" cy="50%" r="20" stroke="#E0E0E0" strokeWidth="4" fill="transparent" className="md:r-24" />
-                                <circle
-                                    cx="50%" cy="50%" r="20" stroke="#3A82CE" strokeWidth="4" fill="transparent"
-                                    strokeDasharray={125.6}
+                                <circle cx="50%" cy="50%" r="20" stroke="#E0E0E0" strokeWidth="4" fill="transparent" />
+                                <circle 
+                                    cx="50%" cy="50%" r="20" stroke="#3A82CE" strokeWidth="4" fill="transparent" 
+                                    strokeDasharray={125.6} 
                                     strokeDashoffset={125.6 - (125.6 * achievementStats.percent) / 100}
                                     strokeLinecap="round"
-                                    className="transition-all duration-1000 ease-out md:r-24"
+                                    className="transition-all duration-1000 ease-out"
                                 />
                             </svg>
                             <span className="absolute text-[10px] md:text-[12px] font-bold text-[#194473]">{achievementStats.percent}%</span>
@@ -483,36 +473,32 @@ export default function EditTripPage({ params }: PageProps) {
                         </div>
                     </div>
 
-                    {/* Progress Bar สำหรับ Mobile (ถ้า SVG ดูเล็กไป) หรือเส้นประเชื่อมต่อ */}
                     <div className="flex-1 w-full h-2 bg-white rounded-full overflow-hidden border border-[#C2DCF3] hidden md:block">
-                        <div
-                            className="h-full bg-gradient-to-r from-[#3A82CE] to-[#60A3DE] transition-all duration-1000 ease-out"
-                            style={{ width: `${achievementStats.percent}%` }}
-                        />
+                        <div className="h-full bg-gradient-to-r from-[#3A82CE] to-[#60A3DE] transition-all duration-1000 ease-out" style={{ width: `${achievementStats.percent}%` }} />
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0 bg-white px-3 py-1 rounded-full border border-[#C2DCF3]">
                         <Star className={`w-4 h-4 ${achievementStats.percent === 100 ? "text-yellow-500 fill-yellow-500" : "text-gray-300"}`} />
                         <span className="text-[11px] md:text-[12px] font-bold text-[#194473] uppercase tracking-wider">
-                            {achievementStats.percent === 100 ? "Country Master" :
-                                achievementStats.percent >= 50 ? "Senior Explorer" :
-                                    achievementStats.percent >= 20 ? "Backpacker" : "Beginner"}
+                            {achievementStats.percent === 100 ? "Country Master" : 
+                             achievementStats.percent >= 50 ? "Senior Explorer" : 
+                             achievementStats.percent >= 20 ? "Backpacker" : "Beginner"}
                         </span>
                     </div>
                 </div>
             </div>
 
-            {/* BODY - Flex Col สำหรับ Mobile และ Flex Row สำหรับ Desktop */}
-            <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative px-4 md:px-[60px] pb-4 md:pb-[40px] pt-4 md:pt-[20px]">
-
+            {/* BODY */}
+            <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative px-4 md:px-[60px] pb-4 md:pb-[40px] pt-2 md:pt-[10px]">
+                
                 {/* MAP AREA */}
                 <div className="flex-1 relative md:mr-[32px] mb-4 md:mb-0">
-                    <div className="w-full h-full bg-white md:shadow-[0px_4px_4px_rgba(0,0,0,0.25)] rounded-[10px] overflow-hidden relative">
+                    <div className="w-full h-full bg-white md:shadow-[0px_4px_4px_rgba(0,0,0,0.25)] rounded-[10px] overflow-hidden relative border border-gray-200 md:border-none">
                         <div className="w-full h-full">
-                            <DynamicMap
-                                countryCode={countryCode}
-                                regionColors={regionColors}
-                                selectedRegions={mapSelectedRegions}
+                            <DynamicMap 
+                                countryCode={countryCode} 
+                                regionColors={regionColors} 
+                                selectedRegions={mapSelectedRegions} 
                                 onRegionClick={handleRegionClick}
                                 mapPosition={mapPosition}
                                 onMoveEnd={setMapPosition}
@@ -528,31 +514,29 @@ export default function EditTripPage({ params }: PageProps) {
                     </div>
                 </div>
 
-                {/* RESIZER - ซ่อนในมือถือ */}
+                {/* RESIZER */}
                 <div className={`hidden md:flex w-1 hover:bg-blue-400 cursor-col-resize z-40 transition-colors items-center justify-center group ${isResizing ? "bg-blue-500" : "bg-transparent"}`} onMouseDown={startResizing}>
                     <div className="h-8 w-4 bg-white border border-gray-300 rounded-full flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"><GripVertical className="w-3 h-3 text-gray-400" /></div>
                 </div>
 
-                {/* ✅ RIGHT PANEL / BOTTOM SHEET FOR MOBILE */}
-                <div
-                    ref={sidebarRef}
+                {/* RIGHT PANEL / BOTTOM SHEET */}
+                <div 
+                    ref={sidebarRef} 
                     className={`
                         fixed inset-x-0 bottom-0 z-[50] bg-white shadow-2xl rounded-t-[24px] transition-transform duration-300 transform flex flex-col flex-shrink-0
                         md:static md:h-full md:rounded-[5px] md:shadow-[0px_0px_4px_rgba(0,0,0,0.25)] md:translate-y-0
-                        ${isMobileOpen ? 'translate-y-0 h-[80vh]' : 'translate-y-full md:block'}
+                        ${isMobileOpen ? 'translate-y-0 h-[85vh]' : 'translate-y-full md:block'}
                     `}
                     style={{ width: mounted && typeof window !== 'undefined' && window.innerWidth > 768 ? sidebarWidth : '100%', minWidth: mounted && typeof window !== 'undefined' && window.innerWidth > 768 ? 483 : 'auto' }}
                 >
-                    {/* ขีดลากลง (Mobile Handle) */}
                     <div className="md:hidden w-full flex justify-center py-3" onClick={() => setIsMobileOpen(false)}>
                         <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
                     </div>
 
-                    {/* ✅ เนื้อหาด้านใน ก๊อปปี้คลาสคุณมาเป๊ะๆ 100% ไม่แตะต้องเลย */}
                     {activeGroupId ? (
-                        /* ✅✅✅ EDIT MODE LAYOUT ✅✅✅ */
-                        <div className="flex flex-col h-full bg-white md:border border-[#E0E0E0] md:shadow-[0px_4px_4px_rgba(0,0,0,0.25)] rounded-[10px] p-[10px] pt-[20px] gap-2 overflow-hidden relative">
-                            {/* --- HEADER --- */}
+                        /* EDIT MODE LAYOUT */
+                        <div className="flex flex-col h-full bg-white md:border border-[#E0E0E0] md:shadow-[0px_4px_4px_rgba(0,0,0,0.25)] rounded-[10px] p-[10px] pt-0 md:pt-[20px] gap-2 overflow-hidden relative">
+                            {/* HEADER */}
                             <div className="flex justify-between items-center w-full pb-[8px] border-b border-[#9E9E9E] mb-4 flex-shrink-0">
                                 <div className="flex items-center gap-[10px] overflow-hidden">
                                     <MapPin className="w-[24px] h-[24px] text-[#F44336] shrink-0" />
@@ -565,28 +549,28 @@ export default function EditTripPage({ params }: PageProps) {
                                 </button>
                             </div>
 
-                            <div className="flex-1 overflow-y-auto scrollbar-thin px-2 flex flex-col gap-4">
-                                {/* --- IMAGES --- */}
+                            <div className="flex-1 overflow-y-auto custom-scrollbar px-2 flex flex-col gap-4">
+                                {/* IMAGES */}
                                 <div className="flex flex-col gap-1">
                                     <label className="text-[14px] font-normal text-[#616161] font-inter">Images ({currentImages.length}/10)</label>
                                     <div className={`w-full flex ${currentImages.length === 0 ? 'justify-center' : 'justify-start'}`}>
                                         {currentImages.length === 0 ? (
-                                            <div onClick={() => fileInputRef.current?.click()} className="w-[403px] h-[155px] bg-[#F0F6FC] border border-dashed border-[#9E9E9E] rounded-[5px] flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-[#e1effc] transition">
+                                            <div onClick={() => fileInputRef.current?.click()} className="w-full md:w-[403px] h-[155px] bg-[#F0F6FC] border border-dashed border-[#9E9E9E] rounded-[5px] flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-[#e1effc] transition">
                                                 <div className="w-[21px] h-[21px] bg-[#3A82CE] rounded-full flex items-center justify-center"><Plus className="w-[14px] h-[14px] text-white" /></div>
                                                 <span className="text-[12px] text-[#9E9E9E] font-inter text-center">Click to upload photos or drag and drop</span>
                                             </div>
                                         ) : (
-                                            <div className="flex flex-wrap gap-[21px] items-start">
+                                            <div className="flex flex-wrap gap-[10px] md:gap-[21px] items-start">
                                                 {currentImages.map((img) => (
-                                                    <div key={img.id} className="relative w-[88px] h-[88px] rounded-[5px] overflow-hidden bg-gray-100 border border-[#E0E0E0]">
+                                                    <div key={img.id} className="relative w-[70px] h-[70px] md:w-[88px] md:h-[88px] rounded-[5px] overflow-hidden bg-gray-100 border border-[#E0E0E0]">
                                                         <img src={img.url} alt="preview" className="w-full h-full object-cover" />
                                                         <button onClick={() => handleRemoveImage(img.id)} className="absolute top-1 right-1 bg-white/90 p-0.5 rounded-full hover:bg-red-100 text-red-500 transition shadow-sm"><X className="w-3 h-3" /></button>
                                                     </div>
                                                 ))}
                                                 {currentImages.length < 10 && (
-                                                    <div onClick={() => fileInputRef.current?.click()} className="w-[88px] h-[88px] bg-[#F0F6FC] border border-dashed border-[#9E9E9E] rounded-[5px] flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-[#e1effc] transition">
+                                                    <div onClick={() => fileInputRef.current?.click()} className="w-[70px] h-[70px] md:w-[88px] md:h-[88px] bg-[#F0F6FC] border border-dashed border-[#9E9E9E] rounded-[5px] flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-[#e1effc] transition">
                                                         <div className="w-[21px] h-[21px] bg-[#3A82CE] rounded-full flex items-center justify-center"><Plus className="w-[14px] h-[14px] text-white" /></div>
-                                                        <span className="text-[12px] text-[#9E9E9E] font-inter">Add more</span>
+                                                        <span className="text-[10px] md:text-[12px] text-[#9E9E9E] font-inter">Add more</span>
                                                     </div>
                                                 )}
                                             </div>
@@ -595,71 +579,72 @@ export default function EditTripPage({ params }: PageProps) {
                                     </div>
                                 </div>
 
-                                {/* --- TEMPLATE NAME --- */}
+                                {/* TEMPLATE NAME */}
                                 <div className="flex flex-col gap-[4px]">
                                     <label className="text-[14px] font-normal text-[#616161] font-inter">Template Name</label>
-                                    <div className="box-border w-full h-[26px] bg-white border border-[#9E9E9E] rounded-[5px] flex items-center justify-between px-[10px] gap-[10px]">
-                                        <input type="text" value={groupName} onChange={(e) => setGroupName(e.target.value)} className="w-full h-full text-[12px] font-normal text-black placeholder-[#9E9E9E] bg-transparent outline-none font-inter leading-[15px]" placeholder="e.g., Summer Vacation" />
+                                    <div className="box-border w-full h-[32px] md:h-[26px] bg-white border border-[#9E9E9E] rounded-[5px] flex items-center justify-between px-[10px] gap-[10px]">
+                                        <input type="text" value={groupName} onChange={(e) => setGroupName(e.target.value)} className="w-full h-full text-[14px] md:text-[12px] font-normal text-black placeholder-[#9E9E9E] bg-transparent outline-none font-inter" placeholder="e.g., Summer Vacation" />
                                         <Edit3 className="w-[16px] h-[16px] text-[#3A82CE] flex-shrink-0" />
                                     </div>
                                 </div>
 
-                                {/* --- DATE (Input Trigger) --- */}
+                                {/* DATE */}
                                 <div className="flex flex-col gap-[4px] relative">
                                     <label className="text-[14px] font-normal text-[#616161] font-inter">Date (From - To)</label>
-                                    <div
-                                        className="box-border w-full h-[26px] bg-white border border-[#9E9E9E] rounded-[5px] flex justify-between items-center px-[10px] cursor-pointer hover:border-[#3A82CE] transition"
+                                    <div 
+                                        className="box-border w-full h-[32px] md:h-[26px] bg-white border border-[#9E9E9E] rounded-[5px] flex justify-between items-center px-[10px] cursor-pointer hover:border-[#3A82CE] transition"
                                         onClick={(e) => { e.stopPropagation(); setIsDatePickerOpen(true); }}
                                     >
-                                        <span className={`text-[12px] font-normal font-inter leading-[15px] ${startDate ? 'text-black' : 'text-[#9E9E9E]'}`}>
+                                        <span className={`text-[14px] md:text-[12px] font-normal font-inter ${startDate ? 'text-black' : 'text-[#9E9E9E]'}`}>
                                             {startDate ? `${formatDate(startDate)}${endDate ? ` - ${formatDate(endDate)}` : ''}` : "MM/DD/YYYY - MM/DD/YYYY"}
                                         </span>
                                         <Calendar className="w-[16px] h-[16px] text-[#3A82CE]" />
                                     </div>
                                 </div>
 
-                                {/* --- NOTE --- */}
+                                {/* NOTE */}
                                 <div className="flex flex-col gap-1">
                                     <label className="text-[14px] font-normal text-[#616161] font-inter">Note (Optional)</label>
-                                    <textarea value={groupNote} onChange={(e) => setGroupNote(e.target.value)} className="w-full min-h-[50px] border border-[#9E9E9E] rounded-[5px] px-[10px] py-[5px] text-[12px] text-black placeholder-[#9E9E9E] outline-none resize-none font-inter leading-[15px]" placeholder="Add details..." />
+                                    <textarea value={groupNote} onChange={(e) => setGroupNote(e.target.value)} className="w-full min-h-[60px] border border-[#9E9E9E] rounded-[5px] px-[10px] py-[5px] text-[14px] md:text-[12px] text-black placeholder-[#9E9E9E] outline-none resize-none font-inter" placeholder="Add details..." />
                                 </div>
 
-                                {/* --- RATING --- */}
+                                {/* RATING */}
                                 <div className="flex flex-col">
                                     <label className="text-[14px] font-normal text-[#616161] font-inter">Trip Rating</label>
-                                    <div className="h-[40px] w-full flex items-center justify-center gap-[8px] px-[80px] py-[10px]">
+                                    <div className="h-[40px] w-full flex items-center justify-center gap-[8px] py-[10px]">
                                         {[1, 2, 3, 4, 5].map((star) => (
-                                            <button
-                                                key={star}
-                                                onClick={() => setTripRating(star)}
-                                                className="focus:outline-none transition-transform hover:scale-110 active:scale-95 flex-shrink-0"
+                                            <button 
+                                                key={star} 
+                                                onClick={() => setTripRating(star)} 
+                                                className="focus:outline-none transition-transform hover:scale-110 active:scale-95 flex-shrink-0" 
                                                 type="button"
                                             >
-                                                <Star className={`w-[20px] h-[20px] ${star <= tripRating ? "fill-[#FFCC00] text-[#FFCC00]" : "fill-[#9E9E9E] text-[#9E9E9E]"}`} strokeWidth={0} />
+                                                <Star className={`w-[24px] h-[24px] md:w-[20px] md:h-[20px] ${star <= tripRating ? "fill-[#FFCC00] text-[#FFCC00]" : "fill-[#9E9E9E] text-[#9E9E9E]"}`} strokeWidth={0} />
                                             </button>
                                         ))}
                                     </div>
                                 </div>
 
-                                {/* --- VISITED PROVINCES --- */}
+                                {/* VISITED PROVINCES WITH RECOMMENDATIONS */}
                                 <div className="flex flex-col gap-[4px] mt-[10px]">
                                     <label className="text-[14px] font-normal text-[#616161] font-inter">Visited Provinces ({currentGroupRegions.length})</label>
-                                    <div className="w-full min-h-[100px] border border-[#9E9E9E] rounded-[5px] flex flex-col bg-white overflow-hidden">
+                                    <div className="w-full min-h-[100px] border border-[#9E9E9E] rounded-[5px] flex flex-col bg-white overflow-hidden mb-4">
                                         {currentGroupRegions.length === 0 ? (
                                             <div className="flex-1 flex flex-col items-center justify-center gap-2 p-4 bg-[#F0F6FC] h-full">
                                                 <div className="w-[21px] h-[21px] bg-[#3A82CE] rounded-full flex items-center justify-center"><MapPin className="w-[12px] h-[12px] text-white" /></div>
-                                                <span className="text-[12px] text-[#9E9E9E] text-center font-inter leading-[15px]">No provinces selected.<br />Click on the map to add.</span>
+                                                <span className="text-[12px] text-[#9E9E9E] text-center font-inter leading-[15px]">No provinces selected.<br/>Click on the map to add.</span>
                                             </div>
                                         ) : (
                                             <div className="flex flex-col w-full">
                                                 {currentGroupRegions.map(region => (
-                                                    <RegionItem
-                                                        key={region.name}
-                                                        region={region}
-                                                        statuses={tripStatuses}
-                                                        onUpdateStatus={(newId) => updateRegionStatus(region.name, newId)}
-                                                        onRemove={() => toggleRegion(region.name)}
-                                                        statusActions={{ onUpdate: handleUpdateStatus, onDelete: handleDeleteStatus, onAdd: handleAddStatus }}
+                                                    <RegionItem 
+                                                        key={region.name} 
+                                                        region={region} 
+                                                        statuses={tripStatuses} 
+                                                        onUpdateStatus={(newId) => updateRegionStatus(region.name, newId)} 
+                                                        onRemove={() => toggleRegion(region.name)} 
+                                                        statusActions={{ onUpdate: handleUpdateStatus, onDelete: handleDeleteStatus, onAdd: handleAddStatus }} 
+                                                        supabase={supabase} // ✅ ส่ง supabase เข้าไป
                                                     />
                                                 ))}
                                             </div>
@@ -668,8 +653,8 @@ export default function EditTripPage({ params }: PageProps) {
                                 </div>
                             </div>
 
-                            {/* --- ACTIONS --- */}
-                            <div className="flex justify-between items-center px-[10px] pt-[10px] pb-0 mt-auto gap-4 flex-shrink-0">
+                            {/* ACTIONS */}
+                            <div className="flex justify-between items-center px-[10px] pt-[10px] pb-4 md:pb-0 mt-auto gap-4 flex-shrink-0 bg-white">
                                 <button onClick={() => handleDeleteGroupById(activeGroupId)} className="w-[60px] h-[42px] bg-[#FFEBEE] rounded-[5px] flex items-center justify-center hover:bg-[#ffcdd2] transition">
                                     <Trash2 className="w-[21px] h-[21px] text-[#F44336]" />
                                 </button>
@@ -679,33 +664,41 @@ export default function EditTripPage({ params }: PageProps) {
                             </div>
                         </div>
                     ) : (
-                        /* ✅✅✅ LIST MODE (No Active Group) ✅✅✅ */
-                        <div className="flex flex-col h-full p-[20px] pt-[30px]">
-                            <div className="flex-shrink-0 mb-[32px]">
+                        /* LIST MODE */
+                        <div className="flex flex-col h-full p-[20px] pt-0 md:pt-[30px]">
+                            <div className="flex-shrink-0 mb-[24px] md:mb-[32px]">
                                 <div className="flex flex-col gap-[8px] pb-[8px] border-b border-[#EEEEEE]">
                                     <div className="flex justify-between items-start">
-                                        <div><h2 className="font-bold text-[20px] leading-[24px] text-black font-inter">Trip Templates</h2><p className="font-normal text-[16px] leading-[19px] text-black font-inter">Create & manage your travel plans</p></div>
+                                        <div><h2 className="font-bold text-[20px] leading-[24px] text-black font-inter">Trip Templates</h2><p className="font-normal text-[14px] md:text-[16px] text-gray-500 font-inter">Create & manage your travel plans</p></div>
                                         {tripGroups.length > 0 && (<button onClick={() => setIsViewAll(!isViewAll)} className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-medium transition select-none ${isViewAll ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{isViewAll ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}{isViewAll ? "Hide All" : "View All"}</button>)}
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="flex-1 overflow-y-auto scrollbar-thin pr-2">
+                            <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 pb-4">
                                 {tripGroups.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center gap-[32px] mt-[100px]">
-                                        <div className="flex flex-col items-center gap-[16px] w-full"><div className="w-[48px] h-[48px] text-[#3A82CE]"><Layers className="w-full h-full" strokeWidth={1.5} /></div><div className="flex flex-col items-center gap-[8px] w-full text-center"><h3 className="font-bold text-[20px] leading-[24px] text-black font-inter">No Trip Templates yet</h3><p className="font-normal text-[16px] leading-[19px] text-black font-inter">Start by creating your first travel template.</p></div></div>
-                                        <button onClick={handleAddGroup} className="w-[220px] h-[42px] bg-[#3A82CE] rounded-[5px] flex items-center justify-center gap-[8px] hover:bg-[#2c6cb0] transition shadow-sm"><div className="w-[14px] h-[14px] flex items-center justify-center"><Plus className="w-full h-full text-white" strokeWidth={3} /></div><span className="font-normal text-[18px] leading-[22px] text-white font-inter">Create New Trip</span></button>
+                                    <div className="flex flex-col items-center justify-center gap-[32px] mt-[60px] md:mt-[100px]">
+                                        <div className="flex flex-col items-center gap-[16px] w-full"><div className="w-[48px] h-[48px] text-[#3A82CE]"><Layers className="w-full h-full" strokeWidth={1.5} /></div><div className="flex flex-col items-center gap-[8px] w-full text-center"><h3 className="font-bold text-[20px] text-black font-inter">No Trip Templates yet</h3><p className="font-normal text-[14px] md:text-[16px] text-gray-500 font-inter">Start by creating your first travel template.</p></div></div>
+                                        <button onClick={handleAddGroup} className="w-[220px] h-[42px] bg-[#3A82CE] rounded-[5px] flex items-center justify-center gap-[8px] hover:bg-[#2c6cb0] transition shadow-sm"><div className="w-[14px] h-[14px] flex items-center justify-center"><Plus className="w-full h-full text-white" strokeWidth={3} /></div><span className="font-normal text-[16px] md:text-[18px] text-white font-inter">Create New Trip</span></button>
                                     </div>
                                 ) : (
                                     <div className="flex flex-col gap-[16px]">
                                         {tripGroups.map(group => (
-                                            <div key={group.id} onClick={() => setPreviewGroupId(prev => prev === group.id ? null : group.id)} className={`box-border w-full h-[64px] bg-white border ${(activeGroupId === group.id || previewGroupId === group.id) ? 'border-[#3A82CE] ring-1 ring-[#3A82CE]' : 'border-[#C2DCF3]'} shadow-[0px_4px_4px_rgba(0,0,0,0.25)] rounded-[5px] flex items-start justify-between p-[10px] gap-[27px] cursor-pointer transition-all hover:border-[#3A82CE] group relative`}>
-                                                <div className="flex items-center gap-[12px]">{group.images && group.images.length > 0 ? (<img src={group.images[0]} alt={group.name} className="w-[44px] h-[44px] rounded-[5px] object-cover" />) : (<div className="w-[44px] h-[44px] rounded-[5px] bg-[#F0F6FC] flex items-center justify-center text-[#3A82CE]"><ImageIcon className="w-5 h-5" /></div>)}<div className="flex flex-col items-start gap-[4px]"><h3 className="font-inter font-medium text-[16px] leading-[19px] text-black truncate max-w-[175px]">{group.name}</h3><p className="font-inter font-normal text-[12px] leading-[15px] text-black">{group.regions.length} {group.regions.length > 1 ? 'provinces' : 'province'}</p></div></div>
-                                                <div className="flex items-center justify-center w-[36px] h-[24px] my-auto"><button onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === group.id ? null : group.id); }} className="text-black hover:text-gray-600 transition"><MoreVertical className="w-5 h-5" /></button></div>
-                                                {openMenuId === group.id && (<div className="absolute right-2 top-10 w-32 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100"><button onClick={(e) => { e.stopPropagation(); setActiveGroupId(group.id); setOpenMenuId(null); setIsMobileOpen(true); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 flex items-center gap-2 border-b border-gray-50"><Edit3 className="w-4 h-4" /> Edit</button><button onClick={(e) => { e.stopPropagation(); handleDeleteGroupById(group.id); setOpenMenuId(null); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"><Trash2 className="w-4 h-4" /> Delete</button></div>)}
+                                            <div key={group.id} onClick={() => setPreviewGroupId(prev => prev === group.id ? null : group.id)} className={`box-border w-full h-[64px] bg-white border ${(activeGroupId === group.id || previewGroupId === group.id) ? 'border-[#3A82CE] ring-1 ring-[#3A82CE]' : 'border-[#C2DCF3]'} shadow-[0px_4px_4px_rgba(0,0,0,0.25)] rounded-[5px] flex items-start justify-between p-[10px] gap-[15px] md:gap-[27px] cursor-pointer transition-all hover:border-[#3A82CE] group relative`}>
+                                                <div className="flex items-center gap-[12px] min-w-0">
+                                                    {group.images && group.images.length > 0 ? (<img src={group.images[0]} alt={group.name} className="w-[44px] h-[44px] rounded-[5px] object-cover flex-shrink-0" />) : (<div className="w-[44px] h-[44px] rounded-[5px] bg-[#F0F6FC] flex items-center justify-center text-[#3A82CE] flex-shrink-0"><ImageIcon className="w-5 h-5" /></div>)}
+                                                    <div className="flex flex-col items-start gap-[4px] min-w-0"><h3 className="font-inter font-medium text-[16px] leading-[19px] text-black truncate w-full max-w-[140px] md:max-w-[175px]">{group.name}</h3><p className="font-inter font-normal text-[12px] leading-[15px] text-gray-500">{group.regions.length} {group.regions.length > 1 ? 'provinces' : 'province'}</p></div>
+                                                </div>
+                                                <div className="flex items-center justify-center w-[36px] h-[24px] my-auto flex-shrink-0"><button onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === group.id ? null : group.id); }} className="text-black hover:text-gray-600 transition"><MoreVertical className="w-5 h-5" /></button></div>
+                                                {openMenuId === group.id && (
+                                                    <div className="absolute right-2 top-12 w-32 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                                                        <button onClick={(e) => { e.stopPropagation(); setActiveGroupId(group.id); setOpenMenuId(null); setIsMobileOpen(true); }} className="w-full text-left px-4 py-3 md:py-2 text-sm text-gray-700 hover:bg-blue-50 flex items-center gap-2 border-b border-gray-50"><Edit3 className="w-4 h-4" /> Edit</button>
+                                                        <button onClick={(e) => { e.stopPropagation(); handleDeleteGroupById(group.id); setOpenMenuId(null); }} className="w-full text-left px-4 py-3 md:py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"><Trash2 className="w-4 h-4" /> Delete</button>
+                                                    </div>
+                                                )}
                                             </div>
                                         ))}
-                                        <button onClick={handleAddGroup} className="w-[220px] h-[42px] bg-[#3A82CE] rounded-[5px] flex items-center justify-center gap-[8px] hover:bg-[#2c6cb0] transition shadow-sm mt-4 mx-auto"><div className="w-[14px] h-[14px] flex items-center justify-center"><Plus className="w-full h-full text-white" strokeWidth={3} /></div><span className="font-normal text-[18px] leading-[22px] text-white font-inter">Create New Trip</span></button>
+                                        <button onClick={handleAddGroup} className="w-full md:w-[220px] h-[42px] bg-[#3A82CE] rounded-[5px] flex items-center justify-center gap-[8px] hover:bg-[#2c6cb0] transition shadow-sm mt-4 mx-auto"><div className="w-[14px] h-[14px] flex items-center justify-center"><Plus className="w-full h-full text-white" strokeWidth={3} /></div><span className="font-normal text-[16px] md:text-[18px] text-white font-inter">Create New Trip</span></button>
                                     </div>
                                 )}
                             </div>
@@ -714,7 +707,7 @@ export default function EditTripPage({ params }: PageProps) {
                 </div>
             </div>
 
-            {/* ✅ Date Picker Overlay */}
+            {/* Date Picker Overlay */}
             {isDatePickerOpen && (
                 <div className="fixed inset-0 z-[10002] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setIsDatePickerOpen(false)}>
                     <CustomDateRangePicker startDate={startDate} endDate={endDate} onClose={() => setIsDatePickerOpen(false)} onChange={(s, e) => { setStartDate(s); setEndDate(e); }} />
@@ -818,31 +811,120 @@ function CustomDateRangePicker({ startDate, endDate, onChange, onClose }: { star
     );
 }
 
-function RegionItem({ region, statuses, onUpdateStatus, onRemove, statusActions }: RegionItemProps) {
+// ✅ Component ที่ถูกปรับปรุงให้ดึงสถานที่แนะนำได้
+function RegionItem({ region, statuses, onUpdateStatus, onRemove, statusActions, supabase }: RegionItemProps) {
     const [isOpen, setIsOpen] = useState(false);
     const currentStatus = statuses.find((s) => s.id === region.statusId) || statuses[0];
+    
+    // ✅ State สำหรับสถานที่แนะนำ
+    const [recommendedPlaces, setRecommendedPlaces] = useState<any[]>([]);
+    const [loadingPlaces, setLoadingPlaces] = useState(false);
+    const [showInspiration, setShowInspiration] = useState(false);
+
+    // ดึงข้อมูลเมื่อผู้ใช้กดเปิดดู Inspiration
+    useEffect(() => {
+        if (!showInspiration) return;
+        
+        const fetchPlaces = async () => {
+            setLoadingPlaces(true);
+            try {
+                // ค้นหาสถานที่ที่อยู่ในจังหวัดนี้ เรียงตามคะแนนความนิยม
+                const { data, error } = await supabase
+                    .from('places')
+                    .select('id, name, images, rating')
+                    .ilike('province_state', `%${region.name}%`)
+                    .order('rating', { ascending: false })
+                    .limit(5);
+
+                if (data && !error) {
+                    setRecommendedPlaces(data);
+                }
+            } catch (err) {
+                console.error("Error fetching recommended places:", err);
+            } finally {
+                setLoadingPlaces(false);
+            }
+        };
+
+        fetchPlaces();
+    }, [showInspiration, region.name, supabase]);
 
     return (
         <div className={`bg-white border-b border-[#E0E0E0] last:border-none transition-all duration-200 ${isOpen ? 'shadow-md border-transparent ring-1 ring-blue-100 z-10 relative rounded-[5px] my-1' : ''}`}>
             {/* Header Row */}
-            <div className="box-border flex justify-between items-center px-[10px] h-[35px] hover:bg-gray-50 transition cursor-pointer" onClick={() => setIsOpen(!isOpen)}>
-                <span className="text-[12px] font-normal text-[#9E9E9E] font-inter truncate max-w-[150px]">{region.name}</span>
-                <div className="flex items-center gap-[10px]">
+            <div className="box-border flex justify-between items-center px-[10px] h-[40px] hover:bg-gray-50 transition cursor-pointer" onClick={() => setIsOpen(!isOpen)}>
+                <div className="flex items-center gap-2 overflow-hidden flex-1">
+                    <span className="text-[13px] font-medium text-gray-800 font-inter truncate max-w-[150px]">{region.name}</span>
+                    
+                    {/* ✅ ปุ่มกดเพื่อดู Inspiration */}
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); setShowInspiration(!showInspiration); }}
+                        className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full border transition-colors ${showInspiration ? 'bg-amber-50 border-amber-200 text-amber-600' : 'bg-white border-gray-200 text-gray-400 hover:bg-gray-50 hover:text-amber-500'}`}
+                        title="Get Inspiration"
+                    >
+                        <Sparkles className="w-3 h-3" />
+                        <span className="text-[9px] font-bold uppercase hidden md:inline-block">Inspire</span>
+                    </button>
+                </div>
+
+                <div className="flex items-center gap-[10px] shrink-0">
                     <div className="flex items-center gap-[8px] px-2 py-1 rounded transition">
                         <div className="w-[12px] h-[12px] rounded-full shadow-sm border border-black/5" style={{ backgroundColor: currentStatus?.color }} />
-                        {isOpen ? <ChevronUp className="w-[10px] h-[10px] text-[#9E9E9E]" /> : <ChevronDown className="w-[10px] h-[10px] text-[#9E9E9E]" />}
+                        {isOpen ? <ChevronUp className="w-[12px] h-[12px] text-[#9E9E9E]" /> : <ChevronDown className="w-[12px] h-[12px] text-[#9E9E9E]" />}
                     </div>
                     <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="p-1 hover:bg-red-50 rounded transition group">
-                        <X className="w-[10px] h-[10px] text-[#9E9E9E] group-hover:text-red-500" />
+                        <X className="w-[12px] h-[12px] text-[#9E9E9E] group-hover:text-red-500" />
                     </button>
                 </div>
             </div>
 
-            {/* Dropdown Content (Full Management) */}
-            {isOpen && (
-                <div className="px-3 pb-3 pt-0 animate-in slide-in-from-top-2 cursor-default" onClick={(e) => e.stopPropagation()}>
-                    <div className="h-px bg-gray-100 w-full mb-3"></div>
+            {/* ✅ Recommended Places Section (Inspiration View) */}
+            {showInspiration && (
+                <div className="px-3 pb-3 bg-gray-50 border-t border-gray-100 animate-in slide-in-from-top-2">
+                    <div className="flex items-center gap-1.5 mb-2 mt-2">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                        <span className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Top places in {region.name}</span>
+                    </div>
+                    
+                    {loadingPlaces ? (
+                        <div className="flex items-center justify-center h-16 text-gray-400">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        </div>
+                    ) : recommendedPlaces.length > 0 ? (
+                        <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-2">
+                            {recommendedPlaces.map(place => {
+                                const imgUrl = Array.isArray(place.images) ? (place.images[0]?.url || place.images[0]) : (place.images || 'https://placehold.co/100x100?text=No+Image');
+                                return (
+                                    <div 
+                                        key={place.id} 
+                                        className="relative w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 cursor-pointer group shadow-sm border border-gray-200" 
+                                        title={place.name} 
+                                        onClick={() => window.open(`/detail?id=${place.id}`, '_blank')} // กดแล้วเปิดหน้า detail
+                                    >
+                                        <img src={imgUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" alt={place.name} />
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-80 group-hover:opacity-100 transition-opacity" />
+                                        <div className="absolute bottom-1 left-1 right-1 flex flex-col">
+                                            <span className="text-[9px] text-white font-bold leading-tight line-clamp-2 drop-shadow-md">{place.name}</span>
+                                            {place.rating > 0 && (
+                                                <div className="flex items-center mt-0.5">
+                                                    <Star className="w-2 h-2 text-yellow-400 fill-yellow-400" />
+                                                    <span className="text-[8px] text-gray-200 ml-0.5">{place.rating}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    ) : (
+                        <div className="text-[11px] text-gray-400 py-2 italic">No recommendations found.</div>
+                    )}
+                </div>
+            )}
 
+            {/* Dropdown Content (Status Management) */}
+            {isOpen && (
+                <div className="px-3 pb-3 pt-2 animate-in slide-in-from-top-2 cursor-default border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
                     {/* Header Columns */}
                     <div className="grid grid-cols-[30px_1fr_40px_30px] gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 px-1">
                         <div></div>
