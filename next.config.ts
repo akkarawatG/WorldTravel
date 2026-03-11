@@ -1,23 +1,18 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-// 1. แก้ไขคำว่า word ให้เป็น world (เติมตัว L)
-  basePath: '/worldtravel',
-  
+basePath: '/wordtravel', // ไม่มี L
   env: {
-    NEXT_PUBLIC_BASE_PATH: '/worldtravel',
+    NEXT_PUBLIC_BASE_PATH: '/wordtravel', // ไม่มี L
   },
-  
   reactStrictMode: false,
-  
   async redirects() {
     return [
       {
         source: '/',
-        destination: '/worldtravel',
+        destination: '/wordtravel',
         permanent: true,
-        // 2. 🟢 จุดสำคัญ: บังคับให้ Next.js ข้าม basePath ตอนเช็คหน้าแรกสุด
-        basePath: false, 
+        basePath: false,
       },
     ]
   },
